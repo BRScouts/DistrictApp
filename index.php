@@ -32,11 +32,11 @@ $modules = [
         'icon' => 'user',
     ],
     [
-    'title' => 'District Directory',
-    'description' => 'Browse District contacts, roles, teams and group leadership information.',
-    'url' => '/directory.php',
-    'status' => 'available',
-    'icon' => 'directory',
+        'title' => 'District Directory',
+        'description' => 'Browse District contacts, roles, teams and group leadership information.',
+        'url' => '/directory.php',
+        'status' => 'available',
+        'icon' => 'directory',
     ],
     [
         'title' => 'Group Resources',
@@ -61,6 +61,23 @@ $modules = [
     ],
 ];
 
+$externalLinks = [
+    [
+        'title' => 'My Scout Membership',
+        'description' => 'Access your Scouts membership record, personal details, learning and member information.',
+        'url' => 'https://membership.scouts.org.uk',
+        'label' => 'Open My Scout Membership',
+        'icon' => 'membership',
+    ],
+    [
+        'title' => 'Online Scout Manager',
+        'description' => 'Open OSM to manage sections, programme planning, registers, badges and parent communications.',
+        'url' => 'https://www.onlinescoutmanager.co.uk/login.php',
+        'label' => 'Open Online Scout Manager',
+        'icon' => 'osm',
+    ],
+];
+
 function dashboard_icon(string $icon): string
 {
     $icons = [
@@ -70,6 +87,9 @@ function dashboard_icon(string $icon): string
         'resources' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a3 3 0 0 1 3-3h3.17a3 3 0 0 1 2.12.88L13.41 7H18a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7Zm3-1a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1h-5a1 1 0 0 1-.71-.29L9.88 6.29A1 1 0 0 0 9.17 6H6Z"/></svg>',
         'website' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-6v2h3a1 1 0 1 1 0 2H7a1 1 0 1 1 0-2h3v-2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v9h16V6H4Z"/></svg>',
         'tickets' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4a3 3 0 0 0 0 6v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4a3 3 0 0 0 0-6V5Zm8 3a1 1 0 0 0-1 1v1a1 1 0 1 0 2 0V9a1 1 0 0 0-1-1Zm0 5a1 1 0 0 0-1 1v1a1 1 0 1 0 2 0v-1a1 1 0 0 0-1-1Z"/></svg>',
+        'membership' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7v2.5A5.5 5.5 0 0 0 10.5 17h.5v3H8a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2h-3v-3h.5A5.5 5.5 0 0 0 19 11.5V9a7 7 0 0 0-7-7Zm0 2a5 5 0 0 1 5 5v2.5A3.5 3.5 0 0 1 13.5 15h-3A3.5 3.5 0 0 1 7 11.5V9a5 5 0 0 1 5-5Zm-2 5a1 1 0 1 0 0 2h4a1 1 0 1 0 0-2h-4Z"/></svg>',
+        'osm' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 2v14h14V5H5Zm3 3h8a1 1 0 1 1 0 2H8a1 1 0 0 1 0-2Zm0 4h8a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2Zm0 4h5a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2Z"/></svg>',
+        'external' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3a1 1 0 1 0 0 2h3.59l-8.3 8.29a1 1 0 1 0 1.42 1.42L19 6.41V10a1 1 0 1 0 2 0V4a1 1 0 0 0-1-1h-6ZM5 5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a1 1 0 1 0-2 0v5H5V7h5a1 1 0 1 0 0-2H5Z"/></svg>',
     ];
 
     return $icons[$icon] ?? $icons['calendar'];
@@ -94,7 +114,7 @@ function dashboard_icon(string $icon): string
                     'resources' => '/assets/img/cub-on-raft-jpg.jpg',
                     'website' => '/assets/img/group-sitting-on-hill-jpg.jpg',
                     'tickets' => '/assets/img/scouts-around-campfire-jpg.jpg',
-                    'directory' => '/assets/img/scouts-around-campfire-jpg.jpg', 
+                    'directory' => '/assets/img/scouts-around-campfire-jpg.jpg',
                 ];
 
                 $imageUrl = $module['image'] ?? $moduleImages[$module['icon']] ?? 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80';
@@ -156,6 +176,47 @@ function dashboard_icon(string $icon): string
                 <?php endif; ?>
             </div>
         <?php endforeach; ?>
+    </section>
+
+    <section class="external-links-section mt-5">
+        <div class="section-heading-row mb-3">
+            <div>
+                <h2 class="external-links-title">Useful external links</h2>
+                <p class="external-links-subtitle">
+                    Quick access to common Scouts systems outside the District Dashboard.
+                </p>
+            </div>
+        </div>
+
+        <div class="row">
+            <?php foreach ($externalLinks as $externalLink): ?>
+                <div class="col-md-6 mb-4">
+                    <a href="<?= e($externalLink['url']) ?>"
+                       class="external-link-card"
+                       target="_blank"
+                       rel="noopener noreferrer">
+                        <div class="external-link-icon">
+                            <?= dashboard_icon($externalLink['icon']) ?>
+                        </div>
+
+                        <div class="external-link-content">
+                            <h3 class="external-link-title">
+                                <?= e($externalLink['title']) ?>
+                            </h3>
+
+                            <p class="external-link-description">
+                                <?= e($externalLink['description']) ?>
+                            </p>
+
+                            <span class="external-link-action">
+                                <?= e($externalLink['label']) ?>
+                                <span aria-hidden="true">↗</span>
+                            </span>
+                        </div>
+                    </a>
+                </div>
+            <?php endforeach; ?>
+        </div>
     </section>
 </main>
 
