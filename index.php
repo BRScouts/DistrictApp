@@ -16,7 +16,7 @@ $modules = [
     [
         'title' => 'District Calendar',
         'description' => 'View District events, group activity, risk assessments and GLV information.',
-        'url' => '/DC/',
+        'url' => '/dc/',
         'status' => 'available',
         'icon' => 'calendar',
     ],
@@ -211,7 +211,7 @@ function dashboard_icon(string $icon): string
             <div class="col-lg-8">
                 <h1 class="h2 mb-2">Welcome, <?= e($displayName) ?></h1>
                 <p class="mb-0">
-                    Choose a District tool below.n
+                    Choose a District tool below.
                 </p>
             </div>
 
