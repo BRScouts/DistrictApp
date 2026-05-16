@@ -38,7 +38,7 @@
 
         /*
         |--------------------------------------------------------------------------
-        | Main Header
+        | Header
         |--------------------------------------------------------------------------
         */
 
@@ -54,6 +54,7 @@
             max-width: 1320px;
             margin: 0 auto;
             padding: 0 1.75rem;
+
             min-height: 82px;
 
             display: flex;
@@ -63,7 +64,7 @@
 
         /*
         |--------------------------------------------------------------------------
-        | Logo Area
+        | Brand
         |--------------------------------------------------------------------------
         */
 
@@ -85,9 +86,11 @@
             border-radius: 12px;
 
             background:
-                linear-gradient(135deg,
-                var(--district-purple),
-                var(--district-purple-dark));
+                linear-gradient(
+                    135deg,
+                    var(--district-purple),
+                    var(--district-purple-dark)
+                );
 
             display: flex;
             align-items: center;
@@ -110,7 +113,7 @@
         }
 
         .brand-title {
-            font-size: 1.1rem;
+            font-size: 1.15rem;
             font-weight: 900;
             letter-spacing: -0.03em;
         }
@@ -119,59 +122,18 @@
             font-size: 0.82rem;
             color: var(--text-muted);
             font-weight: 700;
+            margin-top: 0.2rem;
         }
 
         /*
         |--------------------------------------------------------------------------
-        | Navigation
-        |--------------------------------------------------------------------------
-        */
-
-        .main-nav {
-            display: flex;
-            align-items: center;
-            gap: 1.75rem;
-        }
-
-        .main-nav a {
-            color: #222222;
-            text-decoration: none;
-            font-weight: 800;
-            font-size: 0.95rem;
-            position: relative;
-            transition: color 0.15s ease;
-        }
-
-        .main-nav a:hover {
-            color: var(--district-purple);
-            text-decoration: none;
-        }
-
-        .main-nav a.active {
-            color: var(--district-purple);
-        }
-
-        .main-nav a.active::after {
-            content: "";
-            position: absolute;
-            left: 0;
-            bottom: -1.65rem;
-            width: 100%;
-            height: 3px;
-            border-radius: 999px;
-            background: var(--district-purple);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Profile Section
+        | Profile
         |--------------------------------------------------------------------------
         */
 
         .header-profile {
             display: flex;
             align-items: center;
-            margin-left: 2rem;
             text-decoration: none;
         }
 
@@ -207,9 +169,11 @@
             flex-shrink: 0;
 
             background:
-                linear-gradient(135deg,
-                var(--district-purple),
-                var(--district-purple-dark));
+                linear-gradient(
+                    135deg,
+                    var(--district-purple),
+                    var(--district-purple-dark)
+                );
 
             display: flex;
             align-items: center;
@@ -237,34 +201,11 @@
         |--------------------------------------------------------------------------
         */
 
-        @media (max-width: 991.98px) {
-
-            .main-nav {
-                gap: 1rem;
-            }
-
-            .main-nav a {
-                font-size: 0.88rem;
-            }
-
-            .profile-meta {
-                display: none;
-            }
-        }
-
         @media (max-width: 767.98px) {
 
             .site-header-inner {
                 padding: 0 1rem;
                 min-height: 72px;
-            }
-
-            .brand-subtitle {
-                display: none;
-            }
-
-            .main-nav {
-                display: none;
             }
 
             .brand-logo-placeholder {
@@ -275,6 +216,14 @@
 
             .brand-title {
                 font-size: 1rem;
+            }
+
+            .brand-subtitle {
+                display: none;
+            }
+
+            .profile-meta {
+                display: none;
             }
         }
     </style>
@@ -288,7 +237,7 @@
         <!-- Left -->
         <a href="/index.php" class="brand-area">
 
-            <!-- Replace this with your actual logo image later -->
+            <!-- Replace with actual logo -->
             <div class="brand-logo-placeholder">
                 IV
             </div>
@@ -303,29 +252,6 @@
                 </span>
             </div>
         </a>
-
-        <!-- Centre Navigation -->
-        <nav class="main-nav" aria-label="Main navigation">
-            <a href="/dashboard.php" class="active">
-                Dashboard
-            </a>
-
-            <a href="/events.php">
-                Events
-            </a>
-
-            <a href="/reports.php">
-                Reports
-            </a>
-
-            <a href="/leaders.php">
-                Leaders
-            </a>
-
-            <a href="/settings.php">
-                Settings
-            </a>
-        </nav>
 
         <!-- Right -->
         <a href="/profile.php" class="header-profile">
