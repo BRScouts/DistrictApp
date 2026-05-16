@@ -411,9 +411,7 @@
     }
 </style>
 
-            <div>
-                <span class="brand-title">Irwell Valley District Scouts</span>
-            </div>
+
         </a>
 
         <a href="/profile.php" class="header-profile">

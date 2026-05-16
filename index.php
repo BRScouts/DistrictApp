@@ -90,11 +90,11 @@ function dashboard_icon(string $icon): string
                     'profile' => 'https://www.irvalscouts.org.uk/wp-content/uploads/2026/05/two-scouts-hiking-jpg-scaled-1.jpg',
                     'teams' => 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80',
                     'calendar' => '/assets/img/female-leader-with-large-group-jpg.jpg',
-                    'awards' => 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&w=900&q=80',
-                    'permits' => 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=900&q=80',
-                    'approvals' => 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=900&q=80',
-                    'reports' => 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=900&q=80',
-                    'directory' => 'https://www.irvalscouts.org.uk/wp-content/uploads/2026/05/two-scouts-hiking-jpg-scaled-1.jpg',
+                    'user' => '/assets/img/cubs-crate-stacking-jpg.jpg',
+                    'resources' => '/assets/img/cub-on-raft-jpg.jpg',
+                    'website' => '/assets/img/group-sitting-on-hill-jpg.jpg',
+                    'tickets' => '/assets/img/scouts-around-campfire-jpg.jpg',
+                    'directory' => '/assets/img/scouts-around-campfire-jpg.jpg', 
                 ];
 
                 $imageUrl = $module['image'] ?? $moduleImages[$module['icon']] ?? 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80';
