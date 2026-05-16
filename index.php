@@ -32,11 +32,11 @@ $modules = [
         'icon' => 'user',
     ],
     [
-        'title' => 'District Directory',
-        'description' => 'Browse District contacts, roles, teams and group leadership information.',
-        'url' => '#',
-        'status' => 'coming_soon',
-        'icon' => 'directory',
+    'title' => 'District Directory',
+    'description' => 'Browse District contacts, roles, teams and group leadership information.',
+    'url' => '/directory.php',
+    'status' => 'available',
+    'icon' => 'directory',
     ],
     [
         'title' => 'Group Resources',

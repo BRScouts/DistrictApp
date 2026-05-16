@@ -21,3 +21,15 @@ CREATE TABLE IF NOT EXISTS user_groups (
     INDEX idx_user_groups_group_id (group_id),
     INDEX idx_user_groups_status (status)
 );
+ALTER TABLE group_contacts
+    ADD COLUMN contact_number VARCHAR(50) NULL,
+    ADD COLUMN scout_role VARCHAR(150) NULL,
+    ADD COLUMN about_me TEXT NULL,
+    ADD COLUMN accreditations TEXT NULL,
+    ADD COLUMN share_contact_number TINYINT(1) NOT NULL DEFAULT 0,
+    ADD COLUMN profile_updated_at DATETIME NULL;
+
+    CREATE INDEX idx_group_contacts_group_id ON group_contacts (group_id);
+CREATE INDEX idx_group_contacts_email ON group_contacts (email);
+CREATE INDEX idx_group_contacts_full_name ON group_contacts (full_name);
+CREATE INDEX idx_group_contacts_scout_role ON group_contacts (scout_role);
