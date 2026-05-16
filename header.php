@@ -386,13 +386,10 @@
 <header class="top-header">
     <div class="top-header-inner">
         <a href="/index.php" class="brand-area">
-            <div class="brand-logo-placeholder">
-                IV
-            </div>
+            
 
             <div>
                 <span class="brand-title">Irwell Valley District Scouts</span>
-                <span class="brand-subtitle">District Platform</span>
             </div>
         </a>
 
