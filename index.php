@@ -6,6 +6,10 @@ require_once __DIR__ . '/app/bootstrap.php';
 
 require_login();
 
+if (user_needs_group_onboarding()) {
+    redirect('/onboarding.php');
+}
+
 $user = current_user();
 $appName = app_config('APP_NAME', 'Irwell Valley District Scouts');
 

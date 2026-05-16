@@ -6,3 +6,18 @@ ADD COLUMN last_sso_login_at DATETIME NULL;
 
 ALTER TABLE admin_users
 ADD UNIQUE KEY uq_admin_users_microsoft_oid (microsoft_oid);
+
+CREATE TABLE IF NOT EXISTS user_groups (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    group_id INT NOT NULL,
+    source VARCHAR(50) NOT NULL DEFAULT 'self_selected',
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    is_primary TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uq_user_group (user_id, group_id),
+    INDEX idx_user_groups_user_id (user_id),
+    INDEX idx_user_groups_group_id (group_id),
+    INDEX idx_user_groups_status (status)
+);

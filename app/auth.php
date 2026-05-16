@@ -191,3 +191,33 @@ function touch_sso_login(int $userId): void
         'id' => $userId,
     ]);
 }
+
+function user_has_group_mapping(int $userId): bool
+{
+    $stmt = db()->prepare("
+        SELECT COUNT(*)
+        FROM user_groups
+        WHERE user_id = :user_id
+    ");
+
+    $stmt->execute([
+        'user_id' => $userId,
+    ]);
+
+    return ((int) $stmt->fetchColumn()) > 0;
+}
+
+function user_needs_group_onboarding(): bool
+{
+    $user = current_user();
+
+    if (!$user) {
+        return false;
+    }
+
+    if (($user['role'] ?? '') === ROLE_ADMIN) {
+        return false;
+    }
+
+    return !user_has_group_mapping((int) $user['id']);
+}
