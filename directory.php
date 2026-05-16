@@ -7,6 +7,7 @@ require_once __DIR__ . '/app/bootstrap.php';
 require_login();
 
 $user = current_user();
+$appName = app_config('APP_NAME', 'Irwell Valley District Scouts');
 
 $search = trim((string) ($_GET['q'] ?? ''));
 $groupId = (int) ($_GET['group_id'] ?? 0);
@@ -14,6 +15,115 @@ $role = trim((string) ($_GET['role'] ?? ''));
 $accreditation = trim((string) ($_GET['accreditation'] ?? ''));
 
 $pdo = db();
+
+/*
+|--------------------------------------------------------------------------
+| Role options - must match profile.php
+|--------------------------------------------------------------------------
+*/
+
+$roleOptions = [
+    'Assistant Group Scout Leader – Group Leadership Team Member',
+    'Assistant Section Leader – Section Team Member',
+    'Chair - Chair',
+    'Chaplain - Volunteering Development Team Member',
+    'County/Area/Region(Scotland) Commissioner – County/Area/Region(Scotland) Lead Volunteer',
+    'Deputy Chair - Trustee',
+    'Deputy Group Scout Leader – Group Leadership Team Member',
+    'District Commissioner – District Lead Volunteer',
+    'District Explorer Scout Administrator - 14-24 Team Member',
+    'District/County/Area/Region(Scotland) Skills Instructor – Programme Team Member',
+    'Early Years Section Leader - Section Team Member (of the Squirrels Team)',
+    'Executive Committee Member - Trustee',
+    'Explorer Scout Administrator – 14-24 Team Member',
+    'Group Scout Leader – Group Lead Volunteer',
+    'Group Skills Instructor - Group Leadership Team Member',
+    'Secretary - Trustee',
+    'Section Assistant – Section Team Member',
+    'Section Leader – Section Team Leader',
+    'Treasurer - Treasurer',
+    'Youth Commissioner – Youth Lead',
+];
+
+/*
+|--------------------------------------------------------------------------
+| Accreditation / permit options - must match profile.php
+|--------------------------------------------------------------------------
+*/
+
+$accreditationOptions = [
+    'Nights Away' => [
+        'Nights Away Permit Holder',
+        'Nights Away Adviser',
+        'Greenfield Nights Away',
+        'Lightweight Expedition Nights Away',
+        'Indoor Nights Away',
+        'Campsite Nights Away',
+    ],
+
+    'Activity Permits' => [
+        'Archery Permit',
+        'Air Rifle Shooting Permit',
+        'Tomahawk Throwing Permit',
+        'Climbing Permit',
+        'Abseiling Permit',
+        'Bouldering Permit',
+        'Caving Permit',
+        'Hillwalking Permit',
+        'Mountain Biking Permit',
+        'Canoeing Permit',
+        'Kayaking Permit',
+        'Stand Up Paddleboarding Permit',
+        'Rafting Permit',
+        'Sailing Permit',
+        'Windsurfing Permit',
+        'Powerboating Permit',
+        'Pulling / Rowing Permit',
+        'Bell Boating Permit',
+    ],
+
+    'Training / Support' => [
+        'First Response Trainer',
+        'First Response Assessor',
+        'Safeguarding Trainer',
+        'Safety Trainer',
+        'Learning Assessor',
+        'Training Adviser',
+        'Skills Instructor',
+        'Activity Assessor',
+        'Permit Assessor',
+    ],
+
+    'Other' => [
+        'Minibus Driver',
+        'D1 Driver',
+        'Trailer Towing',
+        'Food Hygiene',
+        'Event First Aid',
+        'Mental Health First Aid',
+    ],
+];
+
+function flatten_accreditation_options(array $options): array
+{
+    $flat = [];
+
+    foreach ($options as $items) {
+        foreach ($items as $item) {
+            $flat[] = $item;
+        }
+    }
+
+    return $flat;
+}
+
+$flatAccreditationOptions = flatten_accreditation_options($accreditationOptions);
+
+/*
+|--------------------------------------------------------------------------
+| Load filter data
+|--------------------------------------------------------------------------
+*/
 
 $stmt = $pdo->query("
     SELECT id, group_name
@@ -24,15 +134,11 @@ $stmt = $pdo->query("
 
 $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$stmt = $pdo->query("
-    SELECT DISTINCT scout_role
-    FROM group_contacts
-    WHERE scout_role IS NOT NULL
-      AND scout_role <> ''
-    ORDER BY scout_role ASC
-");
-
-$roles = $stmt->fetchAll(PDO::FETCH_COLUMN);
+/*
+|--------------------------------------------------------------------------
+| Build directory query
+|--------------------------------------------------------------------------
+*/
 
 $sql = "
     SELECT
@@ -99,6 +205,12 @@ $stmt->execute($params);
 
 $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+/*
+|--------------------------------------------------------------------------
+| Helper functions
+|--------------------------------------------------------------------------
+*/
+
 function directory_value(?string $value, string $fallback = 'Not provided'): string
 {
     $value = trim((string) $value);
@@ -135,63 +247,125 @@ function directory_photo_url(array $contact): ?string
     return '/auth/profile-photo.php?user_id=' . urlencode((string) $contact['linked_user_id']);
 }
 
-?>
+function decode_directory_accreditations(?string $value): array
+{
+    $value = trim((string) $value);
 
+    if ($value === '') {
+        return [];
+    }
+
+    $decoded = json_decode($value, true);
+
+    if (is_array($decoded)) {
+        return array_values(array_filter(array_map('strval', $decoded)));
+    }
+
+    /*
+     * Backwards compatibility for older free-text values.
+     */
+    $lines = preg_split('/\r\n|\r|\n|,/', $value);
+
+    if (!$lines) {
+        return [];
+    }
+
+    return array_values(array_filter(array_map('trim', $lines)));
+}
+
+function short_role_label(string $role): string
+{
+    $parts = preg_split('/\s+[–-]\s+/', $role, 2);
+
+    if (!$parts || trim($parts[0]) === '') {
+        return $role;
+    }
+
+    return trim($parts[0]);
+}
+
+function directory_has_active_filters(string $search, int $groupId, string $role, string $accreditation): bool
+{
+    return $search !== '' || $groupId > 0 || $role !== '' || $accreditation !== '';
+}
+
+?>
 <?php include __DIR__ . '/header.php'; ?>
 
 <style>
     .directory-page {
-        padding-top: 2.5rem;
+        padding-top: 2rem;
         padding-bottom: 5rem;
     }
 
-    .directory-hero {
-        position: relative;
+    /*
+    |--------------------------------------------------------------------------
+    | Compact directory header
+    |--------------------------------------------------------------------------
+    */
+
+    .directory-banner {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+        margin-bottom: 1.75rem;
+        padding: 1.25rem;
+        border: 1px solid var(--border-light);
+        background: #ffffff;
+        box-shadow: 0 0.45rem 1.25rem rgba(0, 0, 0, 0.04);
+    }
+
+    .directory-banner-image {
+        width: 112px;
+        height: 112px;
+        flex: 0 0 112px;
+        border-radius: 999px;
         overflow: hidden;
-        margin-bottom: 2rem;
-        color: #ffffff;
-        background:
-            linear-gradient(
-                90deg,
-                rgba(59, 0, 120, 0.94) 0%,
-                rgba(77, 0, 153, 0.86) 48%,
-                rgba(77, 0, 153, 0.62) 100%
-            ),
-            url('https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1800&q=80');
-        background-size: cover;
-        background-position: center;
+        border: 5px solid #f1e8ff;
+        background: var(--scout-purple);
+        box-shadow: 0 0.75rem 1.75rem rgba(0, 0, 0, 0.12);
     }
 
-    .directory-hero::after {
-        content: "⚜";
-        position: absolute;
-        right: 4%;
-        top: -1rem;
-        font-size: 14rem;
-        line-height: 1;
-        color: rgba(255, 255, 255, 0.08);
-        font-family: serif;
+    .directory-banner-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
     }
 
-    .directory-hero-inner {
-        position: relative;
-        z-index: 1;
-        padding: 2.75rem 3rem;
-    }
-
-    .directory-hero h1 {
-        font-size: 2.45rem;
+    .directory-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        margin-bottom: 0.45rem;
+        padding: 0.25rem 0.65rem;
+        border-radius: 999px;
+        background: #f1e8ff;
+        color: var(--scout-purple);
+        font-size: 0.75rem;
         font-weight: 900;
-        letter-spacing: -0.05em;
-        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
 
-    .directory-hero p {
-        max-width: 680px;
-        color: rgba(255, 255, 255, 0.9);
-        font-weight: 600;
-        margin-bottom: 0;
+    .directory-banner h1 {
+        font-size: 2rem;
+        font-weight: 900;
+        letter-spacing: -0.045em;
+        margin: 0 0 0.25rem;
     }
+
+    .directory-banner p {
+        color: var(--text-muted);
+        font-weight: 700;
+        margin: 0;
+        max-width: 760px;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cards and filters
+    |--------------------------------------------------------------------------
+    */
 
     .filter-card,
     .contact-card,
@@ -204,6 +378,7 @@ function directory_photo_url(array $contact): ?string
 
     .contact-card {
         height: 100%;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
     .contact-card:hover {
@@ -224,6 +399,7 @@ function directory_photo_url(array $contact): ?string
         font-weight: 900;
         flex-shrink: 0;
         font-size: 1rem;
+        border: 3px solid #f1e8ff;
     }
 
     .directory-avatar img {
@@ -287,35 +463,92 @@ function directory_photo_url(array $contact): ?string
         text-align: center;
     }
 
+    .filter-summary {
+        background: #f7f7f7;
+        border: 1px solid var(--border-light);
+        padding: 0.75rem 1rem;
+        margin-bottom: 1.5rem;
+        color: var(--text-muted);
+        font-weight: 700;
+    }
+
+    .filter-pill {
+        display: inline-flex;
+        align-items: center;
+        margin: 0.15rem 0.25rem 0.15rem 0;
+        padding: 0.2rem 0.55rem;
+        border-radius: 999px;
+        background: #f1e8ff;
+        color: var(--scout-purple);
+        font-size: 0.78rem;
+        font-weight: 900;
+    }
+
+    .accreditation-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+
+    .accreditation-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        background: #f1e8ff;
+        color: var(--scout-purple);
+        padding: 0.25rem 0.6rem;
+        font-size: 0.78rem;
+        font-weight: 900;
+        line-height: 1.2;
+    }
+
+    .role-main {
+        font-weight: 800;
+        color: #333333;
+    }
+
+    .directory-contact-link {
+        word-break: break-word;
+    }
+
     @media (max-width: 767.98px) {
         .directory-page {
-            padding-top: 1.5rem;
+            padding-top: 1.25rem;
         }
 
-        .directory-hero-inner {
-            padding: 2rem 1.5rem;
+        .directory-banner {
+            display: block;
+            text-align: center;
         }
 
-        .directory-hero h1 {
-            font-size: 2rem;
+        .directory-banner-image {
+            margin: 0 auto 1rem;
+            width: 96px;
+            height: 96px;
+            flex-basis: 96px;
         }
 
-        .directory-hero::after {
-            font-size: 8rem;
-            top: 1rem;
-            right: -0.5rem;
+        .directory-banner h1 {
+            font-size: 1.75rem;
         }
     }
 </style>
 
 <main class="page-container directory-page">
 
-    <section class="directory-hero">
-        <div class="directory-hero-inner">
-            <h1>District Directory</h1>
+    <section class="directory-banner">
+        <div class="directory-banner-image">
+            <img src="/assets/img/cub-on-raft-jpg.jpg"
+                 alt="">
+        </div>
+
+        <div>
+            <span class="directory-eyebrow">District Directory</span>
+
+            <h1>Find people across Irwell Valley</h1>
 
             <p>
-                Search Irwell Valley contacts by name, group, role, accreditation or profile details.
+                Search contacts by name, group, role, permits, accreditations or profile details.
             </p>
         </div>
     </section>
@@ -332,7 +565,7 @@ function directory_photo_url(array $contact): ?string
                                id="q"
                                name="q"
                                value="<?= e($search) ?>"
-                               placeholder="Name, email, role, about me...">
+                               placeholder="Name, email, role, permit, about me...">
                     </div>
 
                     <div class="form-group col-lg-3">
@@ -363,7 +596,7 @@ function directory_photo_url(array $contact): ?string
 
                             <option value="">All roles</option>
 
-                            <?php foreach ($roles as $roleOption): ?>
+                            <?php foreach ($roleOptions as $roleOption): ?>
                                 <option value="<?= e($roleOption) ?>"
                                     <?= $role === $roleOption ? 'selected' : '' ?>>
                                     <?= e($roleOption) ?>
@@ -374,14 +607,26 @@ function directory_photo_url(array $contact): ?string
                     </div>
 
                     <div class="form-group col-lg-2">
-                        <label for="accreditation">Accreditation</label>
+                        <label for="accreditation">Permit / accreditation</label>
 
-                        <input type="search"
-                               class="form-control"
-                               id="accreditation"
-                               name="accreditation"
-                               value="<?= e($accreditation) ?>"
-                               placeholder="Nights Away">
+                        <select class="form-control"
+                                id="accreditation"
+                                name="accreditation">
+
+                            <option value="">All</option>
+
+                            <?php foreach ($accreditationOptions as $category => $items): ?>
+                                <optgroup label="<?= e($category) ?>">
+                                    <?php foreach ($items as $item): ?>
+                                        <option value="<?= e($item) ?>"
+                                            <?= $accreditation === $item ? 'selected' : '' ?>>
+                                            <?= e($item) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </optgroup>
+                            <?php endforeach; ?>
+
+                        </select>
                     </div>
                 </div>
 
@@ -408,6 +653,38 @@ function directory_photo_url(array $contact): ?string
         </div>
     </section>
 
+    <?php if (directory_has_active_filters($search, $groupId, $role, $accreditation)): ?>
+        <div class="filter-summary">
+            <strong>Active filters:</strong>
+
+            <?php if ($search !== ''): ?>
+                <span class="filter-pill">Search: <?= e($search) ?></span>
+            <?php endif; ?>
+
+            <?php if ($groupId > 0): ?>
+                <?php
+                    $selectedGroupName = 'Selected group';
+
+                    foreach ($groups as $group) {
+                        if ((int) $group['id'] === $groupId) {
+                            $selectedGroupName = (string) $group['group_name'];
+                            break;
+                        }
+                    }
+                ?>
+                <span class="filter-pill">Group: <?= e($selectedGroupName) ?></span>
+            <?php endif; ?>
+
+            <?php if ($role !== ''): ?>
+                <span class="filter-pill">Role: <?= e(short_role_label($role)) ?></span>
+            <?php endif; ?>
+
+            <?php if ($accreditation !== ''): ?>
+                <span class="filter-pill">Permit: <?= e($accreditation) ?></span>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
     <?php if (!$contacts): ?>
 
         <section class="empty-state">
@@ -427,6 +704,8 @@ function directory_photo_url(array $contact): ?string
                     $isLinked = !empty($contact['linked_user_id']) || !empty($contact['microsoft_oid']);
                     $showPhone = (int) ($contact['share_contact_number'] ?? 0) === 1;
                     $photoUrl = directory_photo_url($contact);
+                    $contactAccreditations = decode_directory_accreditations($contact['accreditations'] ?? '');
+                    $roleLabel = directory_value($contact['scout_role'] ?? null);
                 ?>
 
                 <div class="col-lg-6 mb-4">
@@ -453,7 +732,7 @@ function directory_photo_url(array $contact): ?string
                                             </h2>
 
                                             <p class="text-muted mb-1">
-                                                <?= e(directory_value($contact['scout_role'] ?? null)) ?>
+                                                <span class="role-main"><?= e(short_role_label($roleLabel)) ?></span>
                                             </p>
                                         </div>
 
@@ -477,11 +756,16 @@ function directory_photo_url(array $contact): ?string
                             </div>
 
                             <div class="mb-3">
+                                <div class="meta-label">Role</div>
+                                <div><?= e($roleLabel) ?></div>
+                            </div>
+
+                            <div class="mb-3">
                                 <div class="meta-label">Email</div>
 
                                 <div>
                                     <?php if (!empty($contact['email'])): ?>
-                                        <a href="mailto:<?= e($contact['email']) ?>">
+                                        <a href="mailto:<?= e($contact['email']) ?>" class="directory-contact-link">
                                             <?= e($contact['email']) ?>
                                         </a>
                                     <?php else: ?>
@@ -506,12 +790,16 @@ function directory_photo_url(array $contact): ?string
                                 </div>
                             </div>
 
-                            <?php if (!empty($contact['accreditations'])): ?>
+                            <?php if (!empty($contactAccreditations)): ?>
                                 <div class="mb-3">
-                                    <div class="meta-label">Accreditations</div>
+                                    <div class="meta-label">Permits and accreditations</div>
 
-                                    <div class="pre-line">
-                                        <?= e($contact['accreditations']) ?>
+                                    <div class="accreditation-badges">
+                                        <?php foreach ($contactAccreditations as $item): ?>
+                                            <span class="accreditation-badge">
+                                                <?= e($item) ?>
+                                            </span>
+                                        <?php endforeach; ?>
                                     </div>
                                 </div>
                             <?php endif; ?>

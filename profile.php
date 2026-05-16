@@ -9,16 +9,18 @@ require_login();
 $user = current_user();
 $appName = app_config('APP_NAME', 'Irwell Valley District Scouts');
 
-$search = trim((string) ($_GET['q'] ?? ''));
-$groupId = (int) ($_GET['group_id'] ?? 0);
-$role = trim((string) ($_GET['role'] ?? ''));
-$accreditation = trim((string) ($_GET['accreditation'] ?? ''));
+$email = trim((string) ($user['email'] ?? ''));
+$displayName = trim((string) ($user['full_name'] ?? ''));
+$initials = strtoupper(substr($displayName ?: $email, 0, 1));
 
 $pdo = db();
 
+$error = null;
+$success = null;
+
 /*
 |--------------------------------------------------------------------------
-| Role options - must match profile.php
+| Role options
 |--------------------------------------------------------------------------
 */
 
@@ -47,8 +49,11 @@ $roleOptions = [
 
 /*
 |--------------------------------------------------------------------------
-| Accreditation / permit options - must match profile.php
+| Accreditation / permit options
 |--------------------------------------------------------------------------
+|
+| Stored as JSON in group_contacts.accreditations.
+|
 */
 
 $accreditationOptions = [
@@ -104,150 +109,7 @@ $accreditationOptions = [
     ],
 ];
 
-function flatten_accreditation_options(array $options): array
-{
-    $flat = [];
-
-    foreach ($options as $items) {
-        foreach ($items as $item) {
-            $flat[] = $item;
-        }
-    }
-
-    return $flat;
-}
-
-$flatAccreditationOptions = flatten_accreditation_options($accreditationOptions);
-
-/*
-|--------------------------------------------------------------------------
-| Load filter data
-|--------------------------------------------------------------------------
-*/
-
-$stmt = $pdo->query("
-    SELECT id, group_name
-    FROM groups
-    WHERE is_active = 1
-    ORDER BY group_name ASC
-");
-
-$groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-/*
-|--------------------------------------------------------------------------
-| Build directory query
-|--------------------------------------------------------------------------
-*/
-
-$sql = "
-    SELECT
-        gc.id,
-        gc.group_id,
-        gc.full_name,
-        gc.email,
-        gc.contact_number,
-        gc.scout_role,
-        gc.about_me,
-        gc.accreditations,
-        gc.share_contact_number,
-        g.group_name,
-        au.id AS linked_user_id,
-        au.microsoft_oid
-    FROM group_contacts gc
-    LEFT JOIN groups g
-        ON g.id = gc.group_id
-    LEFT JOIN admin_users au
-        ON LOWER(au.email) = LOWER(gc.email)
-    WHERE 1 = 1
-";
-
-$params = [];
-
-if ($search !== '') {
-    $sql .= "
-        AND (
-            gc.full_name LIKE :search
-            OR gc.email LIKE :search
-            OR gc.scout_role LIKE :search
-            OR gc.about_me LIKE :search
-            OR gc.accreditations LIKE :search
-            OR g.group_name LIKE :search
-        )
-    ";
-
-    $params['search'] = '%' . $search . '%';
-}
-
-if ($groupId > 0) {
-    $sql .= " AND gc.group_id = :group_id";
-    $params['group_id'] = $groupId;
-}
-
-if ($role !== '') {
-    $sql .= " AND gc.scout_role = :role";
-    $params['role'] = $role;
-}
-
-if ($accreditation !== '') {
-    $sql .= " AND gc.accreditations LIKE :accreditation";
-    $params['accreditation'] = '%' . $accreditation . '%';
-}
-
-$sql .= "
-    ORDER BY
-        g.group_name ASC,
-        gc.full_name ASC
-";
-
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
-
-$contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-/*
-|--------------------------------------------------------------------------
-| Helper functions
-|--------------------------------------------------------------------------
-*/
-
-function directory_value(?string $value, string $fallback = 'Not provided'): string
-{
-    $value = trim((string) $value);
-
-    return $value !== '' ? $value : $fallback;
-}
-
-function directory_initials(string $name): string
-{
-    $name = trim($name);
-
-    if ($name === '') {
-        return '?';
-    }
-
-    $parts = preg_split('/\s+/', $name);
-
-    if (!$parts) {
-        return strtoupper(substr($name, 0, 1));
-    }
-
-    $first = substr($parts[0], 0, 1);
-    $last = count($parts) > 1 ? substr($parts[count($parts) - 1], 0, 1) : '';
-
-    return strtoupper($first . $last);
-}
-
-function directory_photo_url(array $contact): ?string
-{
-    if (empty($contact['linked_user_id'])) {
-        return null;
-    }
-
-    return '/auth/profile-photo.php?user_id=' . urlencode((string) $contact['linked_user_id']);
-}
-
-function decode_directory_accreditations(?string $value): array
+function decode_accreditations(?string $value): array
 {
     $value = trim((string) $value);
 
@@ -262,7 +124,7 @@ function decode_directory_accreditations(?string $value): array
     }
 
     /*
-     * Backwards compatibility for older free-text values.
+     * Backwards compatibility for old free-text entries.
      */
     $lines = preg_split('/\r\n|\r|\n|,/', $value);
 
@@ -273,38 +135,258 @@ function decode_directory_accreditations(?string $value): array
     return array_values(array_filter(array_map('trim', $lines)));
 }
 
-function short_role_label(string $role): string
+function flatten_accreditation_options(array $options): array
 {
-    $parts = preg_split('/\s+[–-]\s+/', $role, 2);
+    $flat = [];
 
-    if (!$parts || trim($parts[0]) === '') {
-        return $role;
+    foreach ($options as $groupItems) {
+        foreach ($groupItems as $item) {
+            $flat[] = $item;
+        }
     }
 
-    return trim($parts[0]);
+    return $flat;
 }
 
-function directory_has_active_filters(string $search, int $groupId, string $role, string $accreditation): bool
-{
-    return $search !== '' || $groupId > 0 || $role !== '' || $accreditation !== '';
+/*
+|--------------------------------------------------------------------------
+| Load active groups
+|--------------------------------------------------------------------------
+*/
+
+$stmt = $pdo->query("
+    SELECT id, group_name
+    FROM groups
+    WHERE is_active = 1
+    ORDER BY group_name ASC
+");
+
+$groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+/*
+|--------------------------------------------------------------------------
+| Load existing group contact by email
+|--------------------------------------------------------------------------
+*/
+
+$stmt = $pdo->prepare("
+    SELECT *
+    FROM group_contacts
+    WHERE LOWER(email) = LOWER(:email)
+    LIMIT 1
+");
+
+$stmt->execute([
+    'email' => $email,
+]);
+
+$contact = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$contact) {
+    $contact = [
+        'id' => null,
+        'group_id' => '',
+        'full_name' => $displayName,
+        'email' => $email,
+        'contact_number' => '',
+        'scout_role' => '',
+        'about_me' => '',
+        'accreditations' => '',
+        'share_contact_number' => 0,
+    ];
+}
+
+$existingGroupId = (int) ($contact['group_id'] ?? 0);
+$groupIsLocked = $existingGroupId > 0;
+$selectedAccreditations = decode_accreditations($contact['accreditations'] ?? '');
+
+/*
+|--------------------------------------------------------------------------
+| Handle save
+|--------------------------------------------------------------------------
+*/
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $fullName = trim((string) ($_POST['full_name'] ?? ''));
+    $contactNumber = trim((string) ($_POST['contact_number'] ?? ''));
+    $scoutRole = trim((string) ($_POST['scout_role'] ?? ''));
+    $aboutMe = trim((string) ($_POST['about_me'] ?? ''));
+    $shareContactNumber = isset($_POST['share_contact_number']) ? 1 : 0;
+
+    /*
+     * If a group is already set, do not allow the user to change it.
+     */
+    if ($groupIsLocked) {
+        $groupId = $existingGroupId;
+    } else {
+        $groupId = (int) ($_POST['group_id'] ?? 0);
+    }
+
+    $postedAccreditations = $_POST['accreditations'] ?? [];
+
+    if (!is_array($postedAccreditations)) {
+        $postedAccreditations = [];
+    }
+
+    $allowedAccreditations = flatten_accreditation_options($accreditationOptions);
+
+    $cleanAccreditations = array_values(array_intersect(
+        array_map('strval', $postedAccreditations),
+        $allowedAccreditations
+    ));
+
+    $accreditationsJson = json_encode($cleanAccreditations, JSON_UNESCAPED_UNICODE);
+
+    if ($accreditationsJson === false) {
+        $accreditationsJson = '[]';
+    }
+
+    if ($fullName === '') {
+        $error = 'Please enter your name.';
+    } elseif ($groupId <= 0) {
+        $error = 'Please choose your group.';
+    } elseif ($scoutRole === '') {
+        $error = 'Please choose your Scout role.';
+    } elseif (!in_array($scoutRole, $roleOptions, true)) {
+        $error = 'Please choose a valid Scout role.';
+    } else {
+        $stmt = $pdo->prepare("
+            SELECT id
+            FROM groups
+            WHERE id = :id
+              AND is_active = 1
+            LIMIT 1
+        ");
+
+        $stmt->execute([
+            'id' => $groupId,
+        ]);
+
+        if (!$stmt->fetchColumn()) {
+            $error = 'Please choose a valid group.';
+        }
+    }
+
+    if (!$error) {
+        /*
+         * Keep admin_users full_name in sync with profile name.
+         */
+        $stmt = $pdo->prepare("
+            UPDATE admin_users
+            SET full_name = :full_name
+            WHERE id = :id
+        ");
+
+        $stmt->execute([
+            'full_name' => $fullName,
+            'id' => (int) $user['id'],
+        ]);
+
+        $_SESSION['portal_user']['full_name'] = $fullName;
+
+        /*
+         * Update or create group_contacts row matched by email.
+         */
+        if (!empty($contact['id'])) {
+            $stmt = $pdo->prepare("
+                UPDATE group_contacts
+                SET group_id = :group_id,
+                    full_name = :full_name,
+                    contact_number = :contact_number,
+                    scout_role = :scout_role,
+                    about_me = :about_me,
+                    accreditations = :accreditations,
+                    share_contact_number = :share_contact_number,
+                    profile_updated_at = NOW()
+                WHERE id = :id
+            ");
+
+            $stmt->execute([
+                'group_id' => $groupId,
+                'full_name' => $fullName,
+                'contact_number' => $contactNumber,
+                'scout_role' => $scoutRole,
+                'about_me' => $aboutMe,
+                'accreditations' => $accreditationsJson,
+                'share_contact_number' => $shareContactNumber,
+                'id' => (int) $contact['id'],
+            ]);
+        } else {
+            $stmt = $pdo->prepare("
+                INSERT INTO group_contacts (
+                    group_id,
+                    full_name,
+                    email,
+                    contact_number,
+                    scout_role,
+                    about_me,
+                    accreditations,
+                    share_contact_number,
+                    profile_updated_at
+                ) VALUES (
+                    :group_id,
+                    :full_name,
+                    :email,
+                    :contact_number,
+                    :scout_role,
+                    :about_me,
+                    :accreditations,
+                    :share_contact_number,
+                    NOW()
+                )
+            ");
+
+            $stmt->execute([
+                'group_id' => $groupId,
+                'full_name' => $fullName,
+                'email' => $email,
+                'contact_number' => $contactNumber,
+                'scout_role' => $scoutRole,
+                'about_me' => $aboutMe,
+                'accreditations' => $accreditationsJson,
+                'share_contact_number' => $shareContactNumber,
+            ]);
+        }
+
+        $success = 'Your profile has been updated.';
+
+        $stmt = $pdo->prepare("
+            SELECT *
+            FROM group_contacts
+            WHERE LOWER(email) = LOWER(:email)
+            LIMIT 1
+        ");
+
+        $stmt->execute([
+            'email' => $email,
+        ]);
+
+        $contact = $stmt->fetch(PDO::FETCH_ASSOC);
+        $displayName = $fullName;
+        $initials = strtoupper(substr($displayName ?: $email, 0, 1));
+
+        $existingGroupId = (int) ($contact['group_id'] ?? 0);
+        $groupIsLocked = $existingGroupId > 0;
+        $selectedAccreditations = decode_accreditations($contact['accreditations'] ?? '');
+    }
 }
 
 ?>
 <?php include __DIR__ . '/header.php'; ?>
 
 <style>
-    .directory-page {
+    .profile-page {
         padding-top: 2rem;
         padding-bottom: 5rem;
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Compact directory header
+    | Compact profile banner
     |--------------------------------------------------------------------------
     */
 
-    .directory-banner {
+    .profile-banner {
         display: flex;
         align-items: center;
         gap: 1.25rem;
@@ -315,7 +397,7 @@ function directory_has_active_filters(string $search, int $groupId, string $role
         box-shadow: 0 0.45rem 1.25rem rgba(0, 0, 0, 0.04);
     }
 
-    .directory-banner-image {
+    .profile-banner-image {
         width: 112px;
         height: 112px;
         flex: 0 0 112px;
@@ -326,14 +408,18 @@ function directory_has_active_filters(string $search, int $groupId, string $role
         box-shadow: 0 0.75rem 1.75rem rgba(0, 0, 0, 0.12);
     }
 
-    .directory-banner-image img {
+    .profile-banner-image img {
         width: 100%;
         height: 100%;
         object-fit: cover;
         display: block;
     }
 
-    .directory-eyebrow {
+    .profile-banner-copy {
+        min-width: 0;
+    }
+
+    .profile-eyebrow {
         display: inline-flex;
         align-items: center;
         margin-bottom: 0.45rem;
@@ -347,93 +433,55 @@ function directory_has_active_filters(string $search, int $groupId, string $role
         letter-spacing: 0.05em;
     }
 
-    .directory-banner h1 {
+    .profile-banner h1 {
         font-size: 2rem;
         font-weight: 900;
         letter-spacing: -0.045em;
         margin: 0 0 0.25rem;
     }
 
-    .directory-banner p {
+    .profile-banner p {
         color: var(--text-muted);
         font-weight: 700;
         margin: 0;
-        max-width: 760px;
+        word-break: break-word;
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Cards and filters
+    | Cards
     |--------------------------------------------------------------------------
     */
 
-    .filter-card,
-    .contact-card,
-    .empty-state {
+    .profile-card {
         border: 1px solid var(--border-light);
         border-radius: 0;
         background: #ffffff;
         box-shadow: 0 0.45rem 1.25rem rgba(0, 0, 0, 0.04);
     }
 
-    .contact-card {
-        height: 100%;
-        transition: border-color 0.15s ease, box-shadow 0.15s ease;
-    }
-
-    .contact-card:hover {
-        border-color: #c8c8c8;
-        box-shadow: 0 0.65rem 1.5rem rgba(0, 0, 0, 0.07);
-    }
-
-    .directory-avatar {
-        width: 64px;
-        height: 64px;
-        border-radius: 50%;
-        overflow: hidden;
-        background: var(--scout-purple);
-        color: #ffffff;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+    .section-title {
         font-weight: 900;
-        flex-shrink: 0;
-        font-size: 1rem;
-        border: 3px solid #f1e8ff;
+        font-size: 1.15rem;
+        letter-spacing: -0.02em;
+        margin-bottom: 1.5rem;
+        color: var(--scout-purple);
     }
 
-    .directory-avatar img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    .badge-linked {
-        background: #00a794;
-        color: #ffffff;
-    }
-
-    .badge-unlinked {
-        background: #707070;
-        color: #ffffff;
-    }
-
-    .meta-label {
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        font-weight: 900;
-        color: #707070;
-        margin-bottom: 0.15rem;
-    }
-
-    .pre-line {
-        white-space: pre-line;
+    .section-intro {
+        margin-top: -0.85rem;
+        margin-bottom: 1.5rem;
+        color: var(--text-muted);
+        font-weight: 700;
     }
 
     .form-control {
         border-radius: 0;
-        min-height: 46px;
+        min-height: 48px;
+    }
+
+    textarea.form-control {
+        min-height: auto;
     }
 
     label {
@@ -441,11 +489,31 @@ function directory_has_active_filters(string $search, int $groupId, string $role
         font-size: 0.92rem;
     }
 
+    .locked-field {
+        background: #f7f7f7;
+        border: 1px solid #dddddd;
+        min-height: 48px;
+        display: flex;
+        align-items: center;
+        padding: 0.65rem 0.75rem;
+        font-weight: 800;
+        color: #333333;
+    }
+
+    .locked-note {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        font-weight: 700;
+        margin-top: 0.45rem;
+    }
+
     .btn-primary {
         background: var(--scout-purple);
         border-color: var(--scout-purple);
-        border-radius: 0;
         font-weight: 800;
+        border-radius: 0;
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
     }
 
     .btn-primary:hover {
@@ -453,374 +521,315 @@ function directory_has_active_filters(string $search, int $groupId, string $role
         border-color: var(--scout-purple-dark);
     }
 
-    .btn-outline-secondary {
-        border-radius: 0;
-        font-weight: 800;
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | Accreditations
+    |--------------------------------------------------------------------------
+    */
 
-    .empty-state {
-        padding: 3rem;
-        text-align: center;
-    }
-
-    .filter-summary {
-        background: #f7f7f7;
+    .accreditation-group {
         border: 1px solid var(--border-light);
+        background: #ffffff;
+        margin-bottom: 1rem;
+    }
+
+    .accreditation-group-heading {
+        background: #f7f7f7;
+        border-bottom: 1px solid var(--border-light);
         padding: 0.75rem 1rem;
-        margin-bottom: 1.5rem;
-        color: var(--text-muted);
-        font-weight: 700;
-    }
-
-    .filter-pill {
-        display: inline-flex;
-        align-items: center;
-        margin: 0.15rem 0.25rem 0.15rem 0;
-        padding: 0.2rem 0.55rem;
-        border-radius: 999px;
-        background: #f1e8ff;
-        color: var(--scout-purple);
-        font-size: 0.78rem;
         font-weight: 900;
+        color: var(--scout-purple);
     }
 
-    .accreditation-badges {
+    .accreditation-grid {
+        padding: 1rem;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.65rem 1rem;
+    }
+
+    .accreditation-check {
         display: flex;
-        flex-wrap: wrap;
-        gap: 0.4rem;
+        align-items: flex-start;
+        gap: 0.55rem;
+        margin: 0;
+        font-weight: 700;
+        color: #222222;
+        line-height: 1.3;
     }
 
-    .accreditation-badge {
-        display: inline-flex;
-        align-items: center;
-        border-radius: 999px;
-        background: #f1e8ff;
-        color: var(--scout-purple);
-        padding: 0.25rem 0.6rem;
-        font-size: 0.78rem;
-        font-weight: 900;
-        line-height: 1.2;
-    }
-
-    .role-main {
-        font-weight: 800;
-        color: #333333;
-    }
-
-    .directory-contact-link {
-        word-break: break-word;
+    .accreditation-check input {
+        margin-top: 0.15rem;
     }
 
     @media (max-width: 767.98px) {
-        .directory-page {
+        .profile-page {
             padding-top: 1.25rem;
         }
 
-        .directory-banner {
+        .profile-banner {
             display: block;
             text-align: center;
         }
 
-        .directory-banner-image {
+        .profile-banner-image {
             margin: 0 auto 1rem;
             width: 96px;
             height: 96px;
             flex-basis: 96px;
         }
 
-        .directory-banner h1 {
+        .profile-banner h1 {
             font-size: 1.75rem;
+        }
+
+        .accreditation-grid {
+            grid-template-columns: 1fr;
         }
     }
 </style>
 
-<main class="page-container directory-page">
+<main class="page-container profile-page">
 
-    <section class="directory-banner">
-        <div class="directory-banner-image">
+    <section class="profile-banner">
+        <div class="profile-banner-image">
             <img src="/assets/img/cub-on-raft-jpg.jpg"
                  alt="">
         </div>
 
-        <div>
-            <span class="directory-eyebrow">District Directory</span>
+        <div class="profile-banner-copy">
+            <span class="profile-eyebrow">My Profile</span>
 
-            <h1>Find people across Irwell Valley</h1>
+            <h1><?= e($displayName ?: 'My Profile') ?></h1>
 
             <p>
-                Search contacts by name, group, role, permits, accreditations or profile details.
+                <?= e($email) ?>
             </p>
         </div>
     </section>
 
-    <section class="card filter-card mb-4">
-        <div class="card-body p-4">
-            <form method="get">
-                <div class="form-row">
-                    <div class="form-group col-lg-4">
-                        <label for="q">Search</label>
+    <?php if ($error): ?>
+        <div class="alert alert-danger">
+            <?= e($error) ?>
+        </div>
+    <?php endif; ?>
 
-                        <input type="search"
-                               class="form-control"
-                               id="q"
-                               name="q"
-                               value="<?= e($search) ?>"
-                               placeholder="Name, email, role, permit, about me...">
-                    </div>
+    <?php if ($success): ?>
+        <div class="alert alert-success">
+            <?= e($success) ?>
+        </div>
+    <?php endif; ?>
 
-                    <div class="form-group col-lg-3">
-                        <label for="group_id">Group</label>
+    <div class="row justify-content-center">
+        <div class="col-xl-10">
 
-                        <select class="form-control"
-                                id="group_id"
-                                name="group_id">
+            <div class="card profile-card">
+                <div class="card-body p-4 p-md-5">
 
-                            <option value="0">All groups</option>
+                    <form method="post">
 
-                            <?php foreach ($groups as $group): ?>
-                                <option value="<?= (int) $group['id'] ?>"
-                                    <?= $groupId === (int) $group['id'] ? 'selected' : '' ?>>
-                                    <?= e($group['group_name']) ?>
-                                </option>
-                            <?php endforeach; ?>
+                        <h2 class="section-title">
+                            Directory details
+                        </h2>
 
-                        </select>
-                    </div>
+                        <p class="section-intro">
+                            These details will be used in the District Directory. You can choose whether your contact number is shown publicly.
+                        </p>
 
-                    <div class="form-group col-lg-3">
-                        <label for="role">Role</label>
+                        <div class="form-group">
+                            <label for="full_name">Name</label>
 
-                        <select class="form-control"
-                                id="role"
-                                name="role">
+                            <input type="text"
+                                   class="form-control"
+                                   id="full_name"
+                                   name="full_name"
+                                   value="<?= e($contact['full_name'] ?? $displayName) ?>"
+                                   required>
+                        </div>
 
-                            <option value="">All roles</option>
+                        <div class="form-group">
+                            <label for="email">Email address</label>
 
-                            <?php foreach ($roleOptions as $roleOption): ?>
-                                <option value="<?= e($roleOption) ?>"
-                                    <?= $role === $roleOption ? 'selected' : '' ?>>
-                                    <?= e($roleOption) ?>
-                                </option>
-                            <?php endforeach; ?>
+                            <input type="email"
+                                   class="form-control"
+                                   id="email"
+                                   value="<?= e($email) ?>"
+                                   disabled>
 
-                        </select>
-                    </div>
+                            <small class="form-text text-muted">
+                                Your email comes from your Microsoft sign-in and is used to link your directory record.
+                            </small>
+                        </div>
 
-                    <div class="form-group col-lg-2">
-                        <label for="accreditation">Permit / accreditation</label>
+                        <div class="form-group">
+                            <label for="group_id">Group</label>
 
-                        <select class="form-control"
-                                id="accreditation"
-                                name="accreditation">
+                            <?php if ($groupIsLocked): ?>
+                                <?php
+                                    $lockedGroupName = 'Selected group';
 
-                            <option value="">All</option>
+                                    foreach ($groups as $group) {
+                                        if ((int) $group['id'] === $existingGroupId) {
+                                            $lockedGroupName = (string) $group['group_name'];
+                                            break;
+                                        }
+                                    }
+                                ?>
 
-                            <?php foreach ($accreditationOptions as $category => $items): ?>
-                                <optgroup label="<?= e($category) ?>">
-                                    <?php foreach ($items as $item): ?>
-                                        <option value="<?= e($item) ?>"
-                                            <?= $accreditation === $item ? 'selected' : '' ?>>
-                                            <?= e($item) ?>
+                                <div class="locked-field">
+                                    <?= e($lockedGroupName) ?>
+                                </div>
+
+                                <input type="hidden"
+                                       name="group_id"
+                                       value="<?= (int) $existingGroupId ?>">
+
+                                <div class="locked-note">
+                                    Your group is already set. If this needs changing, please contact the District team.
+                                </div>
+                            <?php else: ?>
+                                <select class="form-control"
+                                        id="group_id"
+                                        name="group_id"
+                                        required>
+
+                                    <option value="">
+                                        Select your group
+                                    </option>
+
+                                    <?php foreach ($groups as $group): ?>
+                                        <option value="<?= (int) $group['id'] ?>"
+                                            <?= ((int) ($contact['group_id'] ?? 0) === (int) $group['id']) ? 'selected' : '' ?>>
+
+                                            <?= e($group['group_name']) ?>
+
                                         </option>
                                     <?php endforeach; ?>
-                                </optgroup>
-                            <?php endforeach; ?>
 
-                        </select>
-                    </div>
-                </div>
-
-                <div class="d-flex flex-wrap align-items-center">
-                    <button type="submit"
-                            class="btn btn-primary mr-2">
-
-                        Search directory
-
-                    </button>
-
-                    <a href="/directory.php"
-                       class="btn btn-outline-secondary">
-
-                        Clear
-
-                    </a>
-
-                    <span class="ml-auto text-muted small mt-3 mt-md-0">
-                        <?= count($contacts) ?> result<?= count($contacts) === 1 ? '' : 's' ?>
-                    </span>
-                </div>
-            </form>
-        </div>
-    </section>
-
-    <?php if (directory_has_active_filters($search, $groupId, $role, $accreditation)): ?>
-        <div class="filter-summary">
-            <strong>Active filters:</strong>
-
-            <?php if ($search !== ''): ?>
-                <span class="filter-pill">Search: <?= e($search) ?></span>
-            <?php endif; ?>
-
-            <?php if ($groupId > 0): ?>
-                <?php
-                    $selectedGroupName = 'Selected group';
-
-                    foreach ($groups as $group) {
-                        if ((int) $group['id'] === $groupId) {
-                            $selectedGroupName = (string) $group['group_name'];
-                            break;
-                        }
-                    }
-                ?>
-                <span class="filter-pill">Group: <?= e($selectedGroupName) ?></span>
-            <?php endif; ?>
-
-            <?php if ($role !== ''): ?>
-                <span class="filter-pill">Role: <?= e(short_role_label($role)) ?></span>
-            <?php endif; ?>
-
-            <?php if ($accreditation !== ''): ?>
-                <span class="filter-pill">Permit: <?= e($accreditation) ?></span>
-            <?php endif; ?>
-        </div>
-    <?php endif; ?>
-
-    <?php if (!$contacts): ?>
-
-        <section class="empty-state">
-            <h2 class="h4">No contacts found</h2>
-
-            <p class="text-muted mb-0">
-                Try changing your search filters.
-            </p>
-        </section>
-
-    <?php else: ?>
-
-        <section class="row">
-            <?php foreach ($contacts as $contact): ?>
-                <?php
-                    $name = directory_value($contact['full_name'] ?? null, 'Unnamed contact');
-                    $isLinked = !empty($contact['linked_user_id']) || !empty($contact['microsoft_oid']);
-                    $showPhone = (int) ($contact['share_contact_number'] ?? 0) === 1;
-                    $photoUrl = directory_photo_url($contact);
-                    $contactAccreditations = decode_directory_accreditations($contact['accreditations'] ?? '');
-                    $roleLabel = directory_value($contact['scout_role'] ?? null);
-                ?>
-
-                <div class="col-lg-6 mb-4">
-                    <article class="card contact-card">
-                        <div class="card-body p-4">
-
-                            <div class="d-flex align-items-start mb-3">
-
-                                <div class="directory-avatar mr-3">
-                                    <?php if ($photoUrl): ?>
-                                        <img src="<?= e($photoUrl) ?>"
-                                             alt="<?= e($name) ?>"
-                                             onerror="this.style.display='none'; this.parentNode.innerHTML='<?= e(directory_initials($name)) ?>';">
-                                    <?php else: ?>
-                                        <?= e(directory_initials($name)) ?>
-                                    <?php endif; ?>
-                                </div>
-
-                                <div class="flex-grow-1">
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <div>
-                                            <h2 class="h5 mb-1">
-                                                <?= e($name) ?>
-                                            </h2>
-
-                                            <p class="text-muted mb-1">
-                                                <span class="role-main"><?= e(short_role_label($roleLabel)) ?></span>
-                                            </p>
-                                        </div>
-
-                                        <?php if ($isLinked): ?>
-                                            <span class="badge badge-linked">
-                                                SSO linked
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="badge badge-unlinked">
-                                                Directory only
-                                            </span>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-
-                            </div>
-
-                            <div class="mb-3">
-                                <div class="meta-label">Group</div>
-                                <div><?= e(directory_value($contact['group_name'] ?? null)) ?></div>
-                            </div>
-
-                            <div class="mb-3">
-                                <div class="meta-label">Role</div>
-                                <div><?= e($roleLabel) ?></div>
-                            </div>
-
-                            <div class="mb-3">
-                                <div class="meta-label">Email</div>
-
-                                <div>
-                                    <?php if (!empty($contact['email'])): ?>
-                                        <a href="mailto:<?= e($contact['email']) ?>" class="directory-contact-link">
-                                            <?= e($contact['email']) ?>
-                                        </a>
-                                    <?php else: ?>
-                                        <span class="text-muted">Not provided</span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <div class="meta-label">Contact number</div>
-
-                                <div>
-                                    <?php if ($showPhone && !empty($contact['contact_number'])): ?>
-                                        <a href="tel:<?= e($contact['contact_number']) ?>">
-                                            <?= e($contact['contact_number']) ?>
-                                        </a>
-                                    <?php elseif (!empty($contact['contact_number'])): ?>
-                                        <span class="text-muted">Hidden by user</span>
-                                    <?php else: ?>
-                                        <span class="text-muted">Not provided</span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-
-                            <?php if (!empty($contactAccreditations)): ?>
-                                <div class="mb-3">
-                                    <div class="meta-label">Permits and accreditations</div>
-
-                                    <div class="accreditation-badges">
-                                        <?php foreach ($contactAccreditations as $item): ?>
-                                            <span class="accreditation-badge">
-                                                <?= e($item) ?>
-                                            </span>
-                                        <?php endforeach; ?>
-                                    </div>
-                                </div>
+                                </select>
                             <?php endif; ?>
+                        </div>
 
-                            <?php if (!empty($contact['about_me'])): ?>
-                                <div>
-                                    <div class="meta-label">About</div>
+                        <div class="form-group">
+                            <label for="scout_role">Scout role</label>
 
-                                    <div class="pre-line">
-                                        <?= e($contact['about_me']) ?>
-                                    </div>
+                            <select class="form-control"
+                                    id="scout_role"
+                                    name="scout_role"
+                                    required>
+
+                                <option value="">
+                                    Select your role
+                                </option>
+
+                                <?php foreach ($roleOptions as $roleOption): ?>
+                                    <option value="<?= e($roleOption) ?>"
+                                        <?= (($contact['scout_role'] ?? '') === $roleOption) ? 'selected' : '' ?>>
+
+                                        <?= e($roleOption) ?>
+
+                                    </option>
+                                <?php endforeach; ?>
+
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="contact_number">Contact number</label>
+
+                            <input type="text"
+                                   class="form-control"
+                                   id="contact_number"
+                                   name="contact_number"
+                                   value="<?= e($contact['contact_number'] ?? '') ?>"
+                                   placeholder="Optional">
+                        </div>
+
+                        <div class="form-group form-check">
+                            <input type="checkbox"
+                                   class="form-check-input"
+                                   id="share_contact_number"
+                                   name="share_contact_number"
+                                   value="1"
+                                   <?= !empty($contact['share_contact_number']) ? 'checked' : '' ?>>
+
+                            <label class="form-check-label"
+                                   for="share_contact_number">
+
+                                Share my contact number in the District Directory
+
+                            </label>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="about_me">About me</label>
+
+                            <textarea class="form-control"
+                                      id="about_me"
+                                      name="about_me"
+                                      rows="4"
+                                      placeholder="Optional short profile"><?= e($contact['about_me'] ?? '') ?></textarea>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <h2 class="section-title">
+                            Permits and accreditations
+                        </h2>
+
+                        <p class="section-intro">
+                            Tick the permits, accreditations or adviser roles you hold. These will be saved against your directory profile.
+                        </p>
+
+                        <?php foreach ($accreditationOptions as $category => $items): ?>
+                            <div class="accreditation-group">
+                                <div class="accreditation-group-heading">
+                                    <?= e($category) ?>
                                 </div>
-                            <?php endif; ?>
+
+                                <div class="accreditation-grid">
+                                    <?php foreach ($items as $item): ?>
+                                        <?php $id = 'accreditation_' . md5($item); ?>
+
+                                        <label class="accreditation-check" for="<?= e($id) ?>">
+                                            <input type="checkbox"
+                                                   id="<?= e($id) ?>"
+                                                   name="accreditations[]"
+                                                   value="<?= e($item) ?>"
+                                                   <?= in_array($item, $selectedAccreditations, true) ? 'checked' : '' ?>>
+
+                                            <span><?= e($item) ?></span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+
+                        <div class="d-flex align-items-center flex-wrap mt-4">
+
+                            <button type="submit"
+                                    class="btn btn-primary btn-lg mr-3 mb-2">
+
+                                Save profile
+
+                            </button>
+
+                            <a href="/index.php"
+                               class="btn btn-link mb-2">
+
+                                Back to dashboard
+
+                            </a>
 
                         </div>
-                    </article>
-                </div>
-            <?php endforeach; ?>
-        </section>
 
-    <?php endif; ?>
+                    </form>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
 
 </main>
 
