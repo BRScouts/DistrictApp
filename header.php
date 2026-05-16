@@ -408,32 +408,3 @@
     </div>
 </header>
 
-<section class="member-hero">
-    <div class="member-hero-inner">
-        <h1>Welcome, <?= e($displayName) ?></h1>
-
-        <?php if (!empty($user['member_number'])): ?>
-            <div class="member-number">
-                Member <?= e($user['member_number']) ?>
-            </div>
-        <?php endif; ?>
-
-        <?php if (!empty($user['service_length'])): ?>
-            <div class="member-service">
-                <?= e($user['service_length']) ?> service
-            </div>
-        <?php else: ?>
-            <div class="member-service">
-                District tools
-            </div>
-        <?php endif; ?>
-    </div>
-</section>
-
-<div class="breadcrumb-strip">
-    <div class="breadcrumb-inner">
-        <a href="/index.php">Home</a>
-        <span class="mx-2">›</span>
-        <strong>Dashboard</strong>
-    </div>
-</div>
