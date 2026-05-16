@@ -15,12 +15,22 @@ require_once __DIR__ . '/config.php';
  *   'access_token' => '...',
  * ]
  *
- * Admin/reviewer session:
+ * Existing DC admin/reviewer session:
  * $_SESSION['admin_auth'] = [
  *   'admin_user_id' => 1,
  *   'full_name' => 'District Reviewer',
  *   'email' => 'reviewer@example.org',
  *   'role' => 'reviewer' | 'admin'
+ * ]
+ *
+ * Main app Microsoft SSO session:
+ * $_SESSION['portal_user'] = [
+ *   'id' => 1,
+ *   'full_name' => 'Example User',
+ *   'email' => 'user@example.org',
+ *   'role' => 'user' | 'reviewer' | 'admin',
+ *   'microsoft_oid' => '...',
+ *   'auth_provider' => 'microsoft',
  * ]
  */
 
@@ -61,7 +71,7 @@ function auth_capture_group_token_from_request(): void
 }
 
 /**
- * Returns admin auth array or null
+ * Returns existing DC admin/reviewer auth array or null.
  */
 function auth_admin(): ?array
 {
@@ -69,7 +79,7 @@ function auth_admin(): ?array
 }
 
 /**
- * Returns group auth array or null
+ * Returns group auth array or null.
  */
 function auth_group(): ?array
 {
@@ -77,8 +87,20 @@ function auth_group(): ?array
 }
 
 /**
- * Effective auth context
- * Admin/reviewer takes precedence over group-link session.
+ * Returns main portal Microsoft SSO user array or null.
+ */
+function auth_portal_user(): ?array
+{
+    return $_SESSION['portal_user'] ?? null;
+}
+
+/**
+ * Effective auth context.
+ *
+ * Priority:
+ * 1. Existing DC admin/reviewer session
+ * 2. Main portal Microsoft SSO session
+ * 3. Existing group-link session
  */
 function auth_context(): ?array
 {
@@ -89,6 +111,20 @@ function auth_context(): ?array
             'type' => 'admin',
             'role' => $admin['role'],
             'name' => $admin['full_name'],
+            'email' => $admin['email'] ?? null,
+            'user_id' => $admin['admin_user_id'] ?? null,
+        ];
+    }
+
+    $portalUser = auth_portal_user();
+
+    if ($portalUser) {
+        return [
+            'type' => 'portal_user',
+            'role' => $portalUser['role'] ?? ROLE_USER,
+            'name' => $portalUser['full_name'] ?? $portalUser['email'] ?? 'Portal user',
+            'email' => $portalUser['email'] ?? null,
+            'user_id' => $portalUser['id'] ?? null,
         ];
     }
 
@@ -108,7 +144,7 @@ function auth_context(): ?array
 }
 
 /**
- * Whether user is authenticated at all
+ * Whether user is authenticated at all.
  */
 function is_authenticated(): bool
 {
@@ -116,27 +152,59 @@ function is_authenticated(): bool
 }
 
 /**
- * Whether current user is reviewer/admin
+ * Whether current user is reviewer/admin.
  */
 function is_reviewer_or_admin(): bool
 {
     $admin = auth_admin();
-    return $admin && in_array($admin['role'], [ROLE_REVIEWER, ROLE_ADMIN], true);
+
+    if ($admin && in_array($admin['role'], [ROLE_REVIEWER, ROLE_ADMIN], true)) {
+        return true;
+    }
+
+    $portalUser = auth_portal_user();
+
+    return $portalUser
+        && in_array(($portalUser['role'] ?? ''), [ROLE_REVIEWER, ROLE_ADMIN], true);
 }
 
 /**
- * Whether current user is admin
+ * Whether current user is admin.
  */
 function is_admin(): bool
 {
     $admin = auth_admin();
-    return $admin && $admin['role'] === ROLE_ADMIN;
+
+    if ($admin && $admin['role'] === ROLE_ADMIN) {
+        return true;
+    }
+
+    $portalUser = auth_portal_user();
+
+    return $portalUser && ($portalUser['role'] ?? '') === ROLE_ADMIN;
+}
+
+/**
+ * Whether current user is a normal portal SSO user.
+ */
+function is_portal_user(): bool
+{
+    return auth_portal_user() !== null;
+}
+
+/**
+ * Whether current user is a group-link user.
+ */
+function is_group_link_user(): bool
+{
+    return auth_group() !== null && auth_admin() === null && auth_portal_user() === null;
 }
 
 /**
  * Require any valid auth:
  * - group session OR
- * - reviewer/admin session
+ * - reviewer/admin session OR
+ * - main portal Microsoft SSO session
  *
  * If ?token= is present, capture it first.
  */
@@ -150,7 +218,7 @@ function require_auth(): void
 }
 
 /**
- * Require reviewer/admin
+ * Require reviewer/admin.
  */
 function require_reviewer_or_admin(): void
 {
@@ -162,7 +230,7 @@ function require_reviewer_or_admin(): void
 }
 
 /**
- * Require admin only
+ * Require admin only.
  */
 function require_admin(): void
 {
@@ -174,7 +242,7 @@ function require_admin(): void
 }
 
 /**
- * Returns display label for top-right auth summary
+ * Returns display label for top-right auth summary.
  */
 function auth_display_label(): string
 {
@@ -182,6 +250,12 @@ function auth_display_label(): string
 
     if ($admin) {
         return $admin['full_name'];
+    }
+
+    $portalUser = auth_portal_user();
+
+    if ($portalUser) {
+        return $portalUser['full_name'] ?? $portalUser['email'] ?? 'Portal user';
     }
 
     $group = auth_group();
@@ -194,7 +268,7 @@ function auth_display_label(): string
 }
 
 /**
- * Returns all active groups
+ * Returns all active groups.
  */
 function get_all_active_groups(): array
 {
@@ -211,37 +285,105 @@ function get_all_active_groups(): array
 }
 
 /**
- * Resolve group filters from GET.
- * If no filter passed:
- * - group-link user defaults to their own group
- * - admin/reviewer defaults to all groups
+ * Returns group IDs linked to the signed-in portal user.
+ *
+ * Current simple model:
+ * portal_user.email -> group_contacts.email -> group_contacts.group_id
  */
-function get_selected_group_ids(): array
+function get_portal_user_group_ids(): array
 {
-    $selected = $_GET['groups'] ?? null;
+    $portalUser = auth_portal_user();
 
-    if (is_array($selected) && !empty($selected)) {
-        $clean = array_values(array_unique(array_map('intval', $selected)));
-        return array_filter($clean, fn($v) => $v > 0);
+    if (!$portalUser || empty($portalUser['email'])) {
+        return [];
     }
 
-    $group = auth_group();
-    $admin = auth_admin();
+    $pdo = db();
 
-    if ($admin) {
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT group_id
+        FROM group_contacts
+        WHERE LOWER(email) = LOWER(:email)
+          AND group_id IS NOT NULL
+    ");
+
+    $stmt->execute([
+        'email' => $portalUser['email'],
+    ]);
+
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
+/**
+ * Returns all groups the current user is allowed to see.
+ */
+function get_accessible_group_ids(): array
+{
+    if (is_reviewer_or_admin()) {
         $all = get_all_active_groups();
         return array_map(fn($g) => (int)$g['id'], $all);
     }
 
+    $group = auth_group();
+
     if ($group) {
         return [(int)$group['group_id']];
+    }
+
+    $portalUser = auth_portal_user();
+
+    if ($portalUser) {
+        return get_portal_user_group_ids();
     }
 
     return [];
 }
 
 /**
- * Basic page layout start
+ * Whether the current user can access a specific group.
+ */
+function can_access_group(int $groupId): bool
+{
+    if ($groupId <= 0) {
+        return false;
+    }
+
+    return in_array($groupId, get_accessible_group_ids(), true);
+}
+
+/**
+ * Resolve group filters from GET.
+ *
+ * If no filter passed:
+ * - group-link user defaults to their own group
+ * - portal SSO user defaults to groups matched in group_contacts by email
+ * - admin/reviewer defaults to all groups
+ *
+ * If filter is passed:
+ * - only allow groups the user can actually access
+ */
+function get_selected_group_ids(): array
+{
+    $allowedGroupIds = get_accessible_group_ids();
+
+    if (empty($allowedGroupIds)) {
+        return [];
+    }
+
+    $selected = $_GET['groups'] ?? null;
+
+    if (is_array($selected) && !empty($selected)) {
+        $clean = array_values(array_unique(array_map('intval', $selected)));
+        $clean = array_filter($clean, fn($v) => $v > 0);
+
+        return array_values(array_intersect($clean, $allowedGroupIds));
+    }
+
+    return $allowedGroupIds;
+}
+
+/**
+ * Basic page layout start.
  */
 function render_page_start(string $title = ''): void
 {
@@ -260,7 +402,6 @@ function render_page_start(string $title = ''): void
 
     <link rel="stylesheet"
           href="https://cdn.jsdelivr.net/gh/scoutstrap/scoutstrap@0.1.1/dist/css/scoutstrap.min.css"
-          
           crossorigin="anonymous">
 
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,wght@0,200;0,300;0,400;0,600;0,700;0,800;0,900;1,400;1,600&display=swap"
@@ -293,6 +434,7 @@ function render_page_start(string $title = ''): void
             font-weight: 900;
             margin-right: 0.55rem;
             font-size: 1rem;
+            object-fit: cover;
         }
 
         .afh-current-group {
@@ -397,66 +539,80 @@ function render_page_start(string $title = ''): void
                 text-align: left !important;
             }
         }
+
         /* Global badge contrast fix */
-.badge-success,
-.badge-primary,
-.badge-info,
-.badge-danger,
-.badge-dark,
-.badge-secondary {
-    color: #fff !important;
-}
+        .badge-success,
+        .badge-primary,
+        .badge-info,
+        .badge-danger,
+        .badge-dark,
+        .badge-secondary {
+            color: #fff !important;
+        }
 
-.badge-warning,
-.badge-light {
-    color: #212529 !important;
-}
+        .badge-warning,
+        .badge-light {
+            color: #212529 !important;
+        }
 
-.badge-success {
-    background-color: #28a745 !important;
-}
+        .badge-success {
+            background-color: #28a745 !important;
+        }
 
-.badge-primary {
-    background-color: #006ddf !important;
-}
+        .badge-primary {
+            background-color: #006ddf !important;
+        }
 
-.badge-info {
-    background-color: #17a2b8 !important;
-}
+        .badge-info {
+            background-color: #17a2b8 !important;
+        }
 
-.badge-danger {
-    background-color: #dc3545 !important;
-}
+        .badge-danger {
+            background-color: #dc3545 !important;
+        }
 
-.badge-dark {
-    background-color: #343a40 !important;
-}
+        .badge-dark {
+            background-color: #343a40 !important;
+        }
 
-.badge-secondary {
-    background-color: #6c757d !important;
-}
+        .badge-secondary {
+            background-color: #6c757d !important;
+        }
 
-.badge-warning {
-    background-color: #ffc107 !important;
-}
+        .badge-warning {
+            background-color: #ffc107 !important;
+        }
 
-.badge-light {
-    background-color: #f8f9fa !important;
-}
+        .badge-light {
+            background-color: #f8f9fa !important;
+        }
     </style>
 </head>
 <body>
+<div class="bg-primary text-white py-2">
+    <div class="container-fluid d-flex justify-content-between align-items-center">
+        <div class="font-weight-bold">
+            Away From Hut
+        </div>
+
+        <a href="/index.php" class="btn btn-light btn-sm font-weight-bold">
+            Return to District Dashboard
+        </a>
+    </div>
+</div>
     <?php
 }
 
 /**
- * Navbar / header
+ * Navbar / header.
  */
 function render_header(string $active = ''): void
 {
     $context = auth_context();
     $isLoggedIn = $context !== null;
+
     $admin = auth_admin();
+    $portalUser = auth_portal_user();
     $group = auth_group();
 
     $centralName = APP_NAME;
@@ -465,6 +621,9 @@ function render_header(string $active = ''): void
     if ($admin) {
         $centralName = 'District Lead Volunteer Portal';
         $centralSubtitle = ucfirst((string)$admin['role']);
+    } elseif ($portalUser) {
+        $centralName = $portalUser['full_name'] ?? $portalUser['email'] ?? 'Portal user';
+        $centralSubtitle = ucfirst((string)($portalUser['role'] ?? 'user'));
     } elseif ($group) {
         $centralName = (string)$group['group_name'];
         $centralSubtitle = 'Group portal';
@@ -475,11 +634,12 @@ function render_header(string $active = ''): void
     <div class="container-fluid position-relative">
 
         <a class="navbar-brand afh-navbar-brand d-flex align-items-center" href="<?= e(ROUTE_CALENDAR) ?>">
-<img
-    src="https://www.brscouts.org.uk/wp-content/uploads/2021/03/download.png"
-    alt="<?= e(APP_NAME) ?> icon"
-    class="afh-brand-icon"
->            <span><?= e(APP_NAME) ?></span>
+            <img
+                src="https://www.brscouts.org.uk/wp-content/uploads/2021/03/download.png"
+                alt="<?= e(APP_NAME) ?> icon"
+                class="afh-brand-icon"
+            >
+            <span><?= e(APP_NAME) ?></span>
         </a>
 
         <?php if ($isLoggedIn): ?>
@@ -551,6 +711,10 @@ function render_header(string $active = ''): void
                             <span class="badge badge-primary afh-badge-role">
                                 <?= e(ucfirst((string)$admin['role'])) ?>
                             </span>
+                        <?php elseif ($portalUser): ?>
+                            <span class="badge badge-primary afh-badge-role">
+                                Microsoft SSO
+                            </span>
                         <?php else: ?>
                             <span class="badge badge-secondary afh-badge-role">
                                 Group link
@@ -577,17 +741,15 @@ function render_header(string $active = ''): void
 }
 
 /**
- * Basic page layout end
+ * Basic page layout end.
  */
 function render_page_end(): void
 {
     ?>
 <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
-    
         crossorigin="anonymous"></script>
 
 <script src="https://cdn.jsdelivr.net/gh/scoutstrap/scoutstrap@0.1.1/dist/js/bootstrap.min.js"
-     
         crossorigin="anonymous"></script>
 </body>
 </html>

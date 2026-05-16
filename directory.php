@@ -6,7 +6,6 @@ require_once __DIR__ . '/app/bootstrap.php';
 
 require_login();
 
-$appName = app_config('APP_NAME', 'Irwell Valley District Scouts');
 $user = current_user();
 
 /*
