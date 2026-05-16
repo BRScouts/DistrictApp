@@ -82,7 +82,15 @@ try {
 
     $user = find_or_create_microsoft_user($claims);
 
-    login_user($user);
+        login_user($user);
+
+        /*
+        * Store Microsoft access token temporarily in the session.
+        * Used for fetching the user's Microsoft profile photo.
+        */
+        $_SESSION['microsoft_access_token'] = $accessToken->getToken();
+
+        redirect('/index.php');
 
     unset($_SESSION['oauth2state']);
 
