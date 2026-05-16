@@ -8,26 +8,22 @@
         <div class="footer-content">
             <div class="footer-legal">
                 <p>
-                    © Copyright The Scout Association <?= date('Y') ?>. All rights reserved.
+                    <a href="https://www.ckenterprises.co.uk" target="_blank" rel="noopener noreferrer">District Dashboard Proudly Provided by CK Enterprises UK</a>
                 </p>
 
-                <p>
-                    Charity numbers: 306101 (England and Wales) and SC038437 (Scotland).<br>
-                    Registered address: The Scout Association, Gilwell Park, Chingford, London, England E4 7QW.
-                </p>
+    
 
                 <nav class="footer-links" aria-label="Footer links">
-                    <a href="#">Website</a>
-                    <a href="#">Data Protection</a>
-                    <a href="#">Terms and conditions</a>
-                    <a href="#">Cookie policy</a>
-                    <a href="#">AI policy</a>
+                    <a href="https://www.irvalscouts.org.uk" target="_blank" rel="noopener noreferrer">Website</a>
+                    <a href="https://www.irvalscouts.org.uk/data-protection" target="_blank" rel="noopener noreferrer">Data Protection</a>
+                    <a href="https://www.irvalscouts.org.uk/terms-and-conditions" target="_blank" rel="noopener noreferrer">Terms and conditions</a>
+                    <a href="https://www.irvalscouts.org.uk/cookie-policy" target="_blank" rel="noopener noreferrer">Cookie policy</a>
+                    <a href="https://www.irvalscouts.org.uk/ai-policy" target="_blank" rel="noopener noreferrer">AI policy</a>
                 </nav>
             </div>
 
             <div class="footer-badge">
-                <strong>Investors in People</strong>
-                <span>We invest in people Gold</span>
+                
             </div>
         </div>
     </div>
