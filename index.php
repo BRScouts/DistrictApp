@@ -211,7 +211,7 @@ function dashboard_icon(string $icon): string
             <div class="col-lg-8">
                 <h1 class="h2 mb-2">Welcome, <?= e($displayName) ?></h1>
                 <p class="mb-0">
-                    Choose a District tool below.
+                    Choose a District tool below.n
                 </p>
             </div>
 
