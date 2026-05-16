@@ -19,10 +19,23 @@ function settings_redirect(string $tab): void
     redirect(BASE_URL . '/admin/settings.php?tab=' . urlencode($tab) . '&saved=1');
 }
 
-function current_admin_id(): int
+function current_admin_id(): ?int
 {
     $admin = auth_admin();
-    return (int)($admin['admin_user_id'] ?? $admin['id'] ?? 0);
+
+    if ($admin) {
+        $id = (int)($admin['admin_user_id'] ?? $admin['id'] ?? 0);
+        return $id > 0 ? $id : null;
+    }
+
+    $portalUser = auth_portal_user();
+
+    if ($portalUser) {
+        $id = (int)($portalUser['id'] ?? 0);
+        return $id > 0 ? $id : null;
+    }
+
+    return null;
 }
 
 function full_group_link(array $group): string

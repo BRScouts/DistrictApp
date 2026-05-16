@@ -592,7 +592,7 @@ function render_page_start(string $title = ''): void
 <div class="bg-primary text-white py-2">
     <div class="container-fluid d-flex justify-content-between align-items-center">
         <div class="font-weight-bold">
-            Away From Hut
+            District Calendar
         </div>
 
         <a href="/index.php" class="btn btn-light btn-sm font-weight-bold">
