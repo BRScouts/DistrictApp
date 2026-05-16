@@ -40,7 +40,7 @@ function decode_microsoft_id_token(string $idToken): array
         throw new RuntimeException('Invalid Microsoft signing key response.');
     }
 
-    $keys = JWK::parseKeySet($jwks);
+    $keys = JWK::parseKeySet($jwks, 'RS256');    $decoded = JWT::decode($idToken, $keys);
     $decoded = JWT::decode($idToken, $keys);
     $claims = json_decode(json_encode($decoded), true);
 
