@@ -1,0 +1,8 @@
+ALTER TABLE admin_users
+ADD COLUMN microsoft_oid VARCHAR(128) NULL,
+ADD COLUMN auth_provider VARCHAR(50) NULL DEFAULT 'local',
+ADD COLUMN sso_email VARCHAR(255) NULL,
+ADD COLUMN last_sso_login_at DATETIME NULL;
+
+ALTER TABLE admin_users
+ADD UNIQUE KEY uq_admin_users_microsoft_oid (microsoft_oid);
