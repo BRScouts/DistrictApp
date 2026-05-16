@@ -9,9 +9,9 @@ require_login();
 $user = current_user();
 $appName = app_config('APP_NAME', 'Irwell Valley District Scouts');
 
-if (($user['role'] ?? '') === ROLE_ADMIN) {
-    redirect('/index.php');
-}
+// if (($user['role'] ?? '') === ROLE_ADMIN) {
+//     redirect('/index.php');
+// }
 
 $pdo = db();
 
