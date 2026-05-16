@@ -79,19 +79,63 @@ function auth_admin(): ?array
 }
 
 /**
- * Returns group auth array or null.
- */
-function auth_group(): ?array
-{
-    return $_SESSION['group_auth'] ?? null;
-}
-
-/**
  * Returns main portal Microsoft SSO user array or null.
  */
 function auth_portal_user(): ?array
 {
     return $_SESSION['portal_user'] ?? null;
+}
+
+/**
+ * Returns group auth array or null.
+ *
+ * For old group-link users, this returns $_SESSION['group_auth'].
+ * For Microsoft SSO users, this returns their linked group from group_contacts.
+ */
+function auth_group(): ?array
+{
+    if (!empty($_SESSION['group_auth'])) {
+        return $_SESSION['group_auth'];
+    }
+
+    $portalUser = auth_portal_user();
+
+    if (!$portalUser || empty($portalUser['email'])) {
+        return null;
+    }
+
+    $pdo = db();
+
+    $stmt = $pdo->prepare("
+        SELECT
+            g.id,
+            g.group_name,
+            g.access_token
+        FROM group_contacts gc
+        INNER JOIN groups g
+            ON g.id = gc.group_id
+        WHERE LOWER(gc.email) = LOWER(:email)
+          AND g.is_active = 1
+        ORDER BY gc.id ASC
+        LIMIT 1
+    ");
+
+    $stmt->execute([
+        'email' => $portalUser['email'],
+    ]);
+
+    $group = $stmt->fetch();
+
+    if (!$group) {
+        return null;
+    }
+
+    return [
+        'group_id' => (int) $group['id'],
+        'group_name' => $group['group_name'],
+        'access_token' => $group['access_token'] ?? null,
+        'source' => 'portal_user',
+    ];
 }
 
 /**
@@ -193,52 +237,13 @@ function is_portal_user(): bool
 }
 
 /**
- * Whether current user is a group-link user.
+ * Whether current user is an actual token-based group-link user.
  */
 function is_group_link_user(): bool
 {
-    return auth_group() !== null && auth_admin() === null && auth_portal_user() === null;
-}
-
-/**
- * Require any valid auth:
- * - group session OR
- * - reviewer/admin session OR
- * - main portal Microsoft SSO session
- *
- * If ?token= is present, capture it first.
- */
-function require_auth(): void
-{
-    auth_capture_group_token_from_request();
-
-    if (!is_authenticated()) {
-        redirect(ROUTE_403);
-    }
-}
-
-/**
- * Require reviewer/admin.
- */
-function require_reviewer_or_admin(): void
-{
-    auth_capture_group_token_from_request();
-
-    if (!is_reviewer_or_admin()) {
-        redirect(ROUTE_403);
-    }
-}
-
-/**
- * Require admin only.
- */
-function require_admin(): void
-{
-    auth_capture_group_token_from_request();
-
-    if (!is_admin()) {
-        redirect(ROUTE_403);
-    }
+    return !empty($_SESSION['group_auth'])
+        && auth_admin() === null
+        && auth_portal_user() === null;
 }
 
 /**
@@ -301,10 +306,13 @@ function get_portal_user_group_ids(): array
     $pdo = db();
 
     $stmt = $pdo->prepare("
-        SELECT DISTINCT group_id
-        FROM group_contacts
-        WHERE LOWER(email) = LOWER(:email)
-          AND group_id IS NOT NULL
+        SELECT DISTINCT gc.group_id
+        FROM group_contacts gc
+        INNER JOIN groups g
+            ON g.id = gc.group_id
+        WHERE LOWER(gc.email) = LOWER(:email)
+          AND gc.group_id IS NOT NULL
+          AND g.is_active = 1
     ");
 
     $stmt->execute([
@@ -312,6 +320,28 @@ function get_portal_user_group_ids(): array
     ]);
 
     return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
+/**
+ * Send Microsoft SSO users to onboarding if they do not have a group/contact mapping.
+ */
+function require_portal_user_group_or_onboarding(): void
+{
+    $portalUser = auth_portal_user();
+
+    if (!$portalUser) {
+        return;
+    }
+
+    if (is_reviewer_or_admin()) {
+        return;
+    }
+
+    $groupIds = get_portal_user_group_ids();
+
+    if (empty($groupIds)) {
+        redirect('/onboarding.php');
+    }
 }
 
 /**
@@ -349,6 +379,49 @@ function can_access_group(int $groupId): bool
     }
 
     return in_array($groupId, get_accessible_group_ids(), true);
+}
+
+/**
+ * Require any valid auth:
+ * - group session OR
+ * - reviewer/admin session OR
+ * - main portal Microsoft SSO session
+ *
+ * If ?token= is present, capture it first.
+ */
+function require_auth(): void
+{
+    auth_capture_group_token_from_request();
+
+    if (!is_authenticated()) {
+        redirect(ROUTE_403);
+    }
+
+    require_portal_user_group_or_onboarding();
+}
+
+/**
+ * Require reviewer/admin.
+ */
+function require_reviewer_or_admin(): void
+{
+    auth_capture_group_token_from_request();
+
+    if (!is_reviewer_or_admin()) {
+        redirect(ROUTE_403);
+    }
+}
+
+/**
+ * Require admin only.
+ */
+function require_admin(): void
+{
+    auth_capture_group_token_from_request();
+
+    if (!is_admin()) {
+        redirect(ROUTE_403);
+    }
 }
 
 /**
