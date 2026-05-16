@@ -18,7 +18,7 @@ function microsoft_provider(): GenericProvider
         'urlAuthorize' => "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/authorize",
         'urlAccessToken' => "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/token",
         'urlResourceOwnerDetails' => '',
-        'scopes' => 'openid profile email User.Read',
+        'scopes' => ['openid', 'profile', 'email', 'User.Read'],
     ]);
 }
 

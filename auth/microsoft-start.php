@@ -7,7 +7,7 @@ require_once __DIR__ . '/../app/bootstrap.php';
 $provider = microsoft_provider();
 
 $authorizationUrl = $provider->getAuthorizationUrl([
-    'scope' => ['openid', 'profile', 'email', 'User.Read'],
+    'scope' => 'openid profile email User.Read',
 ]);
 
 $_SESSION['oauth2state'] = $provider->getState();
