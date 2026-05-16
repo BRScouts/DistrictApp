@@ -386,7 +386,30 @@
 <header class="top-header">
     <div class="top-header-inner">
         <a href="/index.php" class="brand-area">
-            
+            <div class="brand-logo">
+    <img src="/assets/img/black-ir-logo.png" alt="Logo">
+</div>
+
+<style>
+    .brand-logo {
+        width: 240px;   /* Controls overall logo width */
+        height: 60px;   /* Controls overall logo height */
+
+        display: flex;
+        align-items: center;
+    }
+
+    .brand-logo img {
+        max-width: 100%;
+        max-height: 100%;
+
+        width: auto;
+        height: auto;
+
+        object-fit: contain;
+        display: block;
+    }
+</style>
 
             <div>
                 <span class="brand-title">Irwell Valley District Scouts</span>
@@ -408,32 +431,3 @@
     </div>
 </header>
 
-<section class="member-hero">
-    <div class="member-hero-inner">
-        <h1>Welcome, <?= e($displayName) ?></h1>
-
-        <?php if (!empty($user['member_number'])): ?>
-            <div class="member-number">
-                Member <?= e($user['member_number']) ?>
-            </div>
-        <?php endif; ?>
-
-        <?php if (!empty($user['service_length'])): ?>
-            <div class="member-service">
-                <?= e($user['service_length']) ?> service
-            </div>
-        <?php else: ?>
-            <div class="member-service">
-                District tools
-            </div>
-        <?php endif; ?>
-    </div>
-</section>
-
-<div class="breadcrumb-strip">
-    <div class="breadcrumb-inner">
-        <a href="/index.php">Home</a>
-        <span class="mx-2">›</span>
-        <strong>Dashboard</strong>
-    </div>
-</div>
