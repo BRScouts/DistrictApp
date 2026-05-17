@@ -433,7 +433,6 @@ $profileUrl = '/profile.php';
             <?php endif; ?>
 
             <?php if ($isSignedIn): ?>
-                <a href="/index.php">Leader Tool</a>
             <?php else: ?>
                 <a href="/dc/logout.php">Leave group access</a>
             <?php endif; ?>
