@@ -14,6 +14,12 @@ $pdo = db();
 $user = current_user();
 $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
 
+/**
+ * -------------------------------------------------------------------------
+ * Leader Tool helpers
+ * -------------------------------------------------------------------------
+ */
+
 function gwa_table_exists(string $table): bool
 {
     static $cache = [];
@@ -192,6 +198,34 @@ function gwa_fetch_group(int $groupId): ?array
     return $group ?: null;
 }
 
+function gwa_fetch_group_lead_volunteers(int $groupId): array
+{
+    if (!gwa_table_exists('group_memberships') || !gwa_table_exists('people')) {
+        return [];
+    }
+
+    $stmt = db()->prepare("
+        SELECT
+            p.id,
+            p.full_name,
+            p.primary_email,
+            p.phone
+        FROM group_memberships gm
+        JOIN people p ON p.id = gm.person_id
+        WHERE gm.group_id = :group_id
+          AND gm.status = 'active'
+          AND p.status = 'active'
+          AND (
+              gm.membership_role = 'group_lead_volunteer'
+              OR gm.access_level = 'group_admin'
+          )
+        ORDER BY p.full_name ASC
+    ");
+    $stmt->execute(['group_id' => $groupId]);
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 function gwa_log_action(int $actorPersonId, string $action, string $entityType, int $entityId, array $details = []): void
 {
     if (!gwa_table_exists('audit_log')) {
@@ -265,6 +299,12 @@ function gwa_slugify(string $value): string
     return $value !== '' ? $value : 'group';
 }
 
+/**
+ * -------------------------------------------------------------------------
+ * WordPress bootstrap/helpers
+ * -------------------------------------------------------------------------
+ */
+
 function gwa_wp_path(): string
 {
     return rtrim(gwa_config_first(['WORDPRESS_PATH', 'WP_PATH'], ''), '/');
@@ -283,15 +323,11 @@ function gwa_wp_bootstrap(): void
         return;
     }
 
-    /*
-     * WordPress must define these itself from wp-config.php.
-     * If the Leader Tool bootstrap has already defined them, WordPress may try
-     * to connect to the wrong database and show "Error establishing a database connection".
-     */
     $reservedConstants = [
         'DB_NAME',
         'DB_USER',
         'DB_PASSWORD',
+        'DB_PASS',
         'DB_HOST',
         'DB_CHARSET',
         'DB_COLLATE',
@@ -311,7 +347,7 @@ function gwa_wp_bootstrap(): void
         throw new RuntimeException(
             'WordPress cannot be safely loaded because these WordPress-reserved constants are already defined by the Leader Tool bootstrap: ' .
             implode(', ', $alreadyDefined) .
-            '. Rename the Leader Tool database constants to APP_DB_NAME, APP_DB_USER, APP_DB_PASSWORD and APP_DB_HOST.'
+            '. Rename the Leader Tool database constants to APP_DB_HOST, APP_DB_NAME, APP_DB_USER, APP_DB_PASS and APP_DB_CHARSET.'
         );
     }
 
@@ -413,34 +449,41 @@ function gwa_wp_store_permalink(int $postId): string
     return gwa_wp_site_url() . '/stores/' . rawurlencode($slug) . '/';
 }
 
+function gwa_wp_thumbnail_url(int $postId): string
+{
+    gwa_wp_bootstrap();
+
+    $url = get_the_post_thumbnail_url($postId, 'medium_large');
+
+    return is_string($url) ? $url : '';
+}
+
+/**
+ * -------------------------------------------------------------------------
+ * Store Locator field handling
+ * -------------------------------------------------------------------------
+ */
+
 function gwa_section_example_json(): string
 {
     return json_encode([
         [
-            'day' => '2',
-            'type' => 'Beavers',
-            'time_start' => '18:00',
-            'time_finish' => '19:00',
+            'day' => '1',
+            'type' => '1',
+            'time_start' => '72',
+            'time_finish' => '76',
             'name' => 'Beaver Scouts',
-            'key' => 'beavers',
+            'key' => '0',
         ],
         [
-            'day' => '2',
-            'type' => 'Cubs',
-            'time_start' => '19:00',
-            'time_finish' => '20:30',
+            'day' => '1',
+            'type' => '2',
+            'time_start' => '76',
+            'time_finish' => '82',
             'name' => 'Cub Scouts',
-            'key' => 'cubs',
+            'key' => '1',
         ],
-        [
-            'day' => '2',
-            'type' => 'Scouts',
-            'time_start' => '20:00',
-            'time_finish' => '21:30',
-            'name' => 'Scouts',
-            'key' => 'scouts',
-        ],
-    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
 function gwa_normalise_section_json(string $rawJson): string
@@ -454,10 +497,11 @@ function gwa_normalise_section_json(string $rawJson): string
     $decoded = json_decode($rawJson, true);
 
     if (!is_array($decoded)) {
-        throw new RuntimeException('Section details JSON is not valid.');
+        throw new RuntimeException('The section meetings could not be saved. Refresh the page and try again.');
     }
 
     $normalised = [];
+    $index = 0;
 
     foreach ($decoded as $row) {
         if (!is_array($row)) {
@@ -467,11 +511,52 @@ function gwa_normalise_section_json(string $rawJson): string
         $normalised[] = [
             'day' => (string) ($row['day'] ?? '0'),
             'type' => (string) ($row['type'] ?? '0'),
-            'time_start' => (string) ($row['time_start'] ?? ''),
-            'time_finish' => (string) ($row['time_finish'] ?? ''),
+            'time_start' => (string) ($row['time_start'] ?? '0'),
+            'time_finish' => (string) ($row['time_finish'] ?? '0'),
             'name' => trim((string) ($row['name'] ?? '')),
-            'key' => trim((string) ($row['key'] ?? '')),
+            'key' => (string) $index,
         ];
+
+        $index++;
+    }
+
+    return json_encode($normalised, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
+function gwa_normalise_scarf_json(string $rawJson): string
+{
+    $rawJson = trim($rawJson);
+
+    if ($rawJson === '') {
+        return json_encode([
+            'scarf_type' => '0',
+            'l' => '#39774e',
+            'r' => '#39774e',
+            'b1l' => '#000000',
+            'b1r' => '#000000',
+            'b2l' => '#ffffff',
+            'b2r' => '#ffffff',
+            'b3l' => '#000000',
+            'b3r' => '#000000',
+            's' => '#ffffff',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    $decoded = json_decode($rawJson, true);
+
+    if (!is_array($decoded)) {
+        throw new RuntimeException('The scarf colours could not be saved. Refresh the page and try again.');
+    }
+
+    $keys = ['scarf_type', 'l', 'r', 'b1l', 'b1r', 'b2l', 'b2r', 'b3l', 'b3r', 's'];
+    $normalised = [];
+
+    foreach ($keys as $key) {
+        $normalised[$key] = (string) ($decoded[$key] ?? '');
+    }
+
+    if ($normalised['scarf_type'] === '') {
+        $normalised['scarf_type'] = '0';
     }
 
     return json_encode($normalised, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -520,7 +605,7 @@ function gwa_create_wordpress_store_for_group(array $group, int $actorPersonId):
 
     $postId = wp_insert_post([
         'post_type' => 'wpsl_stores',
-        'post_status' => 'draft',
+        'post_status' => 'publish',
         'post_title' => $title,
         'post_name' => $slug,
         'post_content' => '',
@@ -549,6 +634,7 @@ function gwa_create_wordpress_store_for_group(array $group, int $actorPersonId):
     update_post_meta($postId, 'wpsl_group_contact', $publicEmail);
     update_post_meta($postId, 'wpsl_group_type', '0');
     update_post_meta($postId, 'wpsl_section_details', '[]');
+    update_post_meta($postId, 'wpsl_section_scarf', gwa_normalise_scarf_json(''));
 
     gwa_update_group_linked_post_id((int) $group['id'], $postId);
 
@@ -586,8 +672,68 @@ function gwa_try_geocode_store(int $postId, array $meta): void
     try {
         $wpsl_admin->geocode->check_geocode_data($postId, $storeData);
     } catch (Throwable $e) {
-        // Do not block saving if geocoding fails.
+        // Saving the Group details should not fail just because geocoding failed.
     }
+}
+
+function gwa_attach_uploaded_image_as_featured(int $postId, array $file): void
+{
+    if (empty($file['tmp_name'])) {
+        return;
+    }
+
+    gwa_wp_bootstrap();
+
+    require_once ABSPATH . 'wp-admin/includes/file.php';
+    require_once ABSPATH . 'wp-admin/includes/media.php';
+    require_once ABSPATH . 'wp-admin/includes/image.php';
+
+    $_FILES['gwa_featured_upload'] = $file;
+
+    $attachmentId = media_handle_upload('gwa_featured_upload', $postId);
+
+    if (is_wp_error($attachmentId)) {
+        throw new RuntimeException('The image upload failed: ' . $attachmentId->get_error_message());
+    }
+
+    set_post_thumbnail($postId, (int) $attachmentId);
+}
+
+function gwa_attach_image_url_as_featured(int $postId, string $url): void
+{
+    $url = trim($url);
+
+    if ($url === '') {
+        return;
+    }
+
+    gwa_wp_bootstrap();
+
+    require_once ABSPATH . 'wp-admin/includes/file.php';
+    require_once ABSPATH . 'wp-admin/includes/media.php';
+    require_once ABSPATH . 'wp-admin/includes/image.php';
+
+    $tmp = download_url($url);
+
+    if (is_wp_error($tmp)) {
+        throw new RuntimeException('The image URL could not be downloaded: ' . $tmp->get_error_message());
+    }
+
+    $name = basename(parse_url($url, PHP_URL_PATH) ?: 'group-image.jpg');
+
+    $file = [
+        'name' => $name,
+        'tmp_name' => $tmp,
+    ];
+
+    $attachmentId = media_handle_sideload($file, $postId);
+
+    if (is_wp_error($attachmentId)) {
+        @unlink($tmp);
+        throw new RuntimeException('The image URL could not be attached: ' . $attachmentId->get_error_message());
+    }
+
+    set_post_thumbnail($postId, (int) $attachmentId);
 }
 
 function gwa_update_wordpress_store_from_form(int $groupId, array $input, int $actorPersonId): void
@@ -610,15 +756,12 @@ function gwa_update_wordpress_store_from_form(int $groupId, array $input, int $a
         throw new RuntimeException('Enter the public Group name.');
     }
 
-    $postStatus = (string) ($input['post_status'] ?? 'publish');
-    $postStatus = in_array($postStatus, ['publish', 'draft', 'pending'], true) ? $postStatus : 'publish';
-
     $updated = wp_update_post([
         'ID' => $postId,
-        'post_title' => $title,
+        'post_title' => sanitize_text_field($title),
         'post_name' => gwa_slugify($title),
-        'post_content' => trim((string) ($input['post_content'] ?? '')),
-        'post_status' => $postStatus,
+        'post_content' => wp_kses_post((string) ($input['post_content'] ?? '')),
+        'post_status' => 'publish',
     ], true);
 
     if (is_wp_error($updated)) {
@@ -626,24 +769,24 @@ function gwa_update_wordpress_store_from_form(int $groupId, array $input, int $a
     }
 
     $sectionDetails = gwa_normalise_section_json((string) ($input['wpsl_section_details'] ?? ''));
+    $scarfDetails = gwa_normalise_scarf_json((string) ($input['wpsl_section_scarf'] ?? ''));
 
     $meta = [
-        'wpsl_address' => trim((string) ($input['wpsl_address'] ?? '')),
-        'wpsl_city' => trim((string) ($input['wpsl_city'] ?? '')),
-        'wpsl_state' => trim((string) ($input['wpsl_state'] ?? '')),
-        'wpsl_zip' => trim((string) ($input['wpsl_zip'] ?? '')),
-        'wpsl_country' => trim((string) ($input['wpsl_country'] ?? 'United Kingdom')),
-        'wpsl_email' => trim((string) ($input['wpsl_email'] ?? '')),
-        'wpsl_phone' => trim((string) ($input['wpsl_phone'] ?? '')),
-        'wpsl_url' => trim((string) ($input['wpsl_url'] ?? '')),
+        'wpsl_address' => sanitize_text_field((string) ($input['wpsl_address'] ?? '')),
+        'wpsl_address2' => sanitize_text_field((string) ($input['wpsl_address2'] ?? '')),
+        'wpsl_city' => sanitize_text_field((string) ($input['wpsl_city'] ?? '')),
+        'wpsl_state' => sanitize_text_field((string) ($input['wpsl_state'] ?? '')),
+        'wpsl_zip' => sanitize_text_field((string) ($input['wpsl_zip'] ?? '')),
+        'wpsl_country' => sanitize_text_field((string) ($input['wpsl_country'] ?? 'United Kingdom')),
+        'wpsl_country_iso' => sanitize_text_field((string) ($input['wpsl_country_iso'] ?? 'GB')),
+        'wpsl_email' => sanitize_email((string) ($input['wpsl_email'] ?? '')),
+        'wpsl_phone' => sanitize_text_field((string) ($input['wpsl_phone'] ?? '')),
+        'wpsl_url' => esc_url_raw((string) ($input['wpsl_url'] ?? '')),
 
-        'wpsl_group_website' => trim((string) ($input['wpsl_group_website'] ?? '')),
-        'wpsl_group_contact' => trim((string) ($input['wpsl_group_contact'] ?? '')),
-        'wpsl_group_type' => trim((string) ($input['wpsl_group_type'] ?? '0')),
-        'wpsl_group_link' => trim((string) ($input['wpsl_group_link'] ?? '')),
-        'wpsl_group_link2' => trim((string) ($input['wpsl_group_link2'] ?? '')),
-        'wpsl_group_link3' => trim((string) ($input['wpsl_group_link3'] ?? '')),
-        'wpsl_section_scarf' => trim((string) ($input['wpsl_section_scarf'] ?? '')),
+        'wpsl_group_website' => esc_url_raw((string) ($input['wpsl_group_website'] ?? '')),
+        'wpsl_group_contact' => sanitize_text_field((string) ($input['wpsl_group_contact'] ?? '')),
+        'wpsl_group_type' => sanitize_text_field((string) ($input['wpsl_group_type'] ?? '0')),
+        'wpsl_section_scarf' => $scarfDetails,
         'wpsl_section_details' => $sectionDetails,
     ];
 
@@ -655,6 +798,16 @@ function gwa_update_wordpress_store_from_form(int $groupId, array $input, int $a
         }
     }
 
+    if (!empty($input['remove_featured_image'])) {
+        delete_post_thumbnail($postId);
+    }
+
+    if (!empty($_FILES['featured_upload']) && is_array($_FILES['featured_upload']) && !empty($_FILES['featured_upload']['tmp_name'])) {
+        gwa_attach_uploaded_image_as_featured($postId, $_FILES['featured_upload']);
+    } elseif (!empty($input['featured_url'])) {
+        gwa_attach_image_url_as_featured($postId, (string) $input['featured_url']);
+    }
+
     do_action('irval_leader_tool_group_store_updated', $postId, $meta, $groupId);
 
     gwa_try_geocode_store($postId, $meta);
@@ -662,9 +815,9 @@ function gwa_update_wordpress_store_from_form(int $groupId, array $input, int $a
     gwa_update_flexible('groups', 'id', $groupId, [
         'website_post_id' => $postId,
         'website_url' => $meta['wpsl_group_website'] ?: $meta['wpsl_url'] ?: null,
-        'public_email' => $meta['wpsl_email'] ?: $meta['wpsl_group_contact'] ?: null,
-        'contact_email' => $meta['wpsl_email'] ?: $meta['wpsl_group_contact'] ?: null,
-        'meeting_place' => $meta['wpsl_address'] ?: null,
+        'public_email' => $meta['wpsl_email'] ?: null,
+        'contact_email' => $meta['wpsl_email'] ?: null,
+        'meeting_place' => trim($meta['wpsl_address'] . ' ' . $meta['wpsl_address2']) ?: null,
         'postcode' => $meta['wpsl_zip'] ?: null,
         'updated_at' => date('Y-m-d H:i:s'),
     ]);
@@ -675,6 +828,12 @@ function gwa_update_wordpress_store_from_form(int $groupId, array $input, int $a
         'website_post_id' => $postId,
     ]);
 }
+
+/**
+ * -------------------------------------------------------------------------
+ * Page setup
+ * -------------------------------------------------------------------------
+ */
 
 $memberships = function_exists('user_group_memberships')
     ? user_group_memberships((int) $user['id'], false)
@@ -740,19 +899,19 @@ try {
             gwa_link_existing_wordpress_post($selectedGroupId, $postId, $actorPersonId);
 
             $selectedGroup = gwa_fetch_group($selectedGroupId);
-            $success = 'WordPress Scout Group post linked.';
+            $success = 'Website post linked. You can now edit the public Group page below.';
 
         } elseif ($action === 'create_website_post') {
-            $postId = gwa_create_wordpress_store_for_group($selectedGroup, $actorPersonId);
+            gwa_create_wordpress_store_for_group($selectedGroup, $actorPersonId);
 
             $selectedGroup = gwa_fetch_group($selectedGroupId);
-            $success = 'New WordPress Scout Group post created as a draft and linked.';
+            $success = 'New public website post created and linked.';
 
         } elseif ($action === 'save_website_details') {
             gwa_update_wordpress_store_from_form($selectedGroupId, $_POST, $actorPersonId);
 
             $selectedGroup = gwa_fetch_group($selectedGroupId);
-            $success = 'Website details saved.';
+            $success = 'Website details saved and published.';
         }
     }
 } catch (Throwable $e) {
@@ -779,6 +938,9 @@ if ($websitePostId > 0) {
     }
 }
 
+$leadVolunteers = gwa_fetch_group_lead_volunteers($selectedGroupId);
+$primaryLeadVolunteer = $leadVolunteers[0] ?? null;
+
 $metaValue = static function (array $meta, string $key, string $fallback = ''): string {
     $value = $meta[$key] ?? $fallback;
 
@@ -788,6 +950,15 @@ $metaValue = static function (array $meta, string $key, string $fallback = ''): 
 
     return (string) $value;
 };
+
+$thumbnailUrl = '';
+if ($websitePostId > 0 && $websitePost) {
+    try {
+        $thumbnailUrl = gwa_wp_thumbnail_url($websitePostId);
+    } catch (Throwable $e) {
+        $thumbnailUrl = '';
+    }
+}
 
 $pageTitle = 'Group Website Admin | ' . $appName;
 $heroTitle = 'Group Website Admin';
@@ -843,18 +1014,87 @@ include __DIR__ . '/header.php';
         }
     }
 
-    .gwa-json {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        min-height: 14rem;
-    }
-
     .gwa-status {
         display: inline-block;
         padding: .2rem .5rem;
         border-radius: .25rem;
         font-weight: 800;
-        background: #e7f1ff;
-        color: #084298;
+        background: #d1e7dd;
+        color: #0f5132;
+    }
+
+    .gwa-meeting-row {
+        border: 2px solid #eee;
+        border-radius: .75rem;
+        padding: 1rem;
+        background: #fff;
+        margin-bottom: 1rem;
+    }
+
+    .gwa-meeting-row-title {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: center;
+        margin-bottom: .75rem;
+    }
+
+    .gwa-scarf-preview {
+        border: 2px solid #eee;
+        background: #f9f9f9;
+        padding: .75rem;
+        border-radius: .75rem;
+        overflow: hidden;
+    }
+
+    .gwa-scarf-preview svg {
+        width: 100%;
+        max-width: 720px;
+        height: auto;
+        display: block;
+        margin: 0 auto;
+    }
+
+    .gwa-colour-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: .75rem;
+    }
+
+    .gwa-colour-control {
+        border: 1px solid #ddd;
+        border-radius: .5rem;
+        padding: .75rem;
+        background: #fff;
+    }
+
+    .gwa-colour-control label {
+        font-weight: 800;
+        display: block;
+        margin-bottom: .4rem;
+    }
+
+    .gwa-preset-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .35rem;
+        margin-top: .5rem;
+    }
+
+    .gwa-preset {
+        width: 1.8rem;
+        height: 1.8rem;
+        border-radius: .25rem;
+        border: 1px solid rgba(0,0,0,.25);
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .gwa-image-preview {
+        max-width: 320px;
+        border-radius: .75rem;
+        border: 2px solid #eee;
+        display: block;
     }
 </style>
 
@@ -873,6 +1113,11 @@ include __DIR__ . '/header.php';
     <?php if ($success): ?>
         <div class="alert alert-success">
             <?= e($success) ?>
+            <?php if ($websitePostId > 0 && $websitePost): ?>
+                <a href="<?= e(gwa_wp_store_permalink($websitePostId)) ?>" target="_blank" rel="noopener">
+                    View public page
+                </a>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 
@@ -914,85 +1159,81 @@ include __DIR__ . '/header.php';
         </p>
     </section>
 
-    <section class="lt-card">
-        <h2 class="lt-section-title">WordPress link</h2>
-
-        <?php if ($websiteLoadError): ?>
-            <div class="alert alert-danger">
+    <?php if ($websiteLoadError): ?>
+        <section class="lt-card">
+            <div class="alert alert-danger mb-0">
                 <strong>WordPress connection problem:</strong>
                 <?= e($websiteLoadError) ?>
             </div>
-        <?php endif; ?>
+        </section>
+    <?php endif; ?>
 
-        <div class="gwa-grid gwa-grid-2">
-            <form method="post" class="gwa-card">
-                <input type="hidden" name="action" value="link_existing_post">
-                <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+    <?php if ($websitePostId < 1 && !$websiteLoadError): ?>
+        <section class="lt-card">
+            <h2 class="lt-section-title">Connect this Group to the website</h2>
 
-                <h3 class="h5 font-weight-bold">Link existing website post</h3>
+            <div class="gwa-grid gwa-grid-2">
+                <form method="post" class="gwa-card">
+                    <input type="hidden" name="action" value="link_existing_post">
+                    <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
 
-                <div class="form-group">
-                    <label for="website_post_id">WordPress Store Locator post ID</label>
-                    <input
-                        class="form-control"
-                        type="number"
-                        min="1"
-                        id="website_post_id"
-                        name="website_post_id"
-                        value="<?= e((string) $websitePostId) ?>"
-                        placeholder="e.g. 123"
-                    >
-                    <small class="form-text text-muted">
-                        The post must be a <code>wpsl_stores</code> post.
-                    </small>
-                </div>
+                    <h3 class="h5 font-weight-bold">Link existing website post</h3>
 
-                <button class="btn btn-primary lt-btn" type="submit">
-                    Link existing post
-                </button>
-            </form>
+                    <div class="form-group">
+                        <label for="website_post_id">WordPress Store Locator post ID</label>
+                        <input
+                            class="form-control"
+                            type="number"
+                            min="1"
+                            id="website_post_id"
+                            name="website_post_id"
+                            placeholder="e.g. 123"
+                        >
+                        <small class="form-text text-muted">
+                            The post must be a <code>wpsl_stores</code> post.
+                        </small>
+                    </div>
 
-            <form method="post" class="gwa-card">
-                <input type="hidden" name="action" value="create_website_post">
-                <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                    <button class="btn btn-primary lt-btn" type="submit">
+                        Link existing post
+                    </button>
+                </form>
 
-                <h3 class="h5 font-weight-bold">Create new website post</h3>
+                <form method="post" class="gwa-card">
+                    <input type="hidden" name="action" value="create_website_post">
+                    <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
 
-                <p>
-                    Creates a new draft WordPress Store Locator post for this Group and links it to the Leader Tool record.
-                </p>
+                    <h3 class="h5 font-weight-bold">Create website page now</h3>
 
-                <button class="btn btn-secondary lt-btn" type="submit">
-                    Create draft post
-                </button>
-            </form>
-        </div>
+                    <p>
+                        Creates and publishes a new public Store Locator page for this Group.
+                    </p>
 
-        <?php if ($websitePost): ?>
-            <p class="gwa-muted">
-                Linked post:
-                <strong><?= e((string) $websitePost['post_title']) ?></strong>
-                <span class="gwa-status"><?= e((string) $websitePost['post_status']) ?></span>
-                ·
-                <a href="<?= e(gwa_wp_store_permalink($websitePostId)) ?>" target="_blank" rel="noopener">
-                    open public page
-                </a>
-            </p>
-        <?php elseif ($websitePostId > 0 && !$websiteLoadError): ?>
-            <div class="alert alert-warning">
-                A post ID is stored for this Group, but the WordPress post could not be found as a <code>wpsl_stores</code> post.
+                    <button class="btn btn-secondary lt-btn" type="submit">
+                        Create public page
+                    </button>
+                </form>
             </div>
-        <?php endif; ?>
-    </section>
+        </section>
+    <?php endif; ?>
 
     <?php if ($websitePost): ?>
-        <form method="post">
+        <form method="post" enctype="multipart/form-data" id="gwa-editor-form">
             <input type="hidden" name="action" value="save_website_details">
             <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
             <input type="hidden" name="website_post_id" value="<?= (int) $websitePostId ?>">
 
             <section class="lt-card">
-                <h2 class="lt-section-title">Public page content</h2>
+                <h2 class="lt-section-title">Website page</h2>
+
+                <p class="gwa-muted">
+                    Status:
+                    <span class="gwa-status">Published live</span>
+                    ·
+                    <a href="<?= e(gwa_wp_store_permalink($websitePostId)) ?>" target="_blank" rel="noopener">
+                        View public page
+                    </a>
+                </p>
 
                 <div class="form-group">
                     <label for="post_title">Public Group name</label>
@@ -1007,26 +1248,7 @@ include __DIR__ . '/header.php';
                 </div>
 
                 <div class="form-group">
-                    <label for="post_status">Website status</label>
-                    <select class="form-control" id="post_status" name="post_status">
-                        <?php
-                            $status = (string) ($websitePost['post_status'] ?? 'draft');
-                            $statuses = [
-                                'publish' => 'Published',
-                                'draft' => 'Draft',
-                                'pending' => 'Pending review',
-                            ];
-                        ?>
-                        <?php foreach ($statuses as $value => $label): ?>
-                            <option value="<?= e($value) ?>" <?= $status === $value ? 'selected' : '' ?>>
-                                <?= e($label) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="post_content">Public description</label>
+                    <label for="post_content">About this Group</label>
                     <textarea
                         class="form-control"
                         id="post_content"
@@ -1037,16 +1259,61 @@ include __DIR__ . '/header.php';
             </section>
 
             <section class="lt-card">
-                <h2 class="lt-section-title">Meeting and contact details</h2>
+                <h2 class="lt-section-title">Photo</h2>
 
-                <div class="form-group">
-                    <label for="wpsl_address">Meeting place / address</label>
-                    <textarea
-                        class="form-control"
-                        id="wpsl_address"
-                        name="wpsl_address"
-                        rows="3"
-                    ><?= e($metaValue($websiteMeta, 'wpsl_address', (string) ($selectedGroup['meeting_place'] ?? ''))) ?></textarea>
+                <?php if ($thumbnailUrl !== ''): ?>
+                    <p>
+                        <img class="gwa-image-preview" src="<?= e($thumbnailUrl) ?>" alt="">
+                    </p>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" value="1" id="remove_featured_image" name="remove_featured_image">
+                        <label class="form-check-label" for="remove_featured_image">
+                            Remove current photo
+                        </label>
+                    </div>
+                <?php else: ?>
+                    <p class="gwa-muted">No photo has been set yet.</p>
+                <?php endif; ?>
+
+                <div class="gwa-form-row gwa-form-row-2">
+                    <div class="form-group">
+                        <label for="featured_upload">Upload a new photo</label>
+                        <input class="form-control" type="file" id="featured_upload" name="featured_upload" accept="image/*">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="featured_url">Or paste an image URL</label>
+                        <input class="form-control" type="url" id="featured_url" name="featured_url" placeholder="https://...">
+                    </div>
+                </div>
+            </section>
+
+            <section class="lt-card">
+                <h2 class="lt-section-title">Meeting place</h2>
+
+                <div class="gwa-form-row gwa-form-row-2">
+                    <div class="form-group">
+                        <label for="wpsl_address">Address line 1</label>
+                        <input
+                            class="form-control"
+                            type="text"
+                            id="wpsl_address"
+                            name="wpsl_address"
+                            value="<?= e($metaValue($websiteMeta, 'wpsl_address', (string) ($selectedGroup['meeting_place'] ?? ''))) ?>"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="wpsl_address2">Address line 2</label>
+                        <input
+                            class="form-control"
+                            type="text"
+                            id="wpsl_address2"
+                            name="wpsl_address2"
+                            value="<?= e($metaValue($websiteMeta, 'wpsl_address2')) ?>"
+                        >
+                    </div>
                 </div>
 
                 <div class="gwa-form-row gwa-form-row-3">
@@ -1062,6 +1329,17 @@ include __DIR__ . '/header.php';
                     </div>
 
                     <div class="form-group">
+                        <label for="wpsl_state">County</label>
+                        <input
+                            class="form-control"
+                            type="text"
+                            id="wpsl_state"
+                            name="wpsl_state"
+                            value="<?= e($metaValue($websiteMeta, 'wpsl_state')) ?>"
+                        >
+                    </div>
+
+                    <div class="form-group">
                         <label for="wpsl_zip">Postcode</label>
                         <input
                             class="form-control"
@@ -1071,7 +1349,9 @@ include __DIR__ . '/header.php';
                             value="<?= e($metaValue($websiteMeta, 'wpsl_zip', (string) ($selectedGroup['postcode'] ?? ''))) ?>"
                         >
                     </div>
+                </div>
 
+                <div class="gwa-form-row gwa-form-row-2">
                     <div class="form-group">
                         <label for="wpsl_country">Country</label>
                         <input
@@ -1082,11 +1362,51 @@ include __DIR__ . '/header.php';
                             value="<?= e($metaValue($websiteMeta, 'wpsl_country', 'United Kingdom')) ?>"
                         >
                     </div>
+
+                    <div class="form-group">
+                        <label for="wpsl_country_iso">Country code</label>
+                        <input
+                            class="form-control"
+                            type="text"
+                            id="wpsl_country_iso"
+                            name="wpsl_country_iso"
+                            value="<?= e($metaValue($websiteMeta, 'wpsl_country_iso', 'GB')) ?>"
+                        >
+                    </div>
                 </div>
+            </section>
 
-                <input type="hidden" name="wpsl_state" value="<?= e($metaValue($websiteMeta, 'wpsl_state')) ?>">
+            <section class="lt-card">
+                <h2 class="lt-section-title">Contact details</h2>
 
-                <div class="gwa-form-row gwa-form-row-2">
+                <?php
+                    $glvName = $primaryLeadVolunteer ? (string) ($primaryLeadVolunteer['full_name'] ?? '') : '';
+                    $glvEmail = $primaryLeadVolunteer ? (string) ($primaryLeadVolunteer['primary_email'] ?? '') : '';
+                    $glvPhone = $primaryLeadVolunteer ? (string) ($primaryLeadVolunteer['phone'] ?? '') : '';
+                ?>
+
+                <?php if ($primaryLeadVolunteer): ?>
+                    <div class="alert alert-info">
+                        Group Lead Volunteer found:
+                        <strong><?= e($glvName) ?></strong>
+                        <?php if ($glvEmail !== ''): ?>
+                            · <?= e($glvEmail) ?>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+
+                <div class="gwa-form-row gwa-form-row-3">
+                    <div class="form-group">
+                        <label for="wpsl_phone">Public phone</label>
+                        <input
+                            class="form-control"
+                            type="text"
+                            id="wpsl_phone"
+                            name="wpsl_phone"
+                            value="<?= e($metaValue($websiteMeta, 'wpsl_phone')) ?>"
+                        >
+                    </div>
+
                     <div class="form-group">
                         <label for="wpsl_email">Public email</label>
                         <input
@@ -1099,14 +1419,34 @@ include __DIR__ . '/header.php';
                     </div>
 
                     <div class="form-group">
-                        <label for="wpsl_phone">Public phone</label>
-                        <input
-                            class="form-control"
-                            type="text"
-                            id="wpsl_phone"
-                            name="wpsl_phone"
-                            value="<?= e($metaValue($websiteMeta, 'wpsl_phone')) ?>"
-                        >
+                        <label for="wpsl_group_contact">Primary contact</label>
+                        <div class="input-group">
+                            <input
+                                class="form-control"
+                                type="text"
+                                id="wpsl_group_contact"
+                                name="wpsl_group_contact"
+                                value="<?= e($metaValue($websiteMeta, 'wpsl_group_contact')) ?>"
+                                placeholder="e.g. Group Lead Volunteer"
+                            >
+                            <?php if ($primaryLeadVolunteer): ?>
+                                <div class="input-group-append">
+                                    <button
+                                        class="btn btn-outline-secondary"
+                                        type="button"
+                                        id="insert-glv"
+                                        data-name="<?= e($glvName) ?>"
+                                        data-email="<?= e($glvEmail) ?>"
+                                        data-phone="<?= e($glvPhone) ?>"
+                                    >
+                                        Insert GLV
+                                    </button>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        <small class="form-text text-muted">
+                            Use the button to insert the Group Lead Volunteer if appropriate.
+                        </small>
                     </div>
                 </div>
 
@@ -1133,110 +1473,625 @@ include __DIR__ . '/header.php';
                         >
                     </div>
                 </div>
-
-                <div class="form-group">
-                    <label for="wpsl_group_contact">Contact text / contact URL</label>
-                    <input
-                        class="form-control"
-                        type="text"
-                        id="wpsl_group_contact"
-                        name="wpsl_group_contact"
-                        value="<?= e($metaValue($websiteMeta, 'wpsl_group_contact')) ?>"
-                    >
-                </div>
             </section>
 
             <section class="lt-card">
-                <h2 class="lt-section-title">Scout display fields</h2>
+                <h2 class="lt-section-title">Group type</h2>
+
+                <?php $groupType = $metaValue($websiteMeta, 'wpsl_group_type', '0'); ?>
 
                 <div class="form-group">
-                    <label for="wpsl_group_type">Group type</label>
-                    <?php $groupType = $metaValue($websiteMeta, 'wpsl_group_type', '0'); ?>
+                    <label for="wpsl_group_type">Type shown on the public website</label>
                     <select class="form-control" id="wpsl_group_type" name="wpsl_group_type">
                         <option value="0" <?= $groupType === '0' ? 'selected' : '' ?>>Scout Group</option>
                         <option value="1" <?= $groupType === '1' ? 'selected' : '' ?>>Explorer Unit</option>
                         <option value="2" <?= $groupType === '2' ? 'selected' : '' ?>>Network</option>
                     </select>
                 </div>
+            </section>
+
+            <section class="lt-card">
+                <h2 class="lt-section-title">Section meeting times</h2>
+
+                <p class="gwa-muted">
+                    Add each section, choose the meeting day, and set the start and finish time.
+                </p>
+
+                <input
+                    type="hidden"
+                    id="wpsl_section_details"
+                    name="wpsl_section_details"
+                    value="<?= e($metaValue($websiteMeta, 'wpsl_section_details', gwa_section_example_json())) ?>"
+                >
+
+                <div id="section-editor"></div>
+
+                <button class="btn btn-secondary lt-btn" type="button" id="add-section-row">
+                    Add section
+                </button>
+            </section>
+
+            <section class="lt-card">
+                <h2 class="lt-section-title">Group scarf / necker</h2>
+
+                <p class="gwa-muted">
+                    Choose the scarf style and colours. The preview updates before saving.
+                </p>
+
+                <input
+                    type="hidden"
+                    id="wpsl_section_scarf"
+                    name="wpsl_section_scarf"
+                    value="<?= e($metaValue($websiteMeta, 'wpsl_section_scarf', gwa_normalise_scarf_json(''))) ?>"
+                >
 
                 <div class="form-group">
-                    <label for="wpsl_section_scarf">Scarf data</label>
-                    <textarea
-                        class="form-control gwa-json"
-                        id="wpsl_section_scarf"
-                        name="wpsl_section_scarf"
-                        rows="5"
-                    ><?= e($metaValue($websiteMeta, 'wpsl_section_scarf')) ?></textarea>
+                    <label for="scarf_type">Scarf style</label>
+                    <select class="form-control" id="scarf_type">
+                        <option value="0">Plain</option>
+                        <option value="1">Single border</option>
+                        <option value="2">Double border</option>
+                        <option value="3">Triple border</option>
+                        <option value="4">Centre stripe</option>
+                        <option value="5">Centre stripe + border</option>
+                        <option value="6">Centre stripe + 2 borders</option>
+                        <option value="7">Centre stripe + 3 borders</option>
+                        <option value="8">Large border</option>
+                    </select>
                 </div>
 
-                <div class="form-group">
-                    <label for="wpsl_section_details">Section details JSON</label>
-                    <textarea
-                        class="form-control gwa-json"
-                        id="wpsl_section_details"
-                        name="wpsl_section_details"
-                        rows="14"
-                    ><?= e($metaValue($websiteMeta, 'wpsl_section_details', gwa_section_example_json())) ?></textarea>
-                    <small class="form-text text-muted">
-                        Must be a JSON array. Each row can include <code>day</code>, <code>type</code>, <code>time_start</code>, <code>time_finish</code>, <code>name</code>, and <code>key</code>.
-                    </small>
+                <div class="gwa-colour-grid">
+                    <div class="gwa-colour-control">
+                        <label for="scarf_l">Left main</label>
+                        <input type="color" id="scarf_l" data-key="l">
+                    </div>
+                    <div class="gwa-colour-control">
+                        <label for="scarf_r">Right main</label>
+                        <input type="color" id="scarf_r" data-key="r">
+                    </div>
+                    <div class="gwa-colour-control">
+                        <label for="scarf_b1l">Border 1 left</label>
+                        <input type="color" id="scarf_b1l" data-key="b1l">
+                    </div>
+                    <div class="gwa-colour-control">
+                        <label for="scarf_b1r">Border 1 right</label>
+                        <input type="color" id="scarf_b1r" data-key="b1r">
+                    </div>
+                    <div class="gwa-colour-control">
+                        <label for="scarf_b2l">Border 2 left</label>
+                        <input type="color" id="scarf_b2l" data-key="b2l">
+                    </div>
+                    <div class="gwa-colour-control">
+                        <label for="scarf_b2r">Border 2 right</label>
+                        <input type="color" id="scarf_b2r" data-key="b2r">
+                    </div>
+                    <div class="gwa-colour-control">
+                        <label for="scarf_b3l">Border 3 left</label>
+                        <input type="color" id="scarf_b3l" data-key="b3l">
+                    </div>
+                    <div class="gwa-colour-control">
+                        <label for="scarf_b3r">Border 3 right</label>
+                        <input type="color" id="scarf_b3r" data-key="b3r">
+                    </div>
+                    <div class="gwa-colour-control">
+                        <label for="scarf_s">Centre stripe</label>
+                        <input type="color" id="scarf_s" data-key="s">
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <button class="btn btn-outline-secondary" type="button" id="match-scarf-sides">
+                        Make right match left
+                    </button>
+                </div>
+
+                <div class="mt-3">
+                    <strong>Preset colours</strong>
+                    <p class="gwa-muted mb-1">
+                        Click a colour after selecting the field you want to change.
+                    </p>
+                    <select class="form-control mb-2" id="preset-target">
+                        <option value="l">Left main</option>
+                        <option value="r">Right main</option>
+                        <option value="b1l">Border 1 left</option>
+                        <option value="b1r">Border 1 right</option>
+                        <option value="b2l">Border 2 left</option>
+                        <option value="b2r">Border 2 right</option>
+                        <option value="b3l">Border 3 left</option>
+                        <option value="b3r">Border 3 right</option>
+                        <option value="s">Centre stripe</option>
+                    </select>
+                    <div class="gwa-preset-grid" id="scarf-presets"></div>
+                </div>
+
+                <div class="mt-4">
+                    <strong>Preview</strong>
+                    <div class="gwa-scarf-preview mt-2" id="scarf-preview"></div>
                 </div>
             </section>
 
             <section class="lt-card">
-                <h2 class="lt-section-title">Linked / partner Groups</h2>
-
-                <div class="gwa-form-row gwa-form-row-3">
-                    <div class="form-group">
-                        <label for="wpsl_group_link">Partner post ID 1</label>
-                        <input
-                            class="form-control"
-                            type="number"
-                            min="0"
-                            id="wpsl_group_link"
-                            name="wpsl_group_link"
-                            value="<?= e($metaValue($websiteMeta, 'wpsl_group_link')) ?>"
-                        >
-                    </div>
-
-                    <div class="form-group">
-                        <label for="wpsl_group_link2">Partner post ID 2</label>
-                        <input
-                            class="form-control"
-                            type="number"
-                            min="0"
-                            id="wpsl_group_link2"
-                            name="wpsl_group_link2"
-                            value="<?= e($metaValue($websiteMeta, 'wpsl_group_link2')) ?>"
-                        >
-                    </div>
-
-                    <div class="form-group">
-                        <label for="wpsl_group_link3">Partner post ID 3</label>
-                        <input
-                            class="form-control"
-                            type="number"
-                            min="0"
-                            id="wpsl_group_link3"
-                            name="wpsl_group_link3"
-                            value="<?= e($metaValue($websiteMeta, 'wpsl_group_link3')) ?>"
-                        >
-                    </div>
-                </div>
-
-                <button class="btn btn-primary lt-btn" type="submit">
-                    Save website details
+                <button class="btn btn-primary lt-btn btn-lg" type="submit">
+                    Save and publish website details
                 </button>
+
+                <a class="btn btn-secondary lt-btn btn-lg" href="<?= e(gwa_wp_store_permalink($websitePostId)) ?>" target="_blank" rel="noopener">
+                    View public page
+                </a>
             </section>
         </form>
-    <?php else: ?>
+    <?php elseif ($websitePostId > 0 && !$websiteLoadError): ?>
         <section class="lt-card">
-            <h2 class="lt-section-title">No linked website post yet</h2>
-            <p class="mb-0">
-                Link an existing WordPress Store Locator post above, or create a new draft post from this Group.
-            </p>
+            <div class="alert alert-warning mb-0">
+                A WordPress post ID is linked, but the post could not be found as a <code>wpsl_stores</code> post.
+            </div>
         </section>
     <?php endif; ?>
 </main>
+
+<script>
+(function () {
+    const insertGlvButton = document.getElementById('insert-glv');
+
+    if (insertGlvButton) {
+        insertGlvButton.addEventListener('click', function () {
+            const name = this.getAttribute('data-name') || '';
+            const email = this.getAttribute('data-email') || '';
+            const phone = this.getAttribute('data-phone') || '';
+
+            const contact = document.getElementById('wpsl_group_contact');
+            const emailInput = document.getElementById('wpsl_email');
+            const phoneInput = document.getElementById('wpsl_phone');
+
+            if (contact && name) {
+                contact.value = name;
+            }
+
+            if (emailInput && email && emailInput.value.trim() === '') {
+                emailInput.value = email;
+            }
+
+            if (phoneInput && phone && phoneInput.value.trim() === '') {
+                phoneInput.value = phone;
+            }
+        });
+    }
+
+    /**
+     * ---------------------------------------------------------------------
+     * Section editor
+     * ---------------------------------------------------------------------
+     */
+
+    const sectionJson = document.getElementById('wpsl_section_details');
+    const sectionEditor = document.getElementById('section-editor');
+    const addSectionRow = document.getElementById('add-section-row');
+
+    const DAYS = [
+        ['0', 'Monday'],
+        ['1', 'Tuesday'],
+        ['2', 'Wednesday'],
+        ['3', 'Thursday'],
+        ['4', 'Friday'],
+        ['5', 'Saturday'],
+        ['6', 'Sunday']
+    ];
+
+    const SECTION_TYPES = [
+        ['0', 'Early Years'],
+        ['1', 'Beavers'],
+        ['2', 'Cubs'],
+        ['3', 'Scouts'],
+        ['4', 'Explorers'],
+        ['5', 'Network'],
+        ['6', 'SASU']
+    ];
+
+    function buildTimes() {
+        const times = [];
+        const hours = ['12:', '01:', '02:', '03:', '04:', '05:', '06:', '07:', '08:', '09:', '10:', '11:'];
+        const minutes = ['00', '15', '30', '45'];
+        const ampm = ['AM', 'PM'];
+
+        for (let a = 0; a < ampm.length; a++) {
+            for (let h = 0; h < hours.length; h++) {
+                for (let m = 0; m < minutes.length; m++) {
+                    times.push(hours[h] + minutes[m] + ' ' + ampm[a]);
+                }
+            }
+        }
+
+        return times;
+    }
+
+    const TIMES = buildTimes();
+
+    function parseSections() {
+        try {
+            const parsed = JSON.parse(sectionJson.value || '[]');
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function writeSections(rows) {
+        const clean = rows.map((row, index) => ({
+            day: String(row.day || '0'),
+            type: String(row.type || '0'),
+            time_start: String(row.time_start || '0'),
+            time_finish: String(row.time_finish || '0'),
+            name: String(row.name || ''),
+            key: String(index)
+        }));
+
+        sectionJson.value = JSON.stringify(clean);
+    }
+
+    function optionHtml(options, selected) {
+        return options.map(([value, label]) => {
+            const isSelected = String(value) === String(selected) ? ' selected' : '';
+            return `<option value="${escapeHtml(value)}"${isSelected}>${escapeHtml(label)}</option>`;
+        }).join('');
+    }
+
+    function timeOptionHtml(selected) {
+        return TIMES.map((label, index) => {
+            const isSelected = String(index) === String(selected) ? ' selected' : '';
+            return `<option value="${index}"${isSelected}>${escapeHtml(label)}</option>`;
+        }).join('');
+    }
+
+    function renderSections() {
+        if (!sectionEditor || !sectionJson) {
+            return;
+        }
+
+        let rows = parseSections();
+
+        if (rows.length === 0) {
+            rows = [{
+                day: '0',
+                type: '1',
+                time_start: '72',
+                time_finish: '76',
+                name: '',
+                key: '0'
+            }];
+            writeSections(rows);
+        }
+
+        sectionEditor.innerHTML = '';
+
+        rows.forEach((row, index) => {
+            const div = document.createElement('div');
+            div.className = 'gwa-meeting-row';
+            div.innerHTML = `
+                <div class="gwa-meeting-row-title">
+                    <strong>Section ${index + 1}</strong>
+                    <button type="button" class="btn btn-outline-danger btn-sm" data-remove="${index}">Remove</button>
+                </div>
+
+                <div class="gwa-form-row gwa-form-row-3">
+                    <div class="form-group">
+                        <label>Section</label>
+                        <select class="form-control" data-field="type" data-index="${index}">
+                            ${optionHtml(SECTION_TYPES, row.type)}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Day</label>
+                        <select class="form-control" data-field="day" data-index="${index}">
+                            ${optionHtml(DAYS, row.day)}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Display name / note</label>
+                        <input class="form-control" type="text" data-field="name" data-index="${index}" value="${escapeHtml(row.name || '')}" placeholder="Optional">
+                    </div>
+                </div>
+
+                <div class="gwa-form-row gwa-form-row-2">
+                    <div class="form-group">
+                        <label>Start time</label>
+                        <select class="form-control" data-field="time_start" data-index="${index}">
+                            ${timeOptionHtml(row.time_start)}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Finish time</label>
+                        <select class="form-control" data-field="time_finish" data-index="${index}">
+                            ${timeOptionHtml(row.time_finish)}
+                        </select>
+                    </div>
+                </div>
+            `;
+
+            sectionEditor.appendChild(div);
+        });
+
+        sectionEditor.querySelectorAll('[data-field]').forEach((input) => {
+            input.addEventListener('input', function () {
+                const rows = parseSections();
+                const index = Number(this.getAttribute('data-index'));
+                const field = this.getAttribute('data-field');
+
+                if (!rows[index]) {
+                    return;
+                }
+
+                rows[index][field] = this.value;
+                writeSections(rows);
+            });
+
+            input.addEventListener('change', function () {
+                const rows = parseSections();
+                const index = Number(this.getAttribute('data-index'));
+                const field = this.getAttribute('data-field');
+
+                if (!rows[index]) {
+                    return;
+                }
+
+                rows[index][field] = this.value;
+                writeSections(rows);
+            });
+        });
+
+        sectionEditor.querySelectorAll('[data-remove]').forEach((button) => {
+            button.addEventListener('click', function () {
+                const rows = parseSections();
+                const index = Number(this.getAttribute('data-remove'));
+
+                rows.splice(index, 1);
+                writeSections(rows);
+                renderSections();
+            });
+        });
+    }
+
+    if (addSectionRow) {
+        addSectionRow.addEventListener('click', function () {
+            const rows = parseSections();
+
+            rows.push({
+                day: '0',
+                type: '1',
+                time_start: '72',
+                time_finish: '76',
+                name: '',
+                key: String(rows.length)
+            });
+
+            writeSections(rows);
+            renderSections();
+        });
+    }
+
+    renderSections();
+
+    /**
+     * ---------------------------------------------------------------------
+     * Scarf editor
+     * ---------------------------------------------------------------------
+     */
+
+    const scarfJson = document.getElementById('wpsl_section_scarf');
+    const scarfType = document.getElementById('scarf_type');
+    const scarfPreview = document.getElementById('scarf-preview');
+    const presetTarget = document.getElementById('preset-target');
+    const presetWrap = document.getElementById('scarf-presets');
+    const matchSides = document.getElementById('match-scarf-sides');
+
+    const DEFAULT_SCARF = {
+        scarf_type: '0',
+        l: '#39774e',
+        r: '#39774e',
+        b1l: '#000000',
+        b1r: '#000000',
+        b2l: '#ffffff',
+        b2r: '#ffffff',
+        b3l: '#000000',
+        b3r: '#000000',
+        s: '#ffffff'
+    };
+
+    const PRESETS = [
+        ['Bright Yellow', '#EFE406'],
+        ['Lemon', '#F3E747'],
+        ['Orange', '#C98200'],
+        ['Scarlet', '#B92f1f'],
+        ['Dark Red', '#8f1937'],
+        ['Maroon', '#480d2c'],
+        ['Purple', '#5C068c'],
+        ['Gold', '#e4b71b'],
+        ['Khaki', '#826e57'],
+        ['Chocolate', '#422310'],
+        ['Grape', '#7b0065'],
+        ['Emerald', '#1a6a30'],
+        ['Pine Green', '#184f3f'],
+        ['Scout Green', '#39774e'],
+        ['Sky Blue', '#afc3d5'],
+        ['Royal Blue', '#0A3786'],
+        ['Navy Blue', '#152442'],
+        ['White', '#f9f9f9'],
+        ['Grey', '#7e7f84'],
+        ['Black', '#000000'],
+        ['Pink', '#cd6888'],
+        ['Light Blue', '#b9cfe4'],
+        ['Turquoise', '#44bce3'],
+        ['Tangerine', '#ff5e00'],
+        ['Lilac', '#c2bcec'],
+        ['HiVis Yellow', '#e6ff15'],
+        ['HiVis Orange', '#ff8418'],
+        ['HiVis Green', '#8dff32'],
+        ['HiVis Pink', '#ff51b5'],
+        ['Reflective', '#e1e8e8']
+    ];
+
+    function parseScarf() {
+        try {
+            const parsed = JSON.parse(scarfJson.value || '{}');
+            return Object.assign({}, DEFAULT_SCARF, parsed || {});
+        } catch (e) {
+            return Object.assign({}, DEFAULT_SCARF);
+        }
+    }
+
+    function writeScarf(data) {
+        scarfJson.value = JSON.stringify(data);
+    }
+
+    function setColourInputValues(data) {
+        document.querySelectorAll('[data-key]').forEach((input) => {
+            const key = input.getAttribute('data-key');
+            input.value = normaliseColour(data[key] || DEFAULT_SCARF[key] || '#000000');
+        });
+
+        if (scarfType) {
+            scarfType.value = String(data.scarf_type || '0');
+        }
+    }
+
+    function readScarfFromInputs() {
+        const data = parseScarf();
+
+        document.querySelectorAll('[data-key]').forEach((input) => {
+            const key = input.getAttribute('data-key');
+            data[key] = input.value || DEFAULT_SCARF[key] || '#000000';
+        });
+
+        data.scarf_type = scarfType ? String(scarfType.value || '0') : '0';
+
+        writeScarf(data);
+        renderScarfPreview(data);
+    }
+
+    function renderPresets() {
+        if (!presetWrap) {
+            return;
+        }
+
+        presetWrap.innerHTML = '';
+
+        PRESETS.forEach(([name, colour]) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'gwa-preset';
+            button.title = name;
+            button.style.backgroundColor = colour;
+            button.setAttribute('data-colour', colour);
+
+            button.addEventListener('click', function () {
+                const target = presetTarget ? presetTarget.value : 'l';
+                const input = document.querySelector('[data-key="' + target + '"]');
+
+                if (input) {
+                    input.value = colour;
+                    readScarfFromInputs();
+                }
+            });
+
+            presetWrap.appendChild(button);
+        });
+    }
+
+    function renderScarfPreview(data) {
+        if (!scarfPreview) {
+            return;
+        }
+
+        const type = Number(data.scarf_type || 0);
+
+        const showB1 = [1, 2, 3, 5, 6, 7, 8].includes(type);
+        const showB2 = [2, 3, 6, 7].includes(type);
+        const showB3 = [3, 7].includes(type);
+        const showStripe = [4, 5, 6, 7].includes(type);
+        const largeBorder = type === 8;
+
+        const borderWidth1 = largeBorder ? 34 : 14;
+        const borderWidth2 = 26;
+        const borderWidth3 = 38;
+
+        scarfPreview.innerHTML = `
+            <svg viewBox="0 0 900 300" role="img" aria-label="Scarf preview">
+                <rect x="0" y="0" width="900" height="300" fill="#f9f9f9"></rect>
+
+                <polygon points="90,30 450,250 450,55" fill="${escapeAttr(data.l)}" stroke="#111" stroke-width="3"></polygon>
+                <polygon points="810,30 450,250 450,55" fill="${escapeAttr(data.r)}" stroke="#111" stroke-width="3"></polygon>
+
+                ${showStripe ? `<polygon points="418,56 482,56 482,218 450,250 418,218" fill="${escapeAttr(data.s)}" stroke="#111" stroke-width="2"></polygon>` : ''}
+
+                ${showB1 ? `<polyline points="105,34 450,238" fill="none" stroke="${escapeAttr(data.b1l)}" stroke-width="${borderWidth1}"></polyline>` : ''}
+                ${showB1 ? `<polyline points="795,34 450,238" fill="none" stroke="${escapeAttr(data.b1r)}" stroke-width="${borderWidth1}"></polyline>` : ''}
+
+                ${showB2 ? `<polyline points="140,45 450,225" fill="none" stroke="${escapeAttr(data.b2l)}" stroke-width="10"></polyline>` : ''}
+                ${showB2 ? `<polyline points="760,45 450,225" fill="none" stroke="${escapeAttr(data.b2r)}" stroke-width="10"></polyline>` : ''}
+
+                ${showB3 ? `<polyline points="175,56 450,212" fill="none" stroke="${escapeAttr(data.b3l)}" stroke-width="8"></polyline>` : ''}
+                ${showB3 ? `<polyline points="725,56 450,212" fill="none" stroke="${escapeAttr(data.b3r)}" stroke-width="8"></polyline>` : ''}
+            </svg>
+        `;
+    }
+
+    function normaliseColour(value) {
+        value = String(value || '').trim();
+
+        if (/^#[0-9a-fA-F]{6}$/.test(value)) {
+            return value;
+        }
+
+        return '#000000';
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    }
+
+    function escapeAttr(value) {
+        return escapeHtml(normaliseColour(value));
+    }
+
+    if (scarfJson && scarfType) {
+        const initial = parseScarf();
+
+        setColourInputValues(initial);
+        renderScarfPreview(initial);
+        renderPresets();
+
+        document.querySelectorAll('[data-key]').forEach((input) => {
+            input.addEventListener('input', readScarfFromInputs);
+            input.addEventListener('change', readScarfFromInputs);
+        });
+
+        scarfType.addEventListener('change', readScarfFromInputs);
+
+        if (matchSides) {
+            matchSides.addEventListener('click', function () {
+                const data = parseScarf();
+
+                data.r = data.l;
+                data.b1r = data.b1l;
+                data.b2r = data.b2l;
+                data.b3r = data.b3l;
+
+                writeScarf(data);
+                setColourInputValues(data);
+                renderScarfPreview(data);
+            });
+        }
+
+        readScarfFromInputs();
+    }
+})();
+</script>
 
 <?php include __DIR__ . '/footer.php'; ?>

@@ -1230,8 +1230,8 @@ $breadcrumb = '<a href="/index.php">Home</a> / Group Manager';
     <?php elseif ($tab === 'website'): ?>
         <div class="gm-coming-soon">
             <h2 class="lt-section-title">Group website details</h2>
-            <p class="lt-lede">Coming soon. This tab will let Group Lead Volunteers update the Group details shown on the public District website.</p>
-            <p class="mb-0">Planned fields include meeting place, section times, public contact details, waiting-list information and website display notes.</p>
+            
+            <a href="group_website_admin.php" class="btn btn-primary lt-btn mt-3">Manage website details</a>
         </div>
     <?php endif; ?>
 </main>
