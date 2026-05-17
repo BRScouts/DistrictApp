@@ -58,10 +58,76 @@ function dc_index_url(array $overrides = []): string
 
     $params = array_filter(
         $params,
-        static fn ($value): bool => $value !== null && $value !== '' && $value !== 0 && $value !== '0'
+        static fn($value): bool => $value !== null && $value !== '' && $value !== 0 && $value !== '0'
     );
 
     return '/dc/' . ($params ? '?' . http_build_query($params) : '');
+}
+
+function dc_index_table_exists(string $table): bool
+{
+    static $cache = [];
+
+    if (array_key_exists($table, $cache)) {
+        return $cache[$table];
+    }
+
+    try {
+        $stmt = db()->prepare("
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = :table_name
+        ");
+        $stmt->execute(['table_name' => $table]);
+
+        return $cache[$table] = ((int) $stmt->fetchColumn()) > 0;
+    } catch (Throwable $e) {
+        return $cache[$table] = false;
+    }
+}
+
+function dc_index_column_exists(string $table, string $column): bool
+{
+    static $cache = [];
+    $key = $table . '.' . $column;
+
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
+    try {
+        $stmt = db()->prepare("
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = :table_name
+              AND COLUMN_NAME = :column_name
+        ");
+        $stmt->execute([
+            'table_name' => $table,
+            'column_name' => $column,
+        ]);
+
+        return $cache[$key] = ((int) $stmt->fetchColumn()) > 0;
+    } catch (Throwable $e) {
+        return $cache[$key] = false;
+    }
+}
+
+function dc_index_event_risk_link_table(): ?string
+{
+    foreach (['event_risk_assessments', 'calendar_event_risk_assessments'] as $table) {
+        if (
+            dc_index_table_exists($table)
+            && dc_index_column_exists($table, 'event_id')
+            && dc_index_column_exists($table, 'risk_assessment_id')
+        ) {
+            return $table;
+        }
+    }
+
+    return null;
 }
 
 function dc_user_can_manage_event_group(array $ctx, int $groupId): bool
@@ -101,6 +167,63 @@ function dc_event_bar_class(string $status): string
     $status = preg_replace('/[^a-z0-9_-]/i', '', $status);
 
     return 'dc-cal-event dc-cal-event-' . $status;
+}
+
+function dc_index_compact(?string $value, int $limit = 120): string
+{
+    $value = trim((string) $value);
+
+    if ($value === '') {
+        return '';
+    }
+
+    if (function_exists('mb_strlen') && mb_strlen($value) > $limit) {
+        return mb_substr($value, 0, $limit - 1) . '…';
+    }
+
+    if (strlen($value) > $limit) {
+        return substr($value, 0, $limit - 1) . '…';
+    }
+
+    return $value;
+}
+
+function dc_index_popup_event(array $event, array $risks, bool $canManage): array
+{
+    $startsAt = !empty($event['starts_at']) && strtotime((string) $event['starts_at'])
+        ? date('D j M Y, H:i', strtotime((string) $event['starts_at']))
+        : 'Unknown start';
+
+    $endsAt = !empty($event['ends_at']) && strtotime((string) $event['ends_at'])
+        ? date('D j M Y, H:i', strtotime((string) $event['ends_at']))
+        : '';
+
+    return [
+        'id' => (int) $event['id'],
+        'title' => (string) ($event['title'] ?? 'Untitled event'),
+        'description' => dc_index_compact((string) ($event['description'] ?? ''), 220),
+        'group_id' => (int) $event['group_id'],
+        'group_name' => (string) ($event['group_name'] ?? 'Unknown Group'),
+        'status' => (string) ($event['status'] ?? ''),
+        'starts_at' => $startsAt,
+        'ends_at' => $endsAt,
+        'location_name' => (string) ($event['location_name'] ?? ''),
+        'location_address' => (string) ($event['location_address'] ?? ''),
+        'leader_name' => (string) ($event['leader_name'] ?? ''),
+        'leader_email' => (string) ($event['leader_email'] ?? ''),
+        'leader_phone' => (string) ($event['leader_phone'] ?? ''),
+        'can_manage' => $canManage,
+        'manage_url' => $canManage ? '/dc/manage-event.php?id=' . (int) $event['id'] : '',
+        'risks' => array_map(static function (array $risk): array {
+            return [
+                'id' => (int) $risk['id'],
+                'title' => (string) ($risk['title'] ?? 'Risk assessment'),
+                'group_name' => (string) ($risk['group_name'] ?? ''),
+                'visibility' => (string) ($risk['visibility'] ?? ''),
+                'download_url' => '/dc/download-risk-assessment.php?id=' . (int) $risk['id'],
+            ];
+        }, $risks),
+    ];
 }
 
 $stmt = db()->query("
@@ -176,6 +299,50 @@ $sql = "
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$eventIds = array_values(array_map(static fn(array $event): int => (int) $event['id'], $events));
+$riskByEvent = [];
+$linkTable = dc_index_event_risk_link_table();
+
+if ($linkTable && $eventIds) {
+    $riskSql = "
+        SELECT
+            er.event_id,
+            ra.id,
+            ra.title,
+            ra.visibility,
+            ra.original_filename,
+            g.group_name
+        FROM {$linkTable} er
+        JOIN risk_assessments ra
+          ON ra.id = er.risk_assessment_id
+        JOIN groups g
+          ON g.id = ra.group_id
+        WHERE er.event_id IN (" . implode(',', array_fill(0, count($eventIds), '?')) . ")
+          AND ra.status = 'active'
+          AND ra.admin_review_status = 'available'
+        ORDER BY ra.title ASC
+    ";
+
+    try {
+        $riskStmt = db()->prepare($riskSql);
+        $riskStmt->execute($eventIds);
+
+        foreach ($riskStmt->fetchAll(PDO::FETCH_ASSOC) as $risk) {
+            $riskByEvent[(int) $risk['event_id']][] = $risk;
+        }
+    } catch (Throwable $e) {
+        $riskByEvent = [];
+    }
+}
+
+$popupEvents = [];
+
+foreach ($events as $event) {
+    $eventId = (int) $event['id'];
+    $canManage = dc_user_can_manage_event_group($ctx, (int) $event['group_id']);
+    $popupEvents[$eventId] = dc_index_popup_event($event, $riskByEvent[$eventId] ?? [], $canManage);
+}
 
 $weeks = [];
 $weekCursor = $calendarStart;
@@ -411,6 +578,11 @@ require __DIR__ . '/layout.php';
         font-size: 0.9rem;
     }
 
+    .dc-calendar-bars-wrap {
+        background: #ffffff;
+        border-top: 1px solid #e6e6e6;
+    }
+
     .dc-calendar-bars {
         display: grid;
         grid-template-columns: 1fr;
@@ -419,15 +591,40 @@ require __DIR__ . '/layout.php';
         background: #ffffff;
     }
 
+    .dc-calendar-week.is-collapsed .dc-calendar-bar-extra {
+        display: none;
+    }
+
+    .dc-calendar-expand {
+        display: none;
+        width: calc(100% - 1rem);
+        margin: 0 0.5rem 0.6rem;
+        border: 1px solid #d8d8d8;
+        background: #f5f5f5;
+        color: #000;
+        font-weight: 900;
+        padding: 0.45rem 0.65rem;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .dc-calendar-week.has-hidden-events .dc-calendar-expand {
+        display: block;
+    }
+
     .dc-cal-event {
         display: block;
+        width: 100%;
+        text-align: left;
         color: #000000;
         background: #e7ddff;
+        border: 0;
         border-left: 6px solid #7413dc;
         padding: 0.45rem 0.55rem;
         min-width: 0;
         text-decoration: none;
         line-height: 1.2;
+        cursor: pointer;
     }
 
     .dc-cal-event:hover,
@@ -441,7 +638,6 @@ require __DIR__ . '/layout.php';
     .dc-cal-event.is-locked {
         background: #e8f1ff;
         border-left-color: #006ddf;
-        cursor: default;
     }
 
     .dc-cal-event-title {
@@ -510,6 +706,96 @@ require __DIR__ . '/layout.php';
         margin-top: 0.5rem;
     }
 
+    .dc-event-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.55);
+        padding: 1rem;
+        z-index: 2000;
+    }
+
+    .dc-event-modal-backdrop.is-open {
+        display: flex;
+    }
+
+    .dc-event-modal {
+        width: min(640px, 100%);
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+        background: #ffffff;
+        border: 2px solid #000;
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+    }
+
+    .dc-event-modal-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        padding: 1rem;
+        background: #f5f5f5;
+        border-bottom: 1px solid #d8d8d8;
+    }
+
+    .dc-event-modal-header h2 {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 900;
+    }
+
+    .dc-event-modal-close {
+        border: 0;
+        background: transparent;
+        color: #000;
+        font-size: 1.5rem;
+        font-weight: 900;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .dc-event-modal-body {
+        padding: 1rem;
+    }
+
+    .dc-event-modal-body dl {
+        display: grid;
+        gap: 0.4rem;
+        margin: 0 0 1rem;
+    }
+
+    @media (min-width: 640px) {
+        .dc-event-modal-body dl {
+            grid-template-columns: 140px minmax(0, 1fr);
+        }
+    }
+
+    .dc-event-modal-body dt {
+        font-weight: 900;
+    }
+
+    .dc-event-modal-body dd {
+        margin: 0;
+    }
+
+    .dc-event-modal-risk-list {
+        margin: 0;
+        padding-left: 1.2rem;
+    }
+
+    .dc-event-modal-risk-list li {
+        margin-bottom: 0.35rem;
+    }
+
+    .dc-event-modal-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+
     @media (min-width: 768px) {
         .dc-calendar-weekdays {
             display: grid;
@@ -546,15 +832,14 @@ require __DIR__ . '/layout.php';
 
         .dc-calendar-bars {
             grid-template-columns: repeat(7, minmax(0, 1fr));
-            grid-auto-rows: minmax(2.35rem, auto);
+            grid-auto-rows: minmax(2.15rem, auto);
             align-items: stretch;
             gap: 0.25rem;
-            padding: 0.35rem 0.5rem 0.7rem;
-            min-height: 78px;
+            padding: 0.35rem 0.5rem 0.5rem;
         }
 
         .dc-cal-event {
-            padding: 0.35rem 0.45rem;
+            padding: 0.3rem 0.45rem;
             border-left: 0;
             border-top: 5px solid #7413dc;
             overflow: hidden;
@@ -607,7 +892,7 @@ require __DIR__ . '/layout.php';
             display: none;
         }
 
-        .dc-calendar-bars {
+        .dc-calendar-bars-wrap {
             display: none;
         }
     }
@@ -677,7 +962,7 @@ require __DIR__ . '/layout.php';
 
         <p class="dc-filter-summary">
             <?= count($events) ?> event<?= count($events) === 1 ? '' : 's' ?> shown.
-            You can open events only for Groups you have access to.
+            Click any event to see details.
         </p>
     </aside>
 
@@ -727,9 +1012,12 @@ require __DIR__ . '/layout.php';
             <?php
             $today = (new DateTimeImmutable('today'))->format('Y-m-d');
 
-            foreach ($weeks as $week):
+            foreach ($weeks as $weekIndex => $week):
+                $visibleLimit = 3;
+                $hiddenCount = max(0, count($week['bars']) - $visibleLimit);
+                $hasHidden = $hiddenCount > 0;
             ?>
-                <div class="dc-calendar-week">
+                <div class="dc-calendar-week <?= $hasHidden ? 'is-collapsed has-hidden-events' : '' ?>" data-week="<?= (int) $weekIndex ?>">
                     <div class="dc-calendar-days">
                         <?php foreach ($week['days'] as $day): ?>
                             <?php
@@ -768,28 +1056,20 @@ require __DIR__ . '/layout.php';
                                     <div class="dc-mobile-event-stack">
                                         <?php foreach ($mobileDayEvents as $event): ?>
                                             <?php
-                                                $canManage = dc_user_can_manage_event_group($ctx, (int) $event['group_id']);
                                                 $eventStatus = (string) $event['status'];
                                                 $eventClass = dc_event_bar_class($eventStatus);
                                                 $timeLabel = date('H:i', strtotime((string) $event['starts_at']));
                                             ?>
 
-                                            <?php if ($canManage): ?>
-                                                <a
-                                                    class="<?= e($eventClass) ?>"
-                                                    href="/dc/manage-event.php?id=<?= (int) $event['id'] ?>"
-                                                >
-                                                    <span class="dc-cal-event-title"><?= e((string) $event['title']) ?></span>
-                                                    <span class="dc-cal-event-meta"><?= e($timeLabel) ?> · <?= e((string) $event['group_name']) ?></span>
-                                                    <span class="dc-cal-event-status"><?= e(str_replace('_', ' ', $eventStatus)) ?></span>
-                                                </a>
-                                            <?php else: ?>
-                                                <div class="<?= e($eventClass) ?> is-locked">
-                                                    <span class="dc-cal-event-title"><?= e((string) $event['title']) ?></span>
-                                                    <span class="dc-cal-event-meta"><?= e($timeLabel) ?> · <?= e((string) $event['group_name']) ?></span>
-                                                    <span class="dc-cal-event-status"><?= e(str_replace('_', ' ', $eventStatus)) ?></span>
-                                                </div>
-                                            <?php endif; ?>
+                                            <button
+                                                type="button"
+                                                class="<?= e($eventClass) ?> <?= dc_user_can_manage_event_group($ctx, (int) $event['group_id']) ? '' : 'is-locked' ?>"
+                                                data-event-id="<?= (int) $event['id'] ?>"
+                                            >
+                                                <span class="dc-cal-event-title"><?= e((string) $event['title']) ?></span>
+                                                <span class="dc-cal-event-meta"><?= e($timeLabel) ?> · <?= e((string) $event['group_name']) ?></span>
+                                                <span class="dc-cal-event-status"><?= e(str_replace('_', ' ', $eventStatus)) ?></span>
+                                            </button>
                                         <?php endforeach; ?>
                                     </div>
                                 <?php endif; ?>
@@ -798,31 +1078,32 @@ require __DIR__ . '/layout.php';
                     </div>
 
                     <?php if ($week['bars']): ?>
-                        <div class="dc-calendar-bars" aria-label="Events for week beginning <?= e($week['start']->format('j F Y')) ?>">
-                            <?php foreach ($week['bars'] as $bar): ?>
-                                <?php
-                                    $event = $bar['event'];
-                                    $canManage = dc_user_can_manage_event_group($ctx, (int) $event['group_id']);
-                                    $eventStatus = (string) $event['status'];
-                                    $eventClass = dc_event_bar_class($eventStatus);
+                        <div class="dc-calendar-bars-wrap">
+                            <div class="dc-calendar-bars" aria-label="Events for week beginning <?= e($week['start']->format('j F Y')) ?>">
+                                <?php foreach ($week['bars'] as $barIndex => $bar): ?>
+                                    <?php
+                                        $event = $bar['event'];
+                                        $canManage = dc_user_can_manage_event_group($ctx, (int) $event['group_id']);
+                                        $eventStatus = (string) $event['status'];
+                                        $eventClass = dc_event_bar_class($eventStatus);
 
-                                    $columnStart = (int) $bar['column_start'];
-                                    $columnEnd = $columnStart + (int) $bar['span'];
-                                    $columnEnd = min($columnEnd, 8);
+                                        $columnStart = (int) $bar['column_start'];
+                                        $columnEnd = $columnStart + (int) $bar['span'];
+                                        $columnEnd = min($columnEnd, 8);
 
-                                    $startsText = date('D j M H:i', strtotime((string) $event['starts_at']));
-                                    $endsText = date('D j M H:i', strtotime((string) $event['ends_at']));
+                                        $startsText = date('D j M H:i', strtotime((string) $event['starts_at']));
+                                        $endsText = date('D j M H:i', strtotime((string) $event['ends_at']));
 
-                                    $continuationPrefix = $bar['continues_before'] ? '← ' : '';
-                                    $continuationSuffix = $bar['continues_after'] ? ' →' : '';
-                                ?>
+                                        $continuationPrefix = $bar['continues_before'] ? '← ' : '';
+                                        $continuationSuffix = $bar['continues_after'] ? ' →' : '';
+                                    ?>
 
-                                <?php if ($canManage): ?>
-                                    <a
-                                        class="<?= e($eventClass) ?>"
-                                        href="/dc/manage-event.php?id=<?= (int) $event['id'] ?>"
+                                    <button
+                                        type="button"
+                                        class="<?= e($eventClass) ?> <?= $canManage ? '' : 'is-locked' ?> <?= $barIndex >= $visibleLimit ? 'dc-calendar-bar-extra' : '' ?>"
                                         style="grid-column: <?= $columnStart ?> / <?= $columnEnd ?>;"
                                         title="<?= e((string) $event['title']) ?> · <?= e($startsText) ?> to <?= e($endsText) ?>"
+                                        data-event-id="<?= (int) $event['id'] ?>"
                                     >
                                         <span class="dc-cal-event-title">
                                             <?= e($continuationPrefix . (string) $event['title'] . $continuationSuffix) ?>
@@ -831,23 +1112,15 @@ require __DIR__ . '/layout.php';
                                             <?= e((string) $event['group_name']) ?> · <?= e(date('H:i', strtotime((string) $event['starts_at']))) ?>
                                         </span>
                                         <span class="dc-cal-event-status"><?= e(str_replace('_', ' ', $eventStatus)) ?></span>
-                                    </a>
-                                <?php else: ?>
-                                    <div
-                                        class="<?= e($eventClass) ?> is-locked"
-                                        style="grid-column: <?= $columnStart ?> / <?= $columnEnd ?>;"
-                                        title="<?= e((string) $event['title']) ?> · <?= e($startsText) ?> to <?= e($endsText) ?>"
-                                    >
-                                        <span class="dc-cal-event-title">
-                                            <?= e($continuationPrefix . (string) $event['title'] . $continuationSuffix) ?>
-                                        </span>
-                                        <span class="dc-cal-event-meta">
-                                            <?= e((string) $event['group_name']) ?> · <?= e(date('H:i', strtotime((string) $event['starts_at']))) ?>
-                                        </span>
-                                        <span class="dc-cal-event-status"><?= e(str_replace('_', ' ', $eventStatus)) ?></span>
-                                    </div>
-                                <?php endif; ?>
-                            <?php endforeach; ?>
+                                    </button>
+                                <?php endforeach; ?>
+                            </div>
+
+                            <?php if ($hasHidden): ?>
+                                <button type="button" class="dc-calendar-expand" data-week-toggle="<?= (int) $weekIndex ?>">
+                                    Show all events this week (+<?= (int) $hiddenCount ?>)
+                                </button>
+                            <?php endif; ?>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -855,5 +1128,149 @@ require __DIR__ . '/layout.php';
         </div>
     </section>
 </div>
+
+<div class="dc-event-modal-backdrop" id="dc-event-modal" aria-hidden="true">
+    <div class="dc-event-modal" role="dialog" aria-modal="true" aria-labelledby="dc-event-modal-title">
+        <div class="dc-event-modal-header">
+            <h2 id="dc-event-modal-title">Event details</h2>
+            <button type="button" class="dc-event-modal-close" id="dc-event-modal-close" aria-label="Close event details">×</button>
+        </div>
+        <div class="dc-event-modal-body" id="dc-event-modal-body"></div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var events = <?= json_encode($popupEvents, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    var modal = document.getElementById('dc-event-modal');
+    var modalTitle = document.getElementById('dc-event-modal-title');
+    var modalBody = document.getElementById('dc-event-modal-body');
+    var modalClose = document.getElementById('dc-event-modal-close');
+
+    function escapeHtml(value) {
+        return String(value || '').replace(/[&<>"']/g, function (char) {
+            return {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            }[char];
+        });
+    }
+
+    function eventHtml(event) {
+        var location = event.location_name || event.location_address || 'Location not named';
+        var risks = '';
+
+        if (event.risks && event.risks.length) {
+            risks = '<ul class="dc-event-modal-risk-list">' + event.risks.map(function (risk) {
+                return '<li><a href="' + escapeHtml(risk.download_url) + '">' + escapeHtml(risk.title) + '</a>' +
+                    (risk.group_name ? ' <span>(' + escapeHtml(risk.group_name) + ')</span>' : '') +
+                    '</li>';
+            }).join('') + '</ul>';
+        } else {
+            risks = '<p>No linked risk assessments.</p>';
+        }
+
+        var contact = '';
+        if (event.leader_name || event.leader_email || event.leader_phone) {
+            contact += escapeHtml(event.leader_name || 'Not set');
+
+            if (event.leader_email) {
+                contact += '<br><a href="mailto:' + escapeHtml(event.leader_email) + '">' + escapeHtml(event.leader_email) + '</a>';
+            }
+
+            if (event.leader_phone) {
+                contact += '<br>' + escapeHtml(event.leader_phone);
+            }
+        } else {
+            contact = 'Not set';
+        }
+
+        var action = event.can_manage && event.manage_url
+            ? '<a class="btn btn-primary lt-btn" href="' + escapeHtml(event.manage_url) + '">Open event</a>'
+            : '<p class="mb-0"><strong>You can view the basic details, but only the owning Group or District reviewers can manage this event.</strong></p>';
+
+        return '' +
+            '<dl>' +
+            '<dt>Group</dt><dd>' + escapeHtml(event.group_name) + '</dd>' +
+            '<dt>Status</dt><dd>' + escapeHtml(String(event.status || '').replace(/_/g, ' ')) + '</dd>' +
+            '<dt>When</dt><dd>' + escapeHtml(event.starts_at) + (event.ends_at ? '<br>to ' + escapeHtml(event.ends_at) : '') + '</dd>' +
+            '<dt>Where</dt><dd>' + escapeHtml(location) + (event.location_address && event.location_address !== event.location_name ? '<br>' + escapeHtml(event.location_address) : '') + '</dd>' +
+            '<dt>Main contact</dt><dd>' + contact + '</dd>' +
+            (event.description ? '<dt>Description</dt><dd>' + escapeHtml(event.description) + '</dd>' : '') +
+            '<dt>Risk assessments</dt><dd>' + risks + '</dd>' +
+            '</dl>' +
+            '<div class="dc-event-modal-actions">' + action + '</div>';
+    }
+
+    function openEvent(eventId) {
+        var event = events[String(eventId)] || events[eventId];
+
+        if (!event || !modal || !modalTitle || !modalBody) {
+            return;
+        }
+
+        modalTitle.textContent = event.title || 'Event details';
+        modalBody.innerHTML = eventHtml(event);
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+
+        if (modalClose) {
+            modalClose.focus();
+        }
+    }
+
+    function closeModal() {
+        if (!modal) {
+            return;
+        }
+
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+
+    document.querySelectorAll('[data-event-id]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            openEvent(button.getAttribute('data-event-id'));
+        });
+    });
+
+    document.querySelectorAll('[data-week-toggle]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var weekId = button.getAttribute('data-week-toggle');
+            var week = document.querySelector('[data-week="' + weekId + '"]');
+
+            if (!week) {
+                return;
+            }
+
+            var collapsed = week.classList.toggle('is-collapsed');
+            button.textContent = collapsed
+                ? button.textContent.replace('Hide extra events', 'Show all events this week')
+                : 'Hide extra events';
+        });
+    });
+
+    if (modalClose) {
+        modalClose.addEventListener('click', closeModal);
+    }
+
+    if (modal) {
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+    }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            closeModal();
+        }
+    });
+}());
+</script>
 
 <?php require __DIR__ . '/layout-footer.php'; ?>

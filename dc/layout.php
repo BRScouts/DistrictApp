@@ -358,7 +358,6 @@ $profileUrl = '/profile.php';
                     <div class="dc-user-text">
                         <span class="dc-user-name"><?= e($displayName) ?></span>
                         <span class="dc-user-role"><?= e($roleLabel) ?></span>
-                        <span class="dc-user-groups"><?= e($membershipSummary) ?></span>
                     </div>
 
                     <?php if ($profilePhotoUrl): ?>
@@ -459,13 +458,7 @@ $profileUrl = '/profile.php';
             <?= e($pageTitle) ?>
         <?php endif; ?>
 
-        <span class="dc-context-label">
-            <?php if ($isSignedIn): ?>
-                <?= e($displayName) ?><?= $roleLabel ? ' · ' . e($roleLabel) : '' ?><?= $membershipSummary ? ' · ' . e($membershipSummary) : '' ?>
-            <?php else: ?>
-                <?= e($groupName ?: $displayName) ?> · Group link
-            <?php endif; ?>
-        </span>
+        
     </div>
 </div>
 
