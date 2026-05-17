@@ -1525,9 +1525,9 @@ $pageTitle = 'Complete your profile | ' . $appName;
 
                 <?php if ($claimCandidates): ?>
                     <section class="onboarding-panel onboarding-claim-panel" id="existing-record-panel">
-                        <h2>Already listed in your Group?</h2>
+                        <h2>Are any of the below names you?</h2>
                         <p class="onboarding-panel-intro">
-                            We may already have a leader record for you from the membership import. If one of the records below is yours, select it and confirm. This will link your Microsoft sign-in to that existing record instead of creating a duplicate.
+                            We may already have a leader record for you. If one of the records below is yours, select it and confirm. If you, please ignore this section and skip to the next section.
                         </p>
 
                         <div class="onboarding-candidate-list" id="existing-record-list">

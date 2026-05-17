@@ -50,7 +50,7 @@ $modules = [
         'description' => 'Submit away-from-hut notifications, view Group activity and share risk assessments.',
         'url' => '/dc/',
         'status' => 'available',
-        'image' => '/assets/img/dashboard/calendar.jpg',
+        'image' => '/assets/img/explorer-campfire-2-jpg.jpg',
         'visible' => true,
     ],
     [
@@ -58,7 +58,7 @@ $modules = [
         'description' => 'Update your details, directory visibility, role information and accreditations.',
         'url' => '/profile.php',
         'status' => 'available',
-        'image' => '/assets/img/dashboard/profile.jpg',
+        'image' => '/assets/img/explorer-campfire-2-jpg.jpg',
         'visible' => true,
     ],
     [
@@ -66,7 +66,7 @@ $modules = [
         'description' => 'Find leaders and volunteers by name, Group, role, section or accreditation.',
         'url' => '/directory.php',
         'status' => 'available',
-        'image' => '/assets/img/dashboard/directory.jpg',
+        'image' => '/assets/img/female-leader-with-large-group-jpg.jpg',
         'visible' => true,
     ],
     [
@@ -74,7 +74,7 @@ $modules = [
         'description' => 'Manage leaders in your Group and request District Microsoft 365 accounts.',
         'url' => '/group-manager.php',
         'status' => 'available',
-        'image' => '/assets/img/dashboard/group-admin.jpg',
+        'image' => '/assets/img/cub-on-raft-jpg.jpg',
         'visible' => $isGroupAdmin,
     ],
     [
