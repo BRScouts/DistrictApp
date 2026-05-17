@@ -451,8 +451,6 @@ require __DIR__ . '/layout.php';
 <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIINfQmHFws3FnWM76N9Px5D7DX33PhD/J0="
-    crossorigin=""
 >
 
 <style>
