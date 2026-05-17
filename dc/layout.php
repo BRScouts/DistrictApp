@@ -421,7 +421,7 @@ $profileUrl = '/profile.php';
             <a class="<?= $active === 'map' ? 'active' : '' ?>" href="/dc/map.php">Map</a>
 
             <?php if ($isGlv): ?>
-                <a class="<?= $active === 'glv' ? 'active' : '' ?>" href="/dc/glv/">
+                <a class="<?= $active === 'glv' ? 'active' : '' ?>" href="/dc/glv.php">
                     GLV
                 </a>
             <?php endif; ?>
