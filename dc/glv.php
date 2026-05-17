@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . 'auth.php';
+require_once __DIR__ . '/auth.php';
 
 $ctx = dc_require_access();
 
@@ -35,22 +35,15 @@ $isGlv = (bool) ($ctx['is_glv'] ?? false)
 
 if (!$isGlv) {
     http_response_code(403);
-    require __DIR__ . '/../403.php';
+    require __DIR__ . '/403.php';
     exit;
 }
 
 $groups = dc_accessible_groups();
 
-$requestedGroupId = isset($_GET['group_id'])
-    ? (int) $_GET['group_id']
-    : (isset($_POST['group_id']) ? (int) $_POST['group_id'] : null);
-
+$requestedGroupId = isset($_GET['group_id']) ? (int) $_GET['group_id'] : null;
 $selectedGroupId = dc_selected_group_id($requestedGroupId);
 $showGroupPicker = count($groups) > 1;
-
-$errors = [];
-$success = '';
-$newGroupLink = null;
 
 function dc_glv_column_exists(string $table, string $column): bool
 {
@@ -84,71 +77,44 @@ function dc_glv_column_exists(string $table, string $column): bool
     return $cache[$key];
 }
 
-function dc_glv_create_group_link(int $groupId, ?int $personId): string
+function dc_glv_absolute_url(string $path): string
 {
-    $rawToken = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-    $tokenHash = hash('sha256', $rawToken);
-
-    $columns = [
-        'group_id' => $groupId,
-        'token_hash' => $tokenHash,
-        'status' => 'active',
-    ];
-
-    if (dc_glv_column_exists('group_access_links', 'scope')) {
-        $columns['scope'] = 'group';
-    }
-
-    if ($personId && dc_glv_column_exists('group_access_links', 'created_by_person_id')) {
-        $columns['created_by_person_id'] = $personId;
-    }
-
-    if (dc_glv_column_exists('group_access_links', 'created_at')) {
-        $columns['created_at'] = date('Y-m-d H:i:s');
-    }
-
-    $columnNames = array_keys($columns);
-    $placeholders = array_map(static fn (string $column): string => ':' . $column, $columnNames);
-
-    $stmt = db()->prepare("
-        INSERT INTO group_access_links (
-            " . implode(', ', $columnNames) . "
-        ) VALUES (
-            " . implode(', ', $placeholders) . "
-        )
-    ");
-
-    $stmt->execute($columns);
-
-    dc_log(
-        'group_access_link.created',
-        'group_access_link',
-        (int) db()->lastInsertId(),
-        ['group_id' => $groupId],
-        $groupId
-    );
-
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $host = $_SERVER['HTTP_HOST'] ?? 'app.irvalscouts.org.uk';
 
-    return $scheme . '://' . $host . '/dc/login.php?token=' . urlencode($rawToken);
+    return $scheme . '://' . $host . $path;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = (string) ($_POST['action'] ?? '');
+function dc_glv_share_url_from_row(array $row): ?string
+{
+    $urlColumns = [
+        'link_url',
+        'access_url',
+        'public_url',
+    ];
 
-    if ($action === 'create_group_link') {
-        try {
-            $newGroupLink = dc_glv_create_group_link(
-                $selectedGroupId,
-                isset($ctx['person_id']) ? (int) $ctx['person_id'] : null
-            );
-
-            $success = 'New Group link created. Copy it now — it cannot be shown again later because only the secure hash is stored.';
-        } catch (Throwable $e) {
-            $errors[] = 'The Group link could not be created. ' . $e->getMessage();
+    foreach ($urlColumns as $column) {
+        if (!empty($row[$column])) {
+            return (string) $row[$column];
         }
     }
+
+    $tokenColumns = [
+        'token_plain',
+        'token',
+        'raw_token',
+        'plain_token',
+        'access_token',
+        'public_token',
+    ];
+
+    foreach ($tokenColumns as $column) {
+        if (!empty($row[$column])) {
+            return dc_glv_absolute_url('/dc/login.php?token=' . urlencode((string) $row[$column]));
+        }
+    }
+
+    return null;
 }
 
 $stmt = db()->prepare("
@@ -166,7 +132,7 @@ $stmt->execute(['group_id' => $selectedGroupId]);
 $group = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$group) {
-    require __DIR__ . '/../404.php';
+    require __DIR__ . '/404.php';
     exit;
 }
 
@@ -214,24 +180,57 @@ $stmt = db()->prepare("
 $stmt->execute(['group_id' => $selectedGroupId]);
 $leaders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$stmt = db()->prepare("
-    SELECT
-        id,
-        scope,
-        status,
-        expires_at,
-        last_used_at,
-        created_at
-    FROM group_access_links
-    WHERE group_id = :group_id
-    ORDER BY
-        CASE WHEN status = 'active' THEN 0 ELSE 1 END,
-        created_at DESC,
-        id DESC
-    LIMIT 20
-");
+$linkColumns = [
+    'id',
+    'group_id',
+    'token_hash',
+    'status',
+];
+
+$optionalColumns = [
+    'scope',
+    'expires_at',
+    'last_used_at',
+    'created_at',
+    'label',
+    'token_plain',
+    'link_url',
+    'access_url',
+    'public_url',
+    'token',
+    'raw_token',
+    'plain_token',
+    'access_token',
+    'public_token',
+];
+
+foreach ($optionalColumns as $column) {
+    if (dc_glv_column_exists('group_access_links', $column)) {
+        $linkColumns[] = $column;
+    }
+}
+
+$groupLinks = [];
 
 try {
+    $hasExpiresAt = dc_glv_column_exists('group_access_links', 'expires_at');
+    $hasCreatedAt = dc_glv_column_exists('group_access_links', 'created_at');
+
+    $stmt = db()->prepare("
+        SELECT
+            " . implode(', ', array_map(static fn (string $column): string => '`' . $column . '`', $linkColumns)) . "
+        FROM group_access_links
+        WHERE group_id = :group_id
+          AND status = 'active'
+          AND (
+                " . ($hasExpiresAt ? "expires_at IS NULL OR expires_at > NOW()" : "1 = 1") . "
+              )
+        ORDER BY
+            " . ($hasCreatedAt ? "created_at DESC," : "") . "
+            id DESC
+        LIMIT 20
+    ");
+
     $stmt->execute(['group_id' => $selectedGroupId]);
     $groupLinks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
@@ -246,10 +245,10 @@ $groupManagerUrl = '/group-manager.php?group_id=' . (int) $selectedGroupId;
 
 $pageTitle = 'Group Lead Volunteer';
 $heroTitle = 'Group Lead Volunteer dashboard';
-$heroText = 'See leader activity, manage Group access and share the Group event submission link.';
+$heroText = 'See leader activity, share the Group calendar link and manage leaders in the main app.';
 $active = 'glv';
 
-require __DIR__ . '/../layout.php';
+require __DIR__ . '/layout.php';
 ?>
 
 <style>
@@ -260,7 +259,7 @@ require __DIR__ . '/../layout.php';
 
     @media (min-width: 992px) {
         .dc-glv-grid {
-            grid-template-columns: minmax(0, 1.3fr) 360px;
+            grid-template-columns: minmax(0, 1.3fr) 380px;
             align-items: start;
         }
     }
@@ -361,7 +360,7 @@ require __DIR__ . '/../layout.php';
 
     .dc-group-link-list {
         display: grid;
-        gap: 0.5rem;
+        gap: 0.75rem;
     }
 
     .dc-group-link-item {
@@ -381,7 +380,24 @@ require __DIR__ . '/../layout.php';
         padding: 0.75rem;
     }
 
+    .dc-warning-panel {
+        border-left: 6px solid #ffdd00;
+        background: #fff8d6;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .dc-copy-row {
+        display: grid;
+        gap: 0.5rem;
+    }
+
     @media (min-width: 768px) {
+        .dc-copy-row {
+            grid-template-columns: 1fr auto;
+            align-items: center;
+        }
+
         .dc-mobile-leader-list {
             display: none;
         }
@@ -394,23 +410,8 @@ require __DIR__ . '/../layout.php';
     }
 </style>
 
-<?php if ($success !== ''): ?>
-    <div class="dc-success"><?= e($success) ?></div>
-<?php endif; ?>
-
-<?php if ($errors): ?>
-    <div class="dc-error-summary" role="alert">
-        <h2>Check this page</h2>
-        <ul>
-            <?php foreach ($errors as $error): ?>
-                <li><?= e($error) ?></li>
-            <?php endforeach; ?>
-        </ul>
-    </div>
-<?php endif; ?>
-
 <?php if ($showGroupPicker): ?>
-    <form method="get" class="lt-panel-grey dc-filter-form" action="/dc/glv/">
+    <form method="get" class="lt-panel-grey dc-filter-form" action="/dc/glv.php">
         <label for="group_id">Choose Group</label>
         <select id="group_id" name="group_id" class="form-control" onchange="this.form.submit()">
             <?= dc_group_options_html($selectedGroupId) ?>
@@ -476,24 +477,29 @@ require __DIR__ . '/../layout.php';
                                 <tr>
                                     <td>
                                         <div class="dc-leader-name"><?= e((string) $leader['full_name']) ?></div>
+
                                         <?php if (!empty($leader['primary_email'])): ?>
                                             <div class="dc-muted"><?= e((string) $leader['primary_email']) ?></div>
                                         <?php endif; ?>
+
                                         <?php if (!empty($leader['phone'])): ?>
                                             <div class="dc-muted"><?= e((string) $leader['phone']) ?></div>
                                         <?php endif; ?>
                                     </td>
+
                                     <td>
                                         <?= e(ucwords(str_replace('_', ' ', (string) $leader['membership_role']))) ?>
                                         <div class="dc-muted">
                                             <?= e(ucwords(str_replace('_', ' ', (string) $leader['access_level']))) ?>
                                         </div>
                                     </td>
+
                                     <td><?= (int) $leader['total_events'] ?></td>
                                     <td><?= (int) $leader['in_review_events'] ?></td>
                                     <td><?= (int) $leader['approved_events'] ?></td>
                                     <td><?= (int) $leader['draft_events'] ?></td>
                                     <td><?= (int) $leader['cancelled_events'] ?></td>
+
                                     <td>
                                         <?php if (!empty($leader['latest_event_at'])): ?>
                                             <?= e(date('j M Y', strtotime((string) $leader['latest_event_at']))) ?>
@@ -534,59 +540,63 @@ require __DIR__ . '/../layout.php';
 
     <aside class="dc-glv-sidebar">
         <section class="lt-panel-grey">
-            <h2 class="lt-section-title">Group link</h2>
+            <h2 class="lt-section-title">Group calendar link</h2>
 
             <p>
-                Share this link with leaders who need to submit events for this Group but do not use District Microsoft 365 sign-in.
+                Share this link with leaders who need to access the shared calendar and submit events for this Group without using District Microsoft 365 sign-in.
             </p>
 
-            <?php if ($newGroupLink): ?>
-                <div class="dc-link-box">
-                    <label for="new_group_link"><strong>New Group link</strong></label>
-                    <input
-                        id="new_group_link"
-                        class="dc-link-output"
-                        value="<?= e($newGroupLink) ?>"
-                        readonly
-                        onclick="this.select();"
-                    >
-                    <p class="form-text mb-0">
-                        Copy this now. It will not be shown again.
+            <?php if (!$groupLinks): ?>
+                <div class="dc-warning-panel">
+                    <strong>No active Group link found.</strong>
+                    <p class="mb-0">
+                        Ask a District admin to create or provide the Group access link for this Group.
                     </p>
                 </div>
-            <?php endif; ?>
-
-            <form method="post">
-                <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-                <input type="hidden" name="action" value="create_group_link">
-
-                <button
-                    class="btn btn-primary lt-btn"
-                    type="submit"
-                    onclick="return confirm('Create a new Group link? Existing links will remain active unless disabled elsewhere.');"
-                >
-                    Create new Group link
-                </button>
-            </form>
-
-            <hr>
-
-            <h3 class="h5 font-weight-bold">Existing links</h3>
-
-            <?php if (!$groupLinks): ?>
-                <p class="mb-0">
-                    No Group links found for this Group yet.
-                </p>
             <?php else: ?>
                 <div class="dc-group-link-list">
                     <?php foreach ($groupLinks as $link): ?>
+                        <?php
+                            $shareUrl = dc_glv_share_url_from_row($link);
+                            $label = trim((string) ($link['label'] ?? ''));
+
+                            if ($label === '') {
+                                $label = 'Group calendar link';
+                            }
+                        ?>
+
                         <article class="dc-group-link-item">
-                            <strong>
-                                <?= e(ucwords(str_replace('_', ' ', (string) ($link['status'] ?? 'unknown')))) ?>
-                            </strong>
+                            <strong><?= e($label) ?></strong>
+
+                            <?php if ($shareUrl): ?>
+                                <div class="dc-copy-row mt-2">
+                                    <input
+                                        class="dc-link-output"
+                                        value="<?= e($shareUrl) ?>"
+                                        readonly
+                                        onclick="this.select();"
+                                        aria-label="<?= e($label) ?>"
+                                    >
+
+                                    <button class="btn btn-primary lt-btn dc-copy-link" type="button">
+                                        Copy
+                                    </button>
+                                </div>
+
+                                <p class="form-text mb-0">
+                                    This link gives access to this Group’s District Calendar and event submission form.
+                                </p>
+                            <?php else: ?>
+                                <div class="dc-warning-panel mt-2 mb-0">
+                                    <strong>This link exists, but the visible token is missing.</strong>
+                                    <p class="mb-0">
+                                        Add <code>token_plain</code> for this link or ask a District admin to rotate it once so the shareable URL can be displayed here.
+                                    </p>
+                                </div>
+                            <?php endif; ?>
 
                             <?php if (!empty($link['scope'])): ?>
-                                <div class="dc-muted">
+                                <div class="dc-muted mt-2">
                                     Scope: <?= e((string) $link['scope']) ?>
                                 </div>
                             <?php endif; ?>
@@ -632,4 +642,34 @@ require __DIR__ . '/../layout.php';
     </aside>
 </div>
 
-<?php require __DIR__ . '/../layout-footer.php'; ?>
+<script>
+(function () {
+    document.querySelectorAll('.dc-copy-link').forEach(function (button) {
+        button.addEventListener('click', async function () {
+            const input = button.parentElement ? button.parentElement.querySelector('input') : null;
+
+            if (!input) {
+                return;
+            }
+
+            input.select();
+
+            try {
+                await navigator.clipboard.writeText(input.value);
+                button.textContent = 'Copied';
+                setTimeout(function () {
+                    button.textContent = 'Copy';
+                }, 1800);
+            } catch (error) {
+                document.execCommand('copy');
+                button.textContent = 'Copied';
+                setTimeout(function () {
+                    button.textContent = 'Copy';
+                }, 1800);
+            }
+        });
+    });
+})();
+</script>
+
+<?php require __DIR__ . '/layout-footer.php'; ?>
