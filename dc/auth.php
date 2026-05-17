@@ -1,830 +1,418 @@
 <?php
+
 declare(strict_types=1);
 
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/../app/bootstrap.php';
 
-/**
- * ------------------------------------------------------------
- * Session model
- * ------------------------------------------------------------
- *
- * Group-link session:
- * $_SESSION['group_auth'] = [
- *   'group_id' => 1,
- *   'group_name' => '1st Example Scouts',
- *   'access_token' => '...',
- * ]
- *
- * Existing DC admin/reviewer session:
- * $_SESSION['admin_auth'] = [
- *   'admin_user_id' => 1,
- *   'full_name' => 'District Reviewer',
- *   'email' => 'reviewer@example.org',
- *   'role' => 'reviewer' | 'admin'
- * ]
- *
- * Main app Microsoft SSO session:
- * $_SESSION['portal_user'] = [
- *   'id' => 1,
- *   'full_name' => 'Example User',
- *   'email' => 'user@example.org',
- *   'role' => 'user' | 'reviewer' | 'admin',
- *   'microsoft_oid' => '...',
- *   'auth_provider' => 'microsoft',
- * ]
- */
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
 
-/**
- * Attempt group auth from ?token=...
- * If valid, persist group session.
- */
-function auth_capture_group_token_from_request(): void
+function dc_setting(string $key, ?string $default = null): ?string
 {
-    $tokenKey = TOKEN_QUERY_KEY;
-    $token = isset($_GET[$tokenKey]) ? trim((string)$_GET[$tokenKey]) : '';
+    static $cache = [];
 
-    if ($token === '') {
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
+    try {
+        $stmt = db()->prepare('SELECT setting_value FROM app_settings WHERE setting_key = :setting_key LIMIT 1');
+        $stmt->execute(['setting_key' => $key]);
+        $value = $stmt->fetchColumn();
+        $cache[$key] = $value === false ? $default : (string) $value;
+        return $cache[$key];
+    } catch (Throwable $e) {
+        return $default;
+    }
+}
+
+function dc_split_emails(?string $value): array
+{
+    if (!$value) {
+        return [];
+    }
+
+    $parts = preg_split('/[;,\n]+/', $value) ?: [];
+    $emails = [];
+
+    foreach ($parts as $part) {
+        $email = trim($part);
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $emails[strtolower($email)] = $email;
+        }
+    }
+
+    return array_values($emails);
+}
+
+function dc_log(string $action, ?string $entityType = null, ?int $entityId = null, array $details = [], ?int $groupId = null): void
+{
+    $ctx = dc_context(false);
+    $actorType = $ctx['actor_type'] ?? 'system';
+    $actorPersonId = $ctx['person_id'] ?? null;
+    $groupId = $groupId ?? ($ctx['group_id'] ?? null);
+
+    try {
+        $stmt = db()->prepare("\n            INSERT INTO audit_log (actor_type, actor_person_id, group_id, entity_type, entity_id, action, details_json, ip_address, user_agent)\n            VALUES (:actor_type, :actor_person_id, :group_id, :entity_type, :entity_id, :action, :details_json, :ip_address, :user_agent)\n        ");
+        $stmt->execute([
+            'actor_type' => $actorType,
+            'actor_person_id' => $actorPersonId,
+            'group_id' => $groupId,
+            'entity_type' => $entityType,
+            'entity_id' => $entityId,
+            'action' => $action,
+            'details_json' => $details ? json_encode($details, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null,
+            'ip_address' => $_SERVER['REMOTE_ADDR'] ?? null,
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
+        ]);
+    } catch (Throwable $e) {
+        // Audit logging must not break a user-facing workflow.
+    }
+}
+
+function dc_queue_email(string $toEmail, ?string $toName, string $subject, string $body, string $type, string $entityType, int $entityId): void
+{
+    if (!filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
         return;
     }
 
-    $pdo = db();
+    try {
+        $pdo = db();
+        $stmt = $pdo->prepare("\n            INSERT INTO email_queue (to_email, to_name, subject, body, status)\n            VALUES (:to_email, :to_name, :subject, :body, 'pending')\n        ");
+        $stmt->execute([
+            'to_email' => $toEmail,
+            'to_name' => $toName,
+            'subject' => $subject,
+            'body' => $body,
+        ]);
 
-    $stmt = $pdo->prepare("
-        SELECT id, group_name, access_token
-        FROM groups
-        WHERE access_token = :token
-          AND is_active = 1
-        LIMIT 1
-    ");
-    $stmt->execute(['token' => $token]);
-    $group = $stmt->fetch();
-
-    if (!$group) {
-        redirect(ROUTE_403);
+        $stmt = $pdo->prepare("\n            INSERT INTO notification_log (related_entity_type, related_entity_id, recipient_name, recipient_email, notification_type, subject, body_preview, sent_successfully)\n            VALUES (:related_entity_type, :related_entity_id, :recipient_name, :recipient_email, :notification_type, :subject, :body_preview, 0)\n        ");
+        $stmt->execute([
+            'related_entity_type' => $entityType,
+            'related_entity_id' => $entityId,
+            'recipient_name' => $toName,
+            'recipient_email' => $toEmail,
+            'notification_type' => $type,
+            'subject' => $subject,
+            'body_preview' => mb_substr(strip_tags($body), 0, 800),
+        ]);
+    } catch (Throwable $e) {
+        // Do not fail the workflow because mail queue insert failed.
     }
-
-    $_SESSION['group_auth'] = [
-        'group_id'      => (int)$group['id'],
-        'group_name'    => $group['group_name'],
-        'access_token'  => $group['access_token'],
-    ];
 }
 
-/**
- * Returns existing DC admin/reviewer auth array or null.
- */
-function auth_admin(): ?array
+function dc_group_link_from_token(string $rawToken): ?array
 {
-    return $_SESSION['admin_auth'] ?? null;
-}
-
-/**
- * Returns main portal Microsoft SSO user array or null.
- */
-function auth_portal_user(): ?array
-{
-    return $_SESSION['portal_user'] ?? null;
-}
-
-/**
- * Returns group auth array or null.
- *
- * For old group-link users, this returns $_SESSION['group_auth'].
- * For Microsoft SSO users, this returns their linked group from group_contacts.
- */
-function auth_group(): ?array
-{
-    if (!empty($_SESSION['group_auth'])) {
-        return $_SESSION['group_auth'];
-    }
-
-    $portalUser = auth_portal_user();
-
-    if (!$portalUser || empty($portalUser['email'])) {
+    if ($rawToken === '') {
         return null;
     }
 
-    $pdo = db();
+    $hash = hash('sha256', $rawToken);
+    $stmt = db()->prepare("\n        SELECT gal.*, g.group_name, g.slug, g.notify_lead_on_event_created\n        FROM group_access_links gal\n        JOIN groups g ON g.id = gal.group_id\n        WHERE gal.token_hash = :token_hash\n          AND gal.status = 'active'\n          AND (gal.expires_at IS NULL OR gal.expires_at > NOW())\n          AND g.is_active = 1\n        LIMIT 1\n    ");
+    $stmt->execute(['token_hash' => $hash]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    $stmt = $pdo->prepare("
-        SELECT
-            g.id,
-            g.group_name,
-            g.access_token
-        FROM group_contacts gc
-        INNER JOIN groups g
-            ON g.id = gc.group_id
-        WHERE LOWER(gc.email) = LOWER(:email)
-          AND g.is_active = 1
-        ORDER BY gc.id ASC
-        LIMIT 1
-    ");
-
-    $stmt->execute([
-        'email' => $portalUser['email'],
-    ]);
-
-    $group = $stmt->fetch();
-
-    if (!$group) {
+    if (!$row) {
         return null;
+    }
+
+    db()->prepare('UPDATE group_access_links SET last_used_at = NOW() WHERE id = :id')
+        ->execute(['id' => (int) $row['id']]);
+
+    return $row;
+}
+
+function dc_context(bool $redirectIfMissing = true): array
+{
+    static $context = null;
+
+    if (isset($_GET['token'])) {
+        $link = dc_group_link_from_token((string) $_GET['token']);
+        if ($link) {
+            $_SESSION['dc_group_link'] = [
+                'id' => (int) $link['id'],
+                'group_id' => (int) $link['group_id'],
+                'group_name' => (string) $link['group_name'],
+                'slug' => (string) $link['slug'],
+                'scope' => (string) $link['scope'],
+            ];
+            dc_log('group_link.used', 'group_access_link', (int) $link['id'], [], (int) $link['group_id']);
+        } else {
+            unset($_SESSION['dc_group_link']);
+        }
+        $context = null;
+    }
+
+    if ($context !== null) {
+        return $context;
+    }
+
+    $user = current_user();
+    if ($user) {
+        $memberships = user_group_memberships((int) $user['id']);
+        $groups = [];
+        foreach ($memberships as $membership) {
+            $groups[(int) $membership['group_id']] = [
+                'id' => (int) $membership['group_id'],
+                'group_name' => (string) $membership['group_name'],
+                'slug' => (string) $membership['slug'],
+                'access_level' => (string) $membership['access_level'],
+                'membership_role' => (string) $membership['membership_role'],
+            ];
+        }
+
+        $access = $user['highest_access_level'] ?? 'member';
+        $isReviewer = in_array($access, ['district_reviewer', 'district_admin', 'system_admin'], true);
+
+        if ($isReviewer) {
+            $stmt = db()->query("SELECT id, group_name, slug FROM groups WHERE is_active = 1 ORDER BY group_name ASC");
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $group) {
+                $groups[(int) $group['id']] = [
+                    'id' => (int) $group['id'],
+                    'group_name' => (string) $group['group_name'],
+                    'slug' => (string) $group['slug'],
+                    'access_level' => $access,
+                    'membership_role' => 'district_volunteer',
+                ];
+            }
+        }
+
+        $context = [
+            'actor_type' => 'person',
+            'person_id' => (int) $user['id'],
+            'name' => (string) ($user['full_name'] ?? $user['email'] ?? 'Signed-in user'),
+            'email' => (string) ($user['email'] ?? ''),
+            'groups' => array_values($groups),
+            'group_ids' => array_map('intval', array_keys($groups)),
+            'is_reviewer' => $isReviewer,
+            'is_signed_in' => true,
+            'group_link' => null,
+        ];
+        return $context;
+    }
+
+    if (!empty($_SESSION['dc_group_link'])) {
+        $link = $_SESSION['dc_group_link'];
+        $context = [
+            'actor_type' => 'group_link',
+            'person_id' => null,
+            'name' => 'Group link user',
+            'email' => null,
+            'groups' => [[
+                'id' => (int) $link['group_id'],
+                'group_name' => (string) $link['group_name'],
+                'slug' => (string) $link['slug'],
+                'access_level' => 'group_link',
+                'membership_role' => 'group_link',
+            ]],
+            'group_ids' => [(int) $link['group_id']],
+            'group_id' => (int) $link['group_id'],
+            'is_reviewer' => false,
+            'is_signed_in' => false,
+            'group_link' => $link,
+        ];
+        return $context;
+    }
+
+    if ($redirectIfMissing) {
+        redirect('/dc/login.php');
     }
 
     return [
-        'group_id' => (int) $group['id'],
-        'group_name' => $group['group_name'],
-        'access_token' => $group['access_token'] ?? null,
-        'source' => 'portal_user',
+        'actor_type' => 'system',
+        'person_id' => null,
+        'groups' => [],
+        'group_ids' => [],
+        'is_reviewer' => false,
+        'is_signed_in' => false,
+        'group_link' => null,
     ];
 }
 
-/**
- * Effective auth context.
- *
- * Priority:
- * 1. Existing DC admin/reviewer session
- * 2. Main portal Microsoft SSO session
- * 3. Existing group-link session
- */
-function auth_context(): ?array
+function dc_require_access(): array
 {
-    $admin = auth_admin();
-
-    if ($admin) {
-        return [
-            'type' => 'admin',
-            'role' => $admin['role'],
-            'name' => $admin['full_name'],
-            'email' => $admin['email'] ?? null,
-            'user_id' => $admin['admin_user_id'] ?? null,
-        ];
+    $ctx = dc_context(true);
+    if (!$ctx['group_ids'] && !$ctx['is_reviewer']) {
+        redirect('/dc/403.php');
     }
-
-    $portalUser = auth_portal_user();
-
-    if ($portalUser) {
-        return [
-            'type' => 'portal_user',
-            'role' => $portalUser['role'] ?? ROLE_USER,
-            'name' => $portalUser['full_name'] ?? $portalUser['email'] ?? 'Portal user',
-            'email' => $portalUser['email'] ?? null,
-            'user_id' => $portalUser['id'] ?? null,
-        ];
-    }
-
-    $group = auth_group();
-
-    if ($group) {
-        return [
-            'type' => ROLE_GROUP_LINK,
-            'role' => ROLE_GROUP_LINK,
-            'group_id' => $group['group_id'],
-            'group_name' => $group['group_name'],
-            'name' => $group['group_name'],
-        ];
-    }
-
-    return null;
+    return $ctx;
 }
 
-/**
- * Whether user is authenticated at all.
- */
-function is_authenticated(): bool
+function dc_require_reviewer(): array
 {
-    return auth_context() !== null;
+    $ctx = dc_require_access();
+    if (!$ctx['is_reviewer']) {
+        redirect('/dc/403.php');
+    }
+    return $ctx;
 }
 
-/**
- * Whether current user is reviewer/admin.
- */
-function is_reviewer_or_admin(): bool
+function dc_user_can_access_group(int $groupId): bool
 {
-    $admin = auth_admin();
+    $ctx = dc_context(false);
+    return $ctx['is_reviewer'] || in_array($groupId, $ctx['group_ids'], true);
+}
 
-    if ($admin && in_array($admin['role'], [ROLE_REVIEWER, ROLE_ADMIN], true)) {
-        return true;
+function dc_accessible_groups(): array
+{
+    $ctx = dc_require_access();
+    return $ctx['groups'];
+}
+
+function dc_selected_group_id(?int $requested = null): int
+{
+    $groups = dc_accessible_groups();
+    if (!$groups) {
+        redirect('/dc/403.php');
     }
 
-    $portalUser = auth_portal_user();
-
-    return $portalUser
-        && in_array(($portalUser['role'] ?? ''), [ROLE_REVIEWER, ROLE_ADMIN], true);
-}
-
-/**
- * Whether current user is admin.
- */
-function is_admin(): bool
-{
-    $admin = auth_admin();
-
-    if ($admin && $admin['role'] === ROLE_ADMIN) {
-        return true;
+    if ($requested && dc_user_can_access_group($requested)) {
+        return $requested;
     }
 
-    $portalUser = auth_portal_user();
-
-    return $portalUser && ($portalUser['role'] ?? '') === ROLE_ADMIN;
+    return (int) $groups[0]['id'];
 }
 
-/**
- * Whether current user is a normal portal SSO user.
- */
-function is_portal_user(): bool
+function dc_group_options_html(?int $selectedId = null): string
 {
-    return auth_portal_user() !== null;
+    $groups = dc_accessible_groups();
+    $html = '';
+    foreach ($groups as $group) {
+        $selected = ((int) $group['id'] === (int) $selectedId) ? ' selected' : '';
+        $html .= '<option value="' . e($group['id']) . '"' . $selected . '>' . e($group['group_name']) . '</option>';
+    }
+    return $html;
 }
 
-/**
- * Whether current user is an actual token-based group-link user.
- */
-function is_group_link_user(): bool
+function dc_fetch_sections(int $groupId): array
 {
-    return !empty($_SESSION['group_auth'])
-        && auth_admin() === null
-        && auth_portal_user() === null;
+    $stmt = db()->prepare("\n        SELECT id, section_type, section_name\n        FROM group_sections\n        WHERE group_id = :group_id\n          AND is_active = 1\n        ORDER BY sort_order ASC, section_name ASC\n    ");
+    $stmt->execute(['group_id' => $groupId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/**
- * Returns display label for top-right auth summary.
- */
-function auth_display_label(): string
+function dc_fetch_group_people(int $groupId): array
 {
-    $admin = auth_admin();
+    $stmt = db()->prepare("\n        SELECT DISTINCT\n            p.id, p.full_name, p.primary_email, p.phone,\n            gm.membership_role, gm.access_level\n        FROM group_memberships gm\n        JOIN people p ON p.id = gm.person_id\n        WHERE gm.group_id = :group_id\n          AND gm.status = 'active'\n          AND p.status = 'active'\n        ORDER BY FIELD(gm.membership_role, 'group_lead_volunteer', 'section_leader', 'assistant_section_leader', 'section_assistant', 'trustee', 'district_volunteer', 'administrator', 'other'), p.full_name\n    ");
+    $stmt->execute(['group_id' => $groupId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
-    if ($admin) {
-        return $admin['full_name'];
+function dc_get_event(int $eventId): ?array
+{
+    $stmt = db()->prepare("\n        SELECT ce.*, g.group_name, g.slug\n        FROM calendar_events ce\n        JOIN groups g ON g.id = ce.group_id\n        WHERE ce.id = :id\n        LIMIT 1\n    ");
+    $stmt->execute(['id' => $eventId]);
+    $event = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $event ?: null;
+}
+
+function dc_upload_base_dir(): string
+{
+    return __DIR__ . '/uploads/risk_assessments';
+}
+
+function dc_safe_upload_dir(): string
+{
+    $dir = dc_upload_base_dir() . '/' . date('Y') . '/' . date('m');
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    $htaccess = dc_upload_base_dir() . '/.htaccess';
+    if (!file_exists($htaccess)) {
+        file_put_contents($htaccess, "Deny from all\n");
+    }
+    return $dir;
+}
+
+function dc_store_risk_assessment_upload(array $file, int $groupId, string $title, ?string $description, ?string $uploadedByName, ?string $uploadedByEmail, ?int $uploadedByPersonId, string $uploadedVia, string $visibility = 'district'): int
+{
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('The risk assessment file could not be uploaded.');
     }
 
-    $portalUser = auth_portal_user();
-
-    if ($portalUser) {
-        return $portalUser['full_name'] ?? $portalUser['email'] ?? 'Portal user';
+    $maxBytes = 20 * 1024 * 1024;
+    if ((int) $file['size'] > $maxBytes) {
+        throw new RuntimeException('Risk assessment files must be 20MB or smaller.');
     }
 
-    $group = auth_group();
-
-    if ($group) {
-        return $group['group_name'];
+    $original = (string) $file['name'];
+    $extension = strtolower(pathinfo($original, PATHINFO_EXTENSION));
+    $allowed = ['pdf', 'doc', 'docx'];
+    if (!in_array($extension, $allowed, true)) {
+        throw new RuntimeException('Risk assessments must be PDF, DOC or DOCX files.');
     }
 
-    return 'Guest';
-}
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file((string) $file['tmp_name']) ?: 'application/octet-stream';
+    $stored = 'risk_assessment_' . date('Ymd_His') . '_' . bin2hex(random_bytes(8)) . '.' . $extension;
+    $dir = dc_safe_upload_dir();
+    $target = $dir . '/' . $stored;
 
-/**
- * Returns all active groups.
- */
-function get_all_active_groups(): array
-{
-    $pdo = db();
-
-    $stmt = $pdo->query("
-        SELECT id, group_name
-        FROM groups
-        WHERE is_active = 1
-        ORDER BY group_name ASC
-    ");
-
-    return $stmt->fetchAll();
-}
-
-/**
- * Returns group IDs linked to the signed-in portal user.
- *
- * Current simple model:
- * portal_user.email -> group_contacts.email -> group_contacts.group_id
- */
-function get_portal_user_group_ids(): array
-{
-    $portalUser = auth_portal_user();
-
-    if (!$portalUser || empty($portalUser['email'])) {
-        return [];
+    if (!move_uploaded_file((string) $file['tmp_name'], $target)) {
+        throw new RuntimeException('The risk assessment file could not be saved.');
     }
 
-    $pdo = db();
+    $relative = 'uploads/risk_assessments/' . date('Y') . '/' . date('m') . '/' . $stored;
+    $sha = hash_file('sha256', $target) ?: null;
 
-    $stmt = $pdo->prepare("
-        SELECT DISTINCT gc.group_id
-        FROM group_contacts gc
-        INNER JOIN groups g
-            ON g.id = gc.group_id
-        WHERE LOWER(gc.email) = LOWER(:email)
-          AND gc.group_id IS NOT NULL
-          AND g.is_active = 1
-    ");
-
+    $stmt = db()->prepare("\n        INSERT INTO risk_assessments (\n            group_id, title, description, visibility, original_filename, stored_filename, file_path,\n            file_extension, mime_type, file_size_bytes, file_sha256, uploaded_by_person_id,\n            uploaded_by_name, uploaded_by_email, uploaded_via, status, admin_review_status\n        ) VALUES (\n            :group_id, :title, :description, :visibility, :original_filename, :stored_filename, :file_path,\n            :file_extension, :mime_type, :file_size_bytes, :file_sha256, :uploaded_by_person_id,\n            :uploaded_by_name, :uploaded_by_email, :uploaded_via, 'active', 'available'\n        )\n    ");
     $stmt->execute([
-        'email' => $portalUser['email'],
+        'group_id' => $groupId,
+        'title' => $title !== '' ? $title : pathinfo($original, PATHINFO_FILENAME),
+        'description' => $description,
+        'visibility' => in_array($visibility, ['group', 'district'], true) ? $visibility : 'district',
+        'original_filename' => $original,
+        'stored_filename' => $stored,
+        'file_path' => $relative,
+        'file_extension' => $extension,
+        'mime_type' => $mime,
+        'file_size_bytes' => (int) $file['size'],
+        'file_sha256' => $sha,
+        'uploaded_by_person_id' => $uploadedByPersonId,
+        'uploaded_by_name' => $uploadedByName ?: 'Unknown leader',
+        'uploaded_by_email' => $uploadedByEmail ?: 'unknown@example.invalid',
+        'uploaded_via' => $uploadedVia,
     ]);
 
-    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    $id = (int) db()->lastInsertId();
+    dc_log('risk_assessment.uploaded', 'risk_assessment', $id, ['visibility' => $visibility], $groupId);
+    return $id;
 }
 
-/**
- * Send Microsoft SSO users to onboarding if they do not have a group/contact mapping.
- */
-function require_portal_user_group_or_onboarding(): void
+function dc_queue_event_notifications(int $eventId, string $eventAction): void
 {
-    $portalUser = auth_portal_user();
-
-    if (!$portalUser) {
+    $event = dc_get_event($eventId);
+    if (!$event) {
         return;
     }
 
-    if (is_reviewer_or_admin()) {
-        return;
+    $subject = match ($eventAction) {
+        'approved' => 'Event approved: ' . $event['title'],
+        'changes_requested' => 'Changes requested: ' . $event['title'],
+        'rejected' => 'Event rejected: ' . $event['title'],
+        default => 'Event submitted for review: ' . $event['title'],
+    };
+
+    $body = "Event: {$event['title']}\nGroup: {$event['group_name']}\nWhen: {$event['starts_at']} to {$event['ends_at']}\nStatus: {$event['status']}\n\nOpen the Leader Tool to review the full details.";
+
+    $recipients = [];
+
+    if ($eventAction === 'submitted') {
+        foreach (dc_split_emails(dc_setting('event_notification_recipients', '')) as $email) {
+            $recipients[$email] = ['email' => $email, 'name' => null];
+        }
+
+        $stmt = db()->prepare("\n            SELECT p.full_name, p.primary_email\n            FROM group_memberships gm\n            JOIN people p ON p.id = gm.person_id\n            JOIN groups g ON g.id = gm.group_id\n            WHERE gm.group_id = :group_id\n              AND gm.membership_role = 'group_lead_volunteer'\n              AND gm.status = 'active'\n              AND p.status = 'active'\n              AND p.primary_email IS NOT NULL\n              AND g.notify_lead_on_event_created = 1\n        ");
+        $stmt->execute(['group_id' => (int) $event['group_id']]);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $recipients[strtolower($row['primary_email'])] = ['email' => $row['primary_email'], 'name' => $row['full_name']];
+        }
     }
 
-    $groupIds = get_portal_user_group_ids();
+    $recipients[strtolower((string) $event['leader_email'])] = ['email' => $event['leader_email'], 'name' => $event['leader_name']];
 
-    if (empty($groupIds)) {
-        redirect('/onboarding.php');
+    foreach ($recipients as $recipient) {
+        dc_queue_email($recipient['email'], $recipient['name'], $subject, $body, 'calendar_event_' . $eventAction, 'calendar_event', $eventId);
     }
-}
-
-/**
- * Returns all groups the current user is allowed to see.
- */
-function get_accessible_group_ids(): array
-{
-    if (is_reviewer_or_admin()) {
-        $all = get_all_active_groups();
-        return array_map(fn($g) => (int)$g['id'], $all);
-    }
-
-    $group = auth_group();
-
-    if ($group) {
-        return [(int)$group['group_id']];
-    }
-
-    $portalUser = auth_portal_user();
-
-    if ($portalUser) {
-        return get_portal_user_group_ids();
-    }
-
-    return [];
-}
-
-/**
- * Whether the current user can access a specific group.
- */
-function can_access_group(int $groupId): bool
-{
-    if ($groupId <= 0) {
-        return false;
-    }
-
-    return in_array($groupId, get_accessible_group_ids(), true);
-}
-
-/**
- * Require any valid auth:
- * - group session OR
- * - reviewer/admin session OR
- * - main portal Microsoft SSO session
- *
- * If ?token= is present, capture it first.
- */
-function require_auth(): void
-{
-    auth_capture_group_token_from_request();
-
-    if (!is_authenticated()) {
-        redirect(ROUTE_403);
-    }
-
-    require_portal_user_group_or_onboarding();
-}
-
-/**
- * Require reviewer/admin.
- */
-function require_reviewer_or_admin(): void
-{
-    auth_capture_group_token_from_request();
-
-    if (!is_reviewer_or_admin()) {
-        redirect(ROUTE_403);
-    }
-}
-
-/**
- * Require admin only.
- */
-function require_admin(): void
-{
-    auth_capture_group_token_from_request();
-
-    if (!is_admin()) {
-        redirect(ROUTE_403);
-    }
-}
-
-/**
- * Resolve group filters from GET.
- *
- * If no filter passed:
- * - group-link user defaults to their own group
- * - portal SSO user defaults to groups matched in group_contacts by email
- * - admin/reviewer defaults to all groups
- *
- * If filter is passed:
- * - only allow groups the user can actually access
- */
-function get_selected_group_ids(): array
-{
-    $allowedGroupIds = get_accessible_group_ids();
-
-    if (empty($allowedGroupIds)) {
-        return [];
-    }
-
-    $selected = $_GET['groups'] ?? null;
-
-    if (is_array($selected) && !empty($selected)) {
-        $clean = array_values(array_unique(array_map('intval', $selected)));
-        $clean = array_filter($clean, fn($v) => $v > 0);
-
-        return array_values(array_intersect($clean, $allowedGroupIds));
-    }
-
-    return $allowedGroupIds;
-}
-
-/**
- * Basic page layout start.
- */
-function render_page_start(string $title = ''): void
-{
-    $fullTitle = $title !== '' ? $title . ' | ' . APP_NAME : APP_NAME;
-
-    ?>
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <title><?= e($fullTitle) ?></title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <!-- AFH favicon/icon URL -->
-    <link rel="icon" href="https://www.brscouts.org.uk/wp-content/uploads/2021/03/download.png" type="image/png">
-
-    <link rel="stylesheet"
-          href="https://cdn.jsdelivr.net/gh/scoutstrap/scoutstrap@0.1.1/dist/css/scoutstrap.min.css"
-          crossorigin="anonymous">
-
-    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,wght@0,200;0,300;0,400;0,600;0,700;0,800;0,900;1,400;1,600&display=swap"
-          rel="stylesheet">
-
-    <style>
-        body {
-            font-family: 'Nunito Sans', sans-serif;
-            background: #f8fafc;
-        }
-
-        .afh-navbar {
-            min-height: 74px;
-        }
-
-        .afh-navbar-brand {
-            font-weight: 900;
-            letter-spacing: -0.02em;
-        }
-
-        .afh-brand-icon {
-            width: 34px;
-            height: 34px;
-            border-radius: 999px;
-            background: #7413dc;
-            color: #fff;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            margin-right: 0.55rem;
-            font-size: 1rem;
-            object-fit: cover;
-        }
-
-        .afh-current-group {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            text-align: center;
-            max-width: 38%;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .afh-current-group-title {
-            font-weight: 900;
-            line-height: 1.1;
-        }
-
-        .afh-current-group-subtitle {
-            font-size: 0.78rem;
-            color: #6c757d;
-            line-height: 1.1;
-        }
-
-        .afh-user-icon {
-            width: 36px;
-            height: 36px;
-            border-radius: 999px;
-            background: #f1e8ff;
-            color: #7413dc;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            margin-right: 0.65rem;
-            flex-shrink: 0;
-        }
-
-        .afh-top-meta {
-            font-size: 0.9rem;
-            line-height: 1.15;
-        }
-
-        .afh-badge-role {
-            font-size: 0.78rem;
-        }
-
-        .afh-sidebar {
-            border-right: 1px solid #dee2e6;
-            min-height: calc(100vh - 80px);
-            padding-right: 1rem;
-        }
-
-        .afh-group-list {
-            max-height: 70vh;
-            overflow-y: auto;
-        }
-
-        .afh-calendar-day {
-            min-height: 140px;
-            vertical-align: top;
-            background: #fff;
-        }
-
-        .afh-calendar-day-number {
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-        }
-
-        .afh-event-pill {
-            display: block;
-            font-size: 0.85rem;
-            margin-bottom: 0.35rem;
-            padding: 0.35rem 0.5rem;
-            border-radius: 0.35rem;
-            text-decoration: none;
-            color: #fff;
-            background: #006ddf;
-        }
-
-        .afh-muted-day {
-            background: #f8f9fa;
-            color: #6c757d;
-        }
-
-        @media (max-width: 991.98px) {
-            .afh-current-group {
-                position: static;
-                transform: none;
-                max-width: 100%;
-                text-align: left;
-                margin: 0.75rem 0;
-                white-space: normal;
-            }
-
-            .afh-navbar-actions {
-                align-items: flex-start !important;
-                margin-top: 0.75rem;
-            }
-
-            .afh-top-meta {
-                text-align: left !important;
-            }
-        }
-
-        /* Global badge contrast fix */
-        .badge-success,
-        .badge-primary,
-        .badge-info,
-        .badge-danger,
-        .badge-dark,
-        .badge-secondary {
-            color: #fff !important;
-        }
-
-        .badge-warning,
-        .badge-light {
-            color: #212529 !important;
-        }
-
-        .badge-success {
-            background-color: #28a745 !important;
-        }
-
-        .badge-primary {
-            background-color: #006ddf !important;
-        }
-
-        .badge-info {
-            background-color: #17a2b8 !important;
-        }
-
-        .badge-danger {
-            background-color: #dc3545 !important;
-        }
-
-        .badge-dark {
-            background-color: #343a40 !important;
-        }
-
-        .badge-secondary {
-            background-color: #6c757d !important;
-        }
-
-        .badge-warning {
-            background-color: #ffc107 !important;
-        }
-
-        .badge-light {
-            background-color: #f8f9fa !important;
-        }
-    </style>
-</head>
-<body>
-<div class="bg-primary text-white py-2">
-    <div class="container-fluid d-flex justify-content-between align-items-center">
-        <div class="font-weight-bold">
-            District Calendar
-        </div>
-
-        <a href="/index.php" class="btn btn-light btn-sm font-weight-bold">
-            Return to District Dashboard
-        </a>
-    </div>
-</div>
-    <?php
-}
-
-/**
- * Navbar / header.
- */
-function render_header(string $active = ''): void
-{
-    $context = auth_context();
-    $isLoggedIn = $context !== null;
-
-    $admin = auth_admin();
-    $portalUser = auth_portal_user();
-    $group = auth_group();
-
-    $centralName = APP_NAME;
-    $centralSubtitle = 'Away From Hut';
-
-    if ($admin) {
-        $centralName = 'District Lead Volunteer Portal';
-        $centralSubtitle = ucfirst((string)$admin['role']);
-    } elseif ($portalUser) {
-        $centralName = $portalUser['full_name'] ?? $portalUser['email'] ?? 'Portal user';
-        $centralSubtitle = ucfirst((string)($portalUser['role'] ?? 'user'));
-    } elseif ($group) {
-        $centralName = (string)$group['group_name'];
-        $centralSubtitle = 'Group portal';
-    }
-
-    ?>
-<nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom mb-4 afh-navbar">
-    <div class="container-fluid position-relative">
-
-        <a class="navbar-brand afh-navbar-brand d-flex align-items-center" href="<?= e(ROUTE_CALENDAR) ?>">
-            <img
-                src="https://www.brscouts.org.uk/wp-content/uploads/2021/03/download.png"
-                alt="<?= e(APP_NAME) ?> icon"
-                class="afh-brand-icon"
-            >
-            <span><?= e(APP_NAME) ?></span>
-        </a>
-
-        <?php if ($isLoggedIn): ?>
-            <div class="afh-current-group">
-                <div class="afh-current-group-title"><?= e($centralName) ?></div>
-                <div class="afh-current-group-subtitle"><?= e($centralSubtitle) ?></div>
-            </div>
-        <?php endif; ?>
-
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#mainNav"
-                aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-
-        <div class="collapse navbar-collapse" id="mainNav">
-
-            <ul class="navbar-nav mr-auto">
-                <?php if ($isLoggedIn): ?>
-
-                    <li class="nav-item <?= $active === 'calendar' ? 'active' : '' ?>">
-                        <a class="nav-link font-weight-bold" href="<?= e(ROUTE_CALENDAR) ?>">
-                            Calendar
-                        </a>
-                    </li>
-
-                    <li class="nav-item <?= $active === 'add-event' ? 'active' : '' ?>">
-                        <a class="nav-link font-weight-bold" href="<?= e(ROUTE_ADD_EVENT) ?>">
-                            Add event
-                        </a>
-                    </li>
-
-                    <li class="nav-item <?= $active === 'glv' ? 'active' : '' ?>">
-                        <a class="nav-link" href="<?= e(ROUTE_GLV) ?>">
-                            GLV
-                        </a>
-                    </li>
-
-                    <li class="nav-item <?= $active === 'risk-assessments' ? 'active' : '' ?>">
-                        <a class="nav-link" href="<?= e(ROUTE_RISK_ASSESSMENTS) ?>">
-                            Risk Assessments
-                        </a>
-                    </li>
-
-                    <?php if (is_reviewer_or_admin()): ?>
-                        <li class="nav-item <?= $active === 'reviewer' ? 'active' : '' ?>">
-                            <a class="nav-link" href="<?= e(ROUTE_REVIEWER) ?>">
-                                Reviewer
-                            </a>
-                        </li>
-                    <?php endif; ?>
-
-                <?php endif; ?>
-            </ul>
-
-            <div class="d-flex align-items-center ml-auto afh-navbar-actions">
-                <?php if ($isLoggedIn): ?>
-
-                    <?php if (is_admin()): ?>
-                        <a href="<?= e(ROUTE_SETTINGS) ?>"
-                           class="btn btn-outline-secondary btn-sm mr-3 <?= $active === 'settings' ? 'active' : '' ?>">
-                            Settings
-                        </a>
-                    <?php endif; ?>
-
-                    <div class="text-right mr-3 afh-top-meta">
-                        <div><strong><?= e(auth_display_label()) ?></strong></div>
-
-                        <?php if ($admin): ?>
-                            <span class="badge badge-primary afh-badge-role">
-                                <?= e(ucfirst((string)$admin['role'])) ?>
-                            </span>
-                        <?php elseif ($portalUser): ?>
-                            <span class="badge badge-primary afh-badge-role">
-                                Microsoft SSO
-                            </span>
-                        <?php else: ?>
-                            <span class="badge badge-secondary afh-badge-role">
-                                Group link
-                            </span>
-                        <?php endif; ?>
-                    </div>
-
-                    <a href="<?= e(ROUTE_LOGOUT) ?>" class="btn btn-outline-secondary btn-sm">
-                        Logout
-                    </a>
-
-                <?php else: ?>
-
-                    <a href="<?= e(ROUTE_LOGIN) ?>" class="btn btn-primary btn-sm">
-                        DLV Login
-                    </a>
-
-                <?php endif; ?>
-            </div>
-        </div>
-    </div>
-</nav>
-    <?php
-}
-
-/**
- * Basic page layout end.
- */
-function render_page_end(): void
-{
-    ?>
-<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
-        crossorigin="anonymous"></script>
-
-<script src="https://cdn.jsdelivr.net/gh/scoutstrap/scoutstrap@0.1.1/dist/js/bootstrap.min.js"
-        crossorigin="anonymous"></script>
-</body>
-</html>
-    <?php
 }
