@@ -15,10 +15,7 @@ declare(strict_types=1);
  * 10 6 * * * /usr/bin/php /home/brscouts/app.irvalscouts.org.uk/cron/data-clense.php >> /home/brscouts/app.irvalscouts.org.uk/storage/logs/dc-data-clense.log 2>&1
  */
 
-if (PHP_SAPI !== 'cli') {
-    http_response_code(403);
-    exit('This script can only be run from the command line.');
-}
+
 
 require_once __DIR__ . '/../app/bootstrap.php';
 
