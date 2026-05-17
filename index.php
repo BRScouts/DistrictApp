@@ -18,7 +18,31 @@ $heroText = 'Complete common District tasks, update your profile and open the to
 $breadcrumb = '<a href="/index.php">Home</a>';
 
 $memberships = user_group_memberships((int) $user['id']);
-$groupNames = array_map(static fn(array $membership): string => (string) $membership['group_name'], $memberships);
+$groupNames = array_values(array_unique(array_filter(array_map(
+    static fn(array $membership): string => (string) ($membership['group_name'] ?? ''),
+    $memberships
+))));
+
+$accessLevels = [(string) ($user['highest_access_level'] ?? $user['role'] ?? 'member')];
+$membershipRoles = [];
+
+foreach ($memberships as $membership) {
+    if (($membership['status'] ?? 'active') !== 'active') {
+        continue;
+    }
+
+    $accessLevels[] = (string) ($membership['access_level'] ?? 'member');
+    $membershipRoles[] = (string) ($membership['membership_role'] ?? '');
+}
+
+$accessLevels = array_values(array_unique($accessLevels));
+$membershipRoles = array_values(array_unique(array_filter($membershipRoles)));
+
+$isSystemAdmin = in_array('system_admin', $accessLevels, true);
+$isDistrictAdmin = $isSystemAdmin || in_array('district_admin', $accessLevels, true);
+$isGroupAdmin = $isDistrictAdmin
+    || in_array('group_admin', $accessLevels, true)
+    || in_array('group_lead_volunteer', $membershipRoles, true);
 
 $modules = [
     [
@@ -26,28 +50,108 @@ $modules = [
         'description' => 'Submit away-from-hut notifications, view Group activity and share risk assessments.',
         'url' => '/dc/',
         'status' => 'available',
+        'image' => '/assets/img/dashboard/calendar.jpg',
+        'visible' => true,
     ],
     [
         'title' => 'My profile',
         'description' => 'Update your details, directory visibility, role information and accreditations.',
         'url' => '/profile.php',
         'status' => 'available',
+        'image' => '/assets/img/dashboard/profile.jpg',
+        'visible' => true,
     ],
     [
         'title' => 'District Directory',
         'description' => 'Find leaders and volunteers by name, Group, role, section or accreditation.',
         'url' => '/directory.php',
         'status' => 'available',
+        'image' => '/assets/img/dashboard/directory.jpg',
+        'visible' => true,
     ],
     [
-        'title' => 'Group admin',
-        'description' => 'Manage leaders, Groups and Microsoft 365 account requests. Available to GLVs soon.',
-        'url' => '#',
+        'title' => 'Group Admin',
+        'description' => 'Manage leaders in your Group and request District Microsoft 365 accounts.',
+        'url' => '/group-manager.php',
+        'status' => 'available',
+        'image' => '/assets/img/dashboard/group-admin.jpg',
+        'visible' => $isGroupAdmin,
+    ],
+    [
+        'title' => 'District Admin',
+        'description' => 'Create Groups, assign GLVs, rotate Group links and manage reviewer/admin permissions.',
+        'url' => '/district-admin.php',
+        'status' => 'available',
+        'image' => '/assets/img/dashboard/district-admin.jpg',
+        'visible' => $isDistrictAdmin,
+    ],
+    [
+        'title' => 'Technical Support',
+        'description' => 'Report a problem, request help with access or ask for a dashboard change.',
+        'url' => '/technical-support.php',
         'status' => 'soon',
+        'image' => '/assets/img/dashboard/support.jpg',
+        'visible' => true,
+    ],
+    [
+        'title' => 'Comms Tool',
+        'description' => 'Prepare District communications and targeted volunteer messages.',
+        'url' => '/comms-tool.php',
+        'status' => 'soon',
+        'image' => '/assets/img/dashboard/comms.jpg',
+        'visible' => $isDistrictAdmin,
     ],
 ];
+
+$modules = array_values(array_filter(
+    $modules,
+    static fn(array $module): bool => (bool) ($module['visible'] ?? false)
+));
 ?>
 <?php include __DIR__ . '/header.php'; ?>
+
+<style>
+    .lt-task-card {
+        overflow: hidden;
+    }
+
+    .lt-task-card-image {
+        height: 130px;
+        margin: -1.25rem -1.25rem 1rem;
+        background: #f3f2f1;
+        border-bottom: 1px solid #e6e6e6;
+        overflow: hidden;
+    }
+
+    .lt-task-card-image img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .lt-task-card-image img[style*="display: none"] + .lt-task-card-image-fallback {
+        display: flex;
+    }
+
+    .lt-task-card-image-fallback {
+        display: none;
+        width: 100%;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+        background: #f7f5fb;
+        color: #4d0b93;
+        font-size: 2rem;
+        font-weight: 900;
+    }
+
+    @media (max-width: 575.98px) {
+        .lt-task-card-image {
+            height: 115px;
+        }
+    }
+</style>
 
 <main class="lt-main">
     <div class="row mb-4">
@@ -80,9 +184,22 @@ $modules = [
                         <a href="<?= e($module['url']) ?>" class="lt-card-link">
                     <?php endif; ?>
                         <article class="lt-task-card">
+                            <div class="lt-task-card-image">
+                                <img
+                                    src="<?= e($module['image']) ?>"
+                                    alt=""
+                                    loading="lazy"
+                                    onerror="this.style.display='none';"
+                                >
+                                <div class="lt-task-card-image-fallback" aria-hidden="true">
+                                    <?= e(strtoupper(substr((string) $module['title'], 0, 1))) ?>
+                                </div>
+                            </div>
+
                             <?php if ($module['status'] !== 'available'): ?>
                                 <span class="lt-badge mb-3">Soon</span>
                             <?php endif; ?>
+
                             <h3><?= e($module['title']) ?></h3>
                             <p><?= e($module['description']) ?></p>
                             <span class="lt-action-link"><?= $module['status'] === 'available' ? 'Open' : 'Not available yet' ?></span>
