@@ -104,9 +104,9 @@ $modules = [
      [
         'title' => 'My District Email / OneDrive',
         'description' => 'As a volunteer with Irwell Valley District, you are eligible for a free Microsoft 365 account with upto 1TB of storage. Access your email, OneDrive and other Microsoft apps here.',
-        'url' => '/technical-support.php',
+        'url' => 'https://outlook.cloud.microsoft/',
         'status' => 'soon',
-        'image' => 'assets/img/cub-carrying-leaves-jpg.jpg',
+        'image' => 'https://cdn-dynmedia-1.microsoft.com/is/image/microsoftcorp/527948-FeaturedNewsCard-416x178?resMode=sharp2&op_usm=1.5,0.65,15,0&wid=1000&hei=429&qlt=85&fit=constrain',
         'visible' => true,
     ],
 ];
