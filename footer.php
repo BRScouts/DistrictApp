@@ -161,7 +161,7 @@
             <div>
                 <h2 class="lt-footer-title">Irwell Valley Scout District</h2>
                 <p class="lt-footer-text">
-                    Supporting volunteers with simplexml_load_file tools for the District Directory,
+                    Supporting volunteers with simple tools for the District.
                 </p>
             </div>
         </div>
@@ -182,9 +182,11 @@
     </div>
 
     <div class="lt-footer-created" aria-label="Creator credit">
-        <div class="lt-footer-created-inner">
-            District Dashboard <span>Proudly Created by CK Enterprises Group Ltd</span>
-        </div>
+       <a href="https://www.ckenterprises.co.uk/" target="_blank" rel="noopener noreferrer">
+            <div class="lt-footer-created-inner">
+                District Dashboard <span>Proudly Created by CK Enterprises Group Ltd</span>
+            </div>
+        </a>
     </div>
 </footer>
 
