@@ -58,7 +58,7 @@ $modules = [
         'description' => 'Update your details, directory visibility, role information and accreditations.',
         'url' => '/profile.php',
         'status' => 'available',
-        'image' => '/assets/img/explorer-campfire-2-jpg.jpg',
+        'image' => 'assets/img/cub-high-ropes-1-jpg.jpg',
         'visible' => true,
     ],
     [
@@ -82,7 +82,7 @@ $modules = [
         'description' => 'Create Groups, assign GLVs, rotate Group links and manage reviewer/admin permissions.',
         'url' => '/district-admin.php',
         'status' => 'available',
-        'image' => '/assets/img/dashboard/district-admin.jpg',
+        'image' => 'assets/img/cub-climbing-jpg.jpg',
         'visible' => $isDistrictAdmin,
     ],
     [
@@ -90,7 +90,7 @@ $modules = [
         'description' => 'Report a problem, request help with access or ask for a dashboard change.',
         'url' => '/technical-support.php',
         'status' => 'soon',
-        'image' => '/assets/img/dashboard/support.jpg',
+        'image' => 'assets/img/cub-carrying-leaves-jpg.jpg',
         'visible' => true,
     ],
     [
@@ -98,7 +98,7 @@ $modules = [
         'description' => 'Prepare District communications and targeted volunteer messages.',
         'url' => '/comms-tool.php',
         'status' => 'available',
-        'image' => '/assets/img/dashboard/comms.jpg',
+        'image' => '/assets/img/db-20220915-00340-jpg.jpg',
         'visible' => $isDistrictAdmin,
     ],
 ];
