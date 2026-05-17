@@ -230,7 +230,70 @@ function gwa_log_action(int $actorPersonId, string $action, string $entityType, 
         // Audit logging must not block a website update.
     }
 }
+function gwa_wp_bootstrap(): void
+{
+    static $loaded = false;
 
+    if ($loaded) {
+        return;
+    }
+
+    /*
+     * WordPress must define these itself from wp-config.php.
+     * If the Leader Tool bootstrap has already defined them, WordPress may try
+     * to connect to the wrong database and show "Error establishing a database connection".
+     */
+    $reservedConstants = [
+        'DB_NAME',
+        'DB_USER',
+        'DB_PASSWORD',
+        'DB_HOST',
+        'DB_CHARSET',
+        'DB_COLLATE',
+        'ABSPATH',
+        'WPINC',
+    ];
+
+    $alreadyDefined = [];
+
+    foreach ($reservedConstants as $constant) {
+        if (defined($constant)) {
+            $alreadyDefined[] = $constant;
+        }
+    }
+
+    if ($alreadyDefined) {
+        throw new RuntimeException(
+            'WordPress cannot be safely loaded because these WordPress-reserved constants are already defined by the Leader Tool bootstrap: ' .
+            implode(', ', $alreadyDefined) .
+            '. Rename the Leader Tool database constants to APP_DB_NAME, APP_DB_USER, APP_DB_PASSWORD and APP_DB_HOST.'
+        );
+    }
+
+    $path = gwa_wp_path();
+
+    if ($path === '') {
+        throw new RuntimeException('WordPress path is not configured. Add WORDPRESS_PATH to the Leader Tool config.');
+    }
+
+    $wpLoad = $path . '/wp-load.php';
+
+    if (!is_file($wpLoad)) {
+        throw new RuntimeException('WordPress could not be loaded. wp-load.php was not found at: ' . $wpLoad);
+    }
+
+    if (!defined('WP_USE_THEMES')) {
+        define('WP_USE_THEMES', false);
+    }
+
+    require_once $wpLoad;
+
+    if (!function_exists('wp_insert_post') || !function_exists('update_post_meta')) {
+        throw new RuntimeException('WordPress loaded, but the expected WordPress functions are unavailable.');
+    }
+
+    $loaded = true;
+}
 function gwa_config_first(array $keys, string $default = ''): string
 {
     foreach ($keys as $key) {
