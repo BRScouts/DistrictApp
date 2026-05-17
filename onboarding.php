@@ -12,7 +12,7 @@ $pdo = db();
 $error = null;
 
 $personId = (int) $user['id'];
-$email = trim((string) ($user['email'] ?? ''));
+$email = strtolower(trim((string) ($user['email'] ?? '')));
 $displayName = trim((string) ($user['full_name'] ?? $email));
 
 $roleOptions = portal_role_options();
@@ -40,6 +40,94 @@ function onboarding_table_exists(string $table): bool
     } catch (Throwable $e) {
         return $cache[$table] = false;
     }
+}
+
+function onboarding_column_exists(string $table, string $column): bool
+{
+    static $cache = [];
+    $key = $table . '.' . $column;
+
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
+    try {
+        $stmt = db()->prepare("
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = :table_name
+              AND COLUMN_NAME = :column_name
+        ");
+        $stmt->execute([
+            'table_name' => $table,
+            'column_name' => $column,
+        ]);
+
+        return $cache[$key] = ((int) $stmt->fetchColumn()) > 0;
+    } catch (Throwable $e) {
+        return $cache[$key] = false;
+    }
+}
+
+function onboarding_table_columns(string $table): array
+{
+    static $cache = [];
+
+    if (array_key_exists($table, $cache)) {
+        return $cache[$table];
+    }
+
+    try {
+        $stmt = db()->prepare("
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = :table_name
+        ");
+        $stmt->execute(['table_name' => $table]);
+
+        return $cache[$table] = array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    } catch (Throwable $e) {
+        return $cache[$table] = [];
+    }
+}
+
+function onboarding_quote_identifier(string $identifier): string
+{
+    return '`' . str_replace('`', '``', $identifier) . '`';
+}
+
+function onboarding_insert_flexible(string $table, array $values): bool
+{
+    if (!onboarding_table_exists($table)) {
+        return false;
+    }
+
+    $columns = onboarding_table_columns($table);
+    $insert = [];
+
+    foreach ($values as $column => $value) {
+        if (in_array((string) $column, $columns, true)) {
+            $insert[(string) $column] = $value;
+        }
+    }
+
+    if (!$insert) {
+        return false;
+    }
+
+    $quotedColumns = array_map('onboarding_quote_identifier', array_keys($insert));
+    $placeholders = array_map(static fn(string $column): string => ':' . $column, array_keys($insert));
+
+    $stmt = db()->prepare("
+        INSERT INTO " . onboarding_quote_identifier($table) . "
+        (" . implode(', ', $quotedColumns) . ")
+        VALUES
+        (" . implode(', ', $placeholders) . ")
+    ");
+
+    return $stmt->execute($insert);
 }
 
 function onboarding_profile_photo_url(array $user, array $profile): string
@@ -73,39 +161,438 @@ function onboarding_profile_photo_url(array $user, array $profile): string
     return '';
 }
 
-function onboarding_audit(int $personId, array $details): void
+function onboarding_audit_action(int $actorPersonId, string $action, string $entityType, int $entityId, array $details = []): void
 {
     if (!onboarding_table_exists('audit_log')) {
         return;
     }
 
     try {
-        $stmt = db()->prepare("
-            INSERT INTO audit_log (
-                actor_type,
-                actor_person_id,
-                action,
-                entity_type,
-                entity_id,
-                details_json
-            )
-            VALUES (
-                'person',
-                :person_id,
-                'self_onboarding_completed',
-                'person',
-                :person_id,
-                :details_json
-            )
-        ");
-
-        $stmt->execute([
-            'person_id' => $personId,
+        onboarding_insert_flexible('audit_log', [
+            'actor_type' => 'person',
+            'actor_person_id' => $actorPersonId,
+            'action' => $action,
+            'entity_type' => $entityType,
+            'entity_id' => $entityId,
             'details_json' => json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'details' => json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'created_at' => date('Y-m-d H:i:s'),
         ]);
     } catch (Throwable $e) {
         // Do not fail onboarding because audit logging failed.
     }
+}
+
+function onboarding_audit(int $personId, array $details): void
+{
+    onboarding_audit_action(
+        $personId,
+        'self_onboarding_completed',
+        'person',
+        $personId,
+        $details
+    );
+}
+
+function onboarding_fetch_claim_candidates(int $currentPersonId): array
+{
+    $sectionSelect = "'' AS section_names";
+    $sectionJoin = '';
+
+    if (
+        onboarding_table_exists('group_membership_sections')
+        && onboarding_table_exists('group_sections')
+    ) {
+        $sectionSelect = "GROUP_CONCAT(DISTINCT gs.section_name ORDER BY gs.section_name SEPARATOR ', ') AS section_names";
+        $sectionJoin = "
+            LEFT JOIN group_membership_sections gms
+              ON gms.group_membership_id = gm.id
+            LEFT JOIN group_sections gs
+              ON gs.id = gms.group_section_id
+             AND gs.is_active = 1
+        ";
+    }
+
+    $stmt = db()->prepare("
+        SELECT
+            p.id AS person_id,
+            p.full_name,
+            p.primary_email,
+            p.phone,
+            gm.group_id,
+            g.group_name,
+            gm.membership_role,
+            gm.access_level,
+            dp.role_title,
+            {$sectionSelect},
+            MAX(CASE WHEN ua.provider = 'microsoft' THEN 1 ELSE 0 END) AS has_microsoft_account
+        FROM group_memberships gm
+        JOIN people p
+          ON p.id = gm.person_id
+        JOIN groups g
+          ON g.id = gm.group_id
+         AND g.is_active = 1
+        LEFT JOIN directory_profiles dp
+          ON dp.person_id = p.id
+        LEFT JOIN user_accounts ua
+          ON ua.person_id = p.id
+         AND ua.provider = 'microsoft'
+        {$sectionJoin}
+        WHERE p.id <> :current_person_id
+          AND p.status = 'active'
+          AND gm.status = 'active'
+        GROUP BY
+            p.id,
+            p.full_name,
+            p.primary_email,
+            p.phone,
+            gm.group_id,
+            g.group_name,
+            gm.membership_role,
+            gm.access_level,
+            dp.role_title
+        ORDER BY g.group_name ASC, p.full_name ASC
+    ");
+    $stmt->execute(['current_person_id' => $currentPersonId]);
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function onboarding_fetch_person(int $personId): ?array
+{
+    $stmt = db()->prepare("
+        SELECT *
+        FROM people
+        WHERE id = :person_id
+        LIMIT 1
+    ");
+    $stmt->execute(['person_id' => $personId]);
+
+    $person = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $person ?: null;
+}
+
+function onboarding_candidate_is_in_selected_group(int $candidatePersonId, array $groupIds): bool
+{
+    $groupIds = array_values(array_unique(array_filter(array_map('intval', $groupIds))));
+
+    if (!$groupIds) {
+        return false;
+    }
+
+    $placeholders = implode(',', array_fill(0, count($groupIds), '?'));
+
+    $params = [$candidatePersonId];
+    foreach ($groupIds as $groupId) {
+        $params[] = $groupId;
+    }
+
+    $stmt = db()->prepare("
+        SELECT COUNT(*)
+        FROM group_memberships
+        WHERE person_id = ?
+          AND status = 'active'
+          AND group_id IN ({$placeholders})
+    ");
+    $stmt->execute($params);
+
+    return ((int) $stmt->fetchColumn()) > 0;
+}
+
+function onboarding_person_has_microsoft_login(int $personId): bool
+{
+    if (!onboarding_table_exists('user_accounts')) {
+        return false;
+    }
+
+    try {
+        $stmt = db()->prepare("
+            SELECT COUNT(*)
+            FROM user_accounts
+            WHERE person_id = :person_id
+              AND provider = 'microsoft'
+        ");
+        $stmt->execute(['person_id' => $personId]);
+
+        return ((int) $stmt->fetchColumn()) > 0;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+function onboarding_preserve_old_email_on_target(int $targetPersonId, string $oldEmail): void
+{
+    $oldEmail = strtolower(trim($oldEmail));
+
+    if ($oldEmail === '' || !filter_var($oldEmail, FILTER_VALIDATE_EMAIL)) {
+        return;
+    }
+
+    $candidateColumns = [
+        'personal_email',
+        'scouting_email',
+        'alternate_email',
+        'secondary_email',
+        'previous_email',
+    ];
+
+    foreach ($candidateColumns as $column) {
+        if (!onboarding_column_exists('people', $column)) {
+            continue;
+        }
+
+        try {
+            $stmt = db()->prepare("
+                UPDATE people
+                SET " . onboarding_quote_identifier($column) . " = COALESCE(NULLIF(" . onboarding_quote_identifier($column) . ", ''), :old_email)
+                WHERE id = :target_person_id
+                LIMIT 1
+            ");
+            $stmt->execute([
+                'old_email' => $oldEmail,
+                'target_person_id' => $targetPersonId,
+            ]);
+
+            return;
+        } catch (Throwable $e) {
+            // Try the next compatible column.
+        }
+    }
+}
+
+function onboarding_update_current_session_person(int $targetPersonId): void
+{
+    foreach (['person_id', 'user_id', 'current_person_id'] as $key) {
+        if (array_key_exists($key, $_SESSION)) {
+            $_SESSION[$key] = $targetPersonId;
+        }
+    }
+
+    foreach (['user', 'current_user'] as $key) {
+        if (isset($_SESSION[$key]) && is_array($_SESSION[$key])) {
+            $_SESSION[$key]['id'] = $targetPersonId;
+        }
+    }
+
+    if (function_exists('refresh_current_user_session')) {
+        refresh_current_user_session();
+    }
+}
+
+function onboarding_claim_existing_person(
+    int $currentPersonId,
+    int $targetPersonId,
+    string $ssoEmail,
+    array $selectedGroupIds
+): void {
+    if ($currentPersonId < 1 || $targetPersonId < 1 || $currentPersonId === $targetPersonId) {
+        throw new RuntimeException('Choose a valid existing record.');
+    }
+
+    if ($ssoEmail === '' || !filter_var($ssoEmail, FILTER_VALIDATE_EMAIL)) {
+        throw new RuntimeException('Your Microsoft sign-in email could not be verified.');
+    }
+
+    if (!onboarding_candidate_is_in_selected_group($targetPersonId, $selectedGroupIds)) {
+        throw new RuntimeException('The selected existing record is not active in one of the Groups you selected.');
+    }
+
+    if (onboarding_person_has_microsoft_login($targetPersonId)) {
+        throw new RuntimeException('That existing record is already linked to a Microsoft sign-in. Please contact your Group Lead Volunteer.');
+    }
+
+    $currentPerson = onboarding_fetch_person($currentPersonId);
+    $targetPerson = onboarding_fetch_person($targetPersonId);
+
+    if (!$currentPerson || !$targetPerson) {
+        throw new RuntimeException('One of the person records could not be found.');
+    }
+
+    $targetOldEmail = strtolower(trim((string) ($targetPerson['primary_email'] ?? '')));
+    $currentOldEmail = strtolower(trim((string) ($currentPerson['primary_email'] ?? '')));
+
+    /*
+     * If people.primary_email is unique, move the temporary SSO-created person
+     * away from the SSO email before assigning that email to the imported record.
+     */
+    $placeholderEmail = 'merged-person-' . $currentPersonId . '-' . time() . '@merged.invalid';
+
+    $stmt = db()->prepare("
+        UPDATE people
+        SET primary_email = :placeholder_email,
+            status = 'inactive'
+        WHERE id = :current_person_id
+        LIMIT 1
+    ");
+    $stmt->execute([
+        'placeholder_email' => $placeholderEmail,
+        'current_person_id' => $currentPersonId,
+    ]);
+
+    onboarding_preserve_old_email_on_target($targetPersonId, $targetOldEmail);
+
+    $stmt = db()->prepare("
+        UPDATE people
+        SET primary_email = :sso_email,
+            status = 'active'
+        WHERE id = :target_person_id
+        LIMIT 1
+    ");
+    $stmt->execute([
+        'sso_email' => $ssoEmail,
+        'target_person_id' => $targetPersonId,
+    ]);
+
+    if (onboarding_table_exists('user_accounts')) {
+        $stmt = db()->prepare("
+            UPDATE user_accounts
+            SET person_id = :target_person_id
+            WHERE person_id = :current_person_id
+        ");
+        $stmt->execute([
+            'target_person_id' => $targetPersonId,
+            'current_person_id' => $currentPersonId,
+        ]);
+    }
+
+    if (onboarding_table_exists('group_memberships')) {
+        /*
+         * If the temporary record somehow gained memberships, keep them active
+         * by moving them to the claimed person where possible.
+         */
+        $stmt = db()->prepare("
+            SELECT group_id, membership_role, access_level, status, is_primary, approved_at
+            FROM group_memberships
+            WHERE person_id = :current_person_id
+        ");
+        $stmt->execute(['current_person_id' => $currentPersonId]);
+        $temporaryMemberships = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($temporaryMemberships as $membership) {
+            try {
+                $insert = db()->prepare("
+                    INSERT INTO group_memberships (
+                        person_id,
+                        group_id,
+                        membership_role,
+                        access_level,
+                        status,
+                        is_primary,
+                        approved_at
+                    )
+                    VALUES (
+                        :target_person_id,
+                        :group_id,
+                        :membership_role,
+                        :access_level,
+                        :status,
+                        :is_primary,
+                        :approved_at
+                    )
+                    ON DUPLICATE KEY UPDATE
+                        status = CASE
+                            WHEN status = 'active' OR VALUES(status) = 'active' THEN 'active'
+                            ELSE status
+                        END,
+                        approved_at = COALESCE(approved_at, VALUES(approved_at))
+                ");
+                $insert->execute([
+                    'target_person_id' => $targetPersonId,
+                    'group_id' => (int) $membership['group_id'],
+                    'membership_role' => (string) ($membership['membership_role'] ?? 'other'),
+                    'access_level' => (string) ($membership['access_level'] ?? 'member'),
+                    'status' => (string) ($membership['status'] ?? 'active'),
+                    'is_primary' => (int) ($membership['is_primary'] ?? 0),
+                    'approved_at' => $membership['approved_at'] ?? null,
+                ]);
+            } catch (Throwable $e) {
+                // Ignore duplicate/incompatible membership transfer issues.
+            }
+        }
+
+        $stmt = db()->prepare("
+            UPDATE group_memberships
+            SET status = 'inactive',
+                is_primary = 0
+            WHERE person_id = :current_person_id
+        ");
+        $stmt->execute(['current_person_id' => $currentPersonId]);
+    }
+
+    if (onboarding_table_exists('directory_profiles')) {
+        $stmt = db()->prepare("
+            UPDATE directory_profiles
+            SET person_id = :target_person_id
+            WHERE person_id = :current_person_id
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM (
+                        SELECT person_id
+                        FROM directory_profiles
+                        WHERE person_id = :target_person_id_check
+                    ) existing_profile
+              )
+        ");
+
+        try {
+            $stmt->execute([
+                'target_person_id' => $targetPersonId,
+                'current_person_id' => $currentPersonId,
+                'target_person_id_check' => $targetPersonId,
+            ]);
+        } catch (Throwable $e) {
+            // Target already has a profile or DB does not support this pattern.
+        }
+    }
+
+    if (onboarding_table_exists('calendar_events')) {
+        if (onboarding_column_exists('calendar_events', 'submitted_by_person_id')) {
+            $stmt = db()->prepare("
+                UPDATE calendar_events
+                SET submitted_by_person_id = :target_person_id
+                WHERE submitted_by_person_id = :current_person_id
+            ");
+            $stmt->execute([
+                'target_person_id' => $targetPersonId,
+                'current_person_id' => $currentPersonId,
+            ]);
+        }
+
+        if (onboarding_column_exists('calendar_events', 'leader_email')) {
+            $stmt = db()->prepare("
+                UPDATE calendar_events
+                SET leader_email = :sso_email
+                WHERE LOWER(leader_email) = LOWER(:current_old_email)
+            ");
+            $stmt->execute([
+                'sso_email' => $ssoEmail,
+                'current_old_email' => $currentOldEmail,
+            ]);
+        }
+    }
+
+    if (onboarding_table_exists('risk_assessments') && onboarding_column_exists('risk_assessments', 'uploaded_by_person_id')) {
+        $stmt = db()->prepare("
+            UPDATE risk_assessments
+            SET uploaded_by_person_id = :target_person_id
+            WHERE uploaded_by_person_id = :current_person_id
+        ");
+        $stmt->execute([
+            'target_person_id' => $targetPersonId,
+            'current_person_id' => $currentPersonId,
+        ]);
+    }
+
+    onboarding_audit_action($targetPersonId, 'self_claimed_existing_person', 'person', $targetPersonId, [
+        'temporary_person_id' => $currentPersonId,
+        'claimed_person_id' => $targetPersonId,
+        'sso_email' => $ssoEmail,
+        'previous_imported_email' => $targetOldEmail,
+        'selected_group_ids' => array_values(array_map('intval', $selectedGroupIds)),
+    ]);
+
+    onboarding_update_current_session_person($targetPersonId);
 }
 
 $stmt = $pdo->query("
@@ -154,14 +641,10 @@ $activeExistingMemberships = array_values(array_filter(
 ));
 
 $existingGroupIds = array_map(static fn(array $m): int => (int) $m['group_id'], $activeExistingMemberships);
+$claimCandidates = onboarding_fetch_claim_candidates($personId);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $fullName = trim((string) ($_POST['full_name'] ?? ''));
-    $phone = trim((string) ($_POST['phone'] ?? ''));
-    $roleTitle = trim((string) ($_POST['role_title'] ?? ''));
-    $aboutMe = trim((string) ($_POST['about_me'] ?? ''));
-    $sharePhone = isset($_POST['share_phone']) ? 1 : 0;
-    $visibleInDirectory = isset($_POST['visible_in_directory']) ? 1 : 0;
+    $action = (string) ($_POST['action'] ?? 'complete_onboarding');
 
     $postedGroupIds = $_POST['group_ids'] ?? [];
 
@@ -174,221 +657,263 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         static fn(int $id): bool => $id > 0
     )));
 
-    $postedSectionIds = $_POST['section_ids'] ?? [];
+    if ($action === 'claim_existing_person') {
+        $targetPersonId = (int) ($_POST['existing_person_id'] ?? 0);
+        $confirmedClaim = isset($_POST['confirm_existing_person_claim']);
 
-    if (!is_array($postedSectionIds)) {
-        $postedSectionIds = [];
-    }
+        if (!$groupIds) {
+            $error = 'Choose your Group before selecting an existing record.';
+        } elseif ($targetPersonId < 1) {
+            $error = 'Choose the existing leader record that belongs to you.';
+        } elseif (!$confirmedClaim) {
+            $error = 'Confirm that the existing record is yours before continuing.';
+        } else {
+            $placeholders = implode(',', array_fill(0, count($groupIds), '?'));
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM groups WHERE is_active = 1 AND id IN ({$placeholders})");
+            $stmt->execute($groupIds);
 
-    $sectionIds = array_values(array_unique(array_filter(
-        array_map('intval', $postedSectionIds),
-        static fn(int $id): bool => $id > 0
-    )));
-
-    $postedAccreditations = $_POST['accreditations'] ?? [];
-
-    if (!is_array($postedAccreditations)) {
-        $postedAccreditations = [];
-    }
-
-    $cleanAccreditations = array_values(array_intersect(
-        array_map('strval', $postedAccreditations),
-        $allowedAccreditations
-    ));
-
-    sort($cleanAccreditations);
-
-    $accreditationsJson = json_encode($cleanAccreditations, JSON_UNESCAPED_UNICODE) ?: '[]';
-
-    if ($fullName === '') {
-        $error = 'Enter your name.';
-    } elseif ($roleTitle === '' || !in_array($roleTitle, $roleOptions, true)) {
-        $error = 'Choose your main role.';
-    } elseif (!$groupIds) {
-        $error = 'Choose at least one Group.';
-    } else {
-        $placeholders = implode(',', array_fill(0, count($groupIds), '?'));
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM groups WHERE is_active = 1 AND id IN ({$placeholders})");
-        $stmt->execute($groupIds);
-
-        if ((int) $stmt->fetchColumn() !== count($groupIds)) {
-            $error = 'Choose valid active Groups.';
+            if ((int) $stmt->fetchColumn() !== count($groupIds)) {
+                $error = 'Choose valid active Groups.';
+            }
         }
-    }
 
-    if (!$error) {
-        $membershipRole = portal_membership_role_from_title($roleTitle);
-        $accessLevel = portal_access_level_from_membership_role($membershipRole);
+        if (!$error) {
+            $pdo->beginTransaction();
 
-        $pdo->beginTransaction();
+            try {
+                onboarding_claim_existing_person($personId, $targetPersonId, $email, $groupIds);
+                $pdo->commit();
 
-        try {
-            $stmt = $pdo->prepare("
-                UPDATE people
-                SET full_name = :full_name,
-                    phone = :phone,
-                    status = 'active'
-                WHERE id = :person_id
-            ");
-            $stmt->execute([
-                'full_name' => $fullName,
-                'phone' => $phone !== '' ? $phone : null,
-                'person_id' => $personId,
-            ]);
+                redirect('/index.php');
+            } catch (Throwable $e) {
+                $pdo->rollBack();
+                $error = $e->getMessage() ?: 'The existing record could not be linked. Please contact your Group Lead Volunteer.';
+            }
+        }
+    } else {
+        $fullName = trim((string) ($_POST['full_name'] ?? ''));
+        $phone = trim((string) ($_POST['phone'] ?? ''));
+        $roleTitle = trim((string) ($_POST['role_title'] ?? ''));
+        $aboutMe = trim((string) ($_POST['about_me'] ?? ''));
+        $sharePhone = isset($_POST['share_phone']) ? 1 : 0;
+        $visibleInDirectory = isset($_POST['visible_in_directory']) ? 1 : 0;
 
-            $stmt = $pdo->prepare("
-                INSERT INTO directory_profiles (
-                    person_id,
-                    role_title,
-                    about_me,
-                    accreditations_json,
-                    visible_in_directory,
-                    share_phone,
-                    profile_updated_at
-                )
-                VALUES (
-                    :person_id,
-                    :role_title,
-                    :about_me,
-                    :accreditations_json,
-                    :visible_in_directory,
-                    :share_phone,
-                    NOW()
-                )
-                ON DUPLICATE KEY UPDATE
-                    role_title = VALUES(role_title),
-                    about_me = VALUES(about_me),
-                    accreditations_json = VALUES(accreditations_json),
-                    visible_in_directory = VALUES(visible_in_directory),
-                    share_phone = VALUES(share_phone),
-                    profile_updated_at = NOW()
-            ");
-            $stmt->execute([
-                'person_id' => $personId,
-                'role_title' => $roleTitle,
-                'about_me' => $aboutMe !== '' ? $aboutMe : null,
-                'accreditations_json' => $accreditationsJson,
-                'visible_in_directory' => $visibleInDirectory,
-                'share_phone' => $sharePhone,
-            ]);
+        $postedSectionIds = $_POST['section_ids'] ?? [];
 
-            /*
-             * Onboarding is the initial self-service Group selection flow.
-             * After this, profile.php displays Group access as read-only.
-             */
-            $membershipIdsByGroup = [];
+        if (!is_array($postedSectionIds)) {
+            $postedSectionIds = [];
+        }
 
-            foreach ($groupIds as $index => $groupId) {
+        $sectionIds = array_values(array_unique(array_filter(
+            array_map('intval', $postedSectionIds),
+            static fn(int $id): bool => $id > 0
+        )));
+
+        $postedAccreditations = $_POST['accreditations'] ?? [];
+
+        if (!is_array($postedAccreditations)) {
+            $postedAccreditations = [];
+        }
+
+        $cleanAccreditations = array_values(array_intersect(
+            array_map('strval', $postedAccreditations),
+            $allowedAccreditations
+        ));
+
+        sort($cleanAccreditations);
+
+        $accreditationsJson = json_encode($cleanAccreditations, JSON_UNESCAPED_UNICODE) ?: '[]';
+
+        if ($fullName === '') {
+            $error = 'Enter your name.';
+        } elseif ($roleTitle === '' || !in_array($roleTitle, $roleOptions, true)) {
+            $error = 'Choose your main role.';
+        } elseif (!$groupIds) {
+            $error = 'Choose at least one Group.';
+        } else {
+            $placeholders = implode(',', array_fill(0, count($groupIds), '?'));
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM groups WHERE is_active = 1 AND id IN ({$placeholders})");
+            $stmt->execute($groupIds);
+
+            if ((int) $stmt->fetchColumn() !== count($groupIds)) {
+                $error = 'Choose valid active Groups.';
+            }
+        }
+
+        if (!$error) {
+            $membershipRole = portal_membership_role_from_title($roleTitle);
+            $accessLevel = portal_access_level_from_membership_role($membershipRole);
+
+            $pdo->beginTransaction();
+
+            try {
                 $stmt = $pdo->prepare("
-                    INSERT INTO group_memberships (
+                    UPDATE people
+                    SET full_name = :full_name,
+                        phone = :phone,
+                        status = 'active'
+                    WHERE id = :person_id
+                ");
+                $stmt->execute([
+                    'full_name' => $fullName,
+                    'phone' => $phone !== '' ? $phone : null,
+                    'person_id' => $personId,
+                ]);
+
+                $stmt = $pdo->prepare("
+                    INSERT INTO directory_profiles (
                         person_id,
-                        group_id,
-                        membership_role,
-                        access_level,
-                        status,
-                        is_primary,
-                        approved_at
+                        role_title,
+                        about_me,
+                        accreditations_json,
+                        visible_in_directory,
+                        share_phone,
+                        profile_updated_at
                     )
                     VALUES (
                         :person_id,
-                        :group_id,
-                        :membership_role,
-                        :access_level,
-                        'active',
-                        :is_primary,
+                        :role_title,
+                        :about_me,
+                        :accreditations_json,
+                        :visible_in_directory,
+                        :share_phone,
                         NOW()
                     )
                     ON DUPLICATE KEY UPDATE
-                        membership_role = VALUES(membership_role),
-                        access_level = VALUES(access_level),
-                        status = 'active',
-                        is_primary = VALUES(is_primary),
-                        approved_at = COALESCE(approved_at, NOW())
+                        role_title = VALUES(role_title),
+                        about_me = VALUES(about_me),
+                        accreditations_json = VALUES(accreditations_json),
+                        visible_in_directory = VALUES(visible_in_directory),
+                        share_phone = VALUES(share_phone),
+                        profile_updated_at = NOW()
                 ");
                 $stmt->execute([
                     'person_id' => $personId,
-                    'group_id' => $groupId,
-                    'membership_role' => $membershipRole,
-                    'access_level' => $accessLevel,
-                    'is_primary' => $index === 0 ? 1 : 0,
+                    'role_title' => $roleTitle,
+                    'about_me' => $aboutMe !== '' ? $aboutMe : null,
+                    'accreditations_json' => $accreditationsJson,
+                    'visible_in_directory' => $visibleInDirectory,
+                    'share_phone' => $sharePhone,
                 ]);
 
-                $stmt = $pdo->prepare("
-                    SELECT id
-                    FROM group_memberships
-                    WHERE person_id = :person_id
-                      AND group_id = :group_id
-                    LIMIT 1
-                ");
-                $stmt->execute([
-                    'person_id' => $personId,
-                    'group_id' => $groupId,
-                ]);
+                /*
+                 * Onboarding is the initial self-service Group selection flow.
+                 * After this, profile.php displays Group access as read-only.
+                 */
+                $membershipIdsByGroup = [];
 
-                $membershipId = (int) $stmt->fetchColumn();
-
-                if ($membershipId > 0) {
-                    $membershipIdsByGroup[$groupId] = $membershipId;
-                }
-            }
-
-            foreach ($membershipIdsByGroup as $membershipId) {
-                $stmt = $pdo->prepare("
-                    DELETE FROM group_membership_sections
-                    WHERE group_membership_id = :membership_id
-                ");
-                $stmt->execute(['membership_id' => $membershipId]);
-            }
-
-            if ($sectionIds) {
-                $placeholders = implode(',', array_fill(0, count($sectionIds), '?'));
-                $stmt = $pdo->prepare("
-                    SELECT id, group_id
-                    FROM group_sections
-                    WHERE is_active = 1
-                      AND id IN ({$placeholders})
-                ");
-                $stmt->execute($sectionIds);
-                $validSections = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-                foreach ($validSections as $section) {
-                    $groupId = (int) $section['group_id'];
-
-                    if (!isset($membershipIdsByGroup[$groupId])) {
-                        continue;
-                    }
-
+                foreach ($groupIds as $index => $groupId) {
                     $stmt = $pdo->prepare("
-                        INSERT IGNORE INTO group_membership_sections (
-                            group_membership_id,
-                            group_section_id
+                        INSERT INTO group_memberships (
+                            person_id,
+                            group_id,
+                            membership_role,
+                            access_level,
+                            status,
+                            is_primary,
+                            approved_at
                         )
                         VALUES (
-                            :membership_id,
-                            :section_id
+                            :person_id,
+                            :group_id,
+                            :membership_role,
+                            :access_level,
+                            'active',
+                            :is_primary,
+                            NOW()
                         )
+                        ON DUPLICATE KEY UPDATE
+                            membership_role = VALUES(membership_role),
+                            access_level = VALUES(access_level),
+                            status = 'active',
+                            is_primary = VALUES(is_primary),
+                            approved_at = COALESCE(approved_at, NOW())
                     ");
                     $stmt->execute([
-                        'membership_id' => $membershipIdsByGroup[$groupId],
-                        'section_id' => (int) $section['id'],
+                        'person_id' => $personId,
+                        'group_id' => $groupId,
+                        'membership_role' => $membershipRole,
+                        'access_level' => $accessLevel,
+                        'is_primary' => $index === 0 ? 1 : 0,
                     ]);
+
+                    $stmt = $pdo->prepare("
+                        SELECT id
+                        FROM group_memberships
+                        WHERE person_id = :person_id
+                          AND group_id = :group_id
+                        LIMIT 1
+                    ");
+                    $stmt->execute([
+                        'person_id' => $personId,
+                        'group_id' => $groupId,
+                    ]);
+
+                    $membershipId = (int) $stmt->fetchColumn();
+
+                    if ($membershipId > 0) {
+                        $membershipIdsByGroup[$groupId] = $membershipId;
+                    }
                 }
+
+                foreach ($membershipIdsByGroup as $membershipId) {
+                    $stmt = $pdo->prepare("
+                        DELETE FROM group_membership_sections
+                        WHERE group_membership_id = :membership_id
+                    ");
+                    $stmt->execute(['membership_id' => $membershipId]);
+                }
+
+                if ($sectionIds) {
+                    $placeholders = implode(',', array_fill(0, count($sectionIds), '?'));
+                    $stmt = $pdo->prepare("
+                        SELECT id, group_id
+                        FROM group_sections
+                        WHERE is_active = 1
+                          AND id IN ({$placeholders})
+                    ");
+                    $stmt->execute($sectionIds);
+                    $validSections = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                    foreach ($validSections as $section) {
+                        $groupId = (int) $section['group_id'];
+
+                        if (!isset($membershipIdsByGroup[$groupId])) {
+                            continue;
+                        }
+
+                        $stmt = $pdo->prepare("
+                            INSERT IGNORE INTO group_membership_sections (
+                                group_membership_id,
+                                group_section_id
+                            )
+                            VALUES (
+                                :membership_id,
+                                :section_id
+                            )
+                        ");
+                        $stmt->execute([
+                            'membership_id' => $membershipIdsByGroup[$groupId],
+                            'section_id' => (int) $section['id'],
+                        ]);
+                    }
+                }
+
+                onboarding_audit($personId, [
+                    'group_ids' => $groupIds,
+                    'section_ids' => $sectionIds,
+                    'role_title' => $roleTitle,
+                    'accreditation_count' => count($cleanAccreditations),
+                ]);
+
+                $pdo->commit();
+
+                refresh_current_user_session();
+                redirect('/index.php');
+            } catch (Throwable $e) {
+                $pdo->rollBack();
+                $error = 'Your details could not be saved. Please try again.';
             }
-
-            onboarding_audit($personId, [
-                'group_ids' => $groupIds,
-                'section_ids' => $sectionIds,
-                'role_title' => $roleTitle,
-                'accreditation_count' => count($cleanAccreditations),
-            ]);
-
-            $pdo->commit();
-
-            refresh_current_user_session();
-            redirect('/index.php');
-        } catch (Throwable $e) {
-            $pdo->rollBack();
-            $error = 'Your details could not be saved. Please try again.';
         }
     }
 }
@@ -677,6 +1202,67 @@ $pageTitle = 'Complete your profile | ' . $appName;
             }
         }
 
+        .onboarding-claim-panel {
+            background: #fff8d6;
+            border-left: 6px solid #ffdd00;
+        }
+
+        .onboarding-candidate-list {
+            display: grid;
+            gap: .75rem;
+            margin-top: 1rem;
+        }
+
+        .onboarding-candidate {
+            display: block;
+            background: #ffffff;
+            border: 1px solid #d8d8d8;
+            border-radius: .5rem;
+            padding: .9rem;
+        }
+
+        .onboarding-candidate.is-hidden {
+            display: none;
+        }
+
+        .onboarding-candidate input {
+            margin-right: .5rem;
+        }
+
+        .onboarding-candidate strong {
+            color: #4d0b93;
+            font-weight: 900;
+        }
+
+        .onboarding-candidate-meta {
+            display: block;
+            margin-top: .25rem;
+            color: #555;
+            font-weight: 700;
+        }
+
+        .onboarding-no-candidates {
+            display: none;
+            margin-top: 1rem;
+            padding: .85rem;
+            background: #ffffff;
+            border: 1px solid #d8d8d8;
+            border-radius: .5rem;
+            font-weight: 700;
+        }
+
+        .onboarding-no-candidates.is-visible {
+            display: block;
+        }
+
+        .onboarding-claim-confirm {
+            margin-top: 1rem;
+            padding: .85rem;
+            background: #ffffff;
+            border: 1px solid #d8d8d8;
+            border-radius: .5rem;
+        }
+
         .onboarding-group-section {
             display: none;
         }
@@ -859,9 +1445,9 @@ $pageTitle = 'Complete your profile | ' . $appName;
             <p class="onboarding-email"><?= e($email) ?></p>
 
             <ol class="onboarding-steps">
-                <li>Check your contact details.</li>
-                <li>Choose your Group access.</li>
-                <li>Add directory and accreditation details.</li>
+                <li>Choose your Group.</li>
+                <li>Check whether an existing leader record is already yours.</li>
+                <li>Complete your directory details.</li>
                 <li>Save to open the dashboard.</li>
             </ol>
 
@@ -898,7 +1484,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
                             disabled
                         >
                         <small class="form-text text-muted">
-                            This comes from your Microsoft sign-in and cannot be changed here.
+                            This comes from your Microsoft sign-in.
                         </small>
                     </div>
 
@@ -936,6 +1522,86 @@ $pageTitle = 'Complete your profile | ' . $appName;
                         <?php endforeach; ?>
                     </div>
                 </section>
+
+                <?php if ($claimCandidates): ?>
+                    <section class="onboarding-panel onboarding-claim-panel" id="existing-record-panel">
+                        <h2>Already listed in your Group?</h2>
+                        <p class="onboarding-panel-intro">
+                            We may already have a leader record for you from the membership import. If one of the records below is yours, select it and confirm. This will link your Microsoft sign-in to that existing record instead of creating a duplicate.
+                        </p>
+
+                        <div class="onboarding-candidate-list" id="existing-record-list">
+                            <?php foreach ($claimCandidates as $candidate): ?>
+                                <?php
+                                $candidatePersonId = (int) $candidate['person_id'];
+                                $candidateGroupId = (int) $candidate['group_id'];
+                                $hasMicrosoft = (int) ($candidate['has_microsoft_account'] ?? 0) === 1;
+                                ?>
+                                <label
+                                    class="onboarding-candidate"
+                                    data-existing-record
+                                    data-group-id="<?= $candidateGroupId ?>"
+                                    data-has-microsoft="<?= $hasMicrosoft ? '1' : '0' ?>"
+                                >
+                                    <input
+                                        type="radio"
+                                        name="existing_person_id"
+                                        value="<?= $candidatePersonId ?>"
+                                        <?= $hasMicrosoft ? 'disabled' : '' ?>
+                                    >
+                                    <strong><?= e((string) $candidate['full_name']) ?></strong>
+                                    <span class="onboarding-candidate-meta">
+                                        <?= e((string) $candidate['group_name']) ?>
+                                        <?php if (!empty($candidate['role_title'])): ?>
+                                            · <?= e((string) $candidate['role_title']) ?>
+                                        <?php elseif (!empty($candidate['membership_role'])): ?>
+                                            · <?= e(ucwords(str_replace('_', ' ', (string) $candidate['membership_role']))) ?>
+                                        <?php endif; ?>
+                                    </span>
+                                    <span class="onboarding-candidate-meta">
+                                        Email currently on record:
+                                        <?= e((string) ($candidate['primary_email'] ?: 'not set')) ?>
+                                    </span>
+                                    <?php if (!empty($candidate['section_names'])): ?>
+                                        <span class="onboarding-candidate-meta">
+                                            Sections: <?= e((string) $candidate['section_names']) ?>
+                                        </span>
+                                    <?php endif; ?>
+                                    <?php if ($hasMicrosoft): ?>
+                                        <span class="onboarding-candidate-meta">
+                                            This record is already linked to Microsoft sign-in.
+                                        </span>
+                                    <?php endif; ?>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <div class="onboarding-no-candidates" id="existing-record-empty">
+                            No active existing leader records are shown for the selected Group.
+                        </div>
+
+                        <div class="onboarding-claim-confirm">
+                            <label class="lt-check mb-3">
+                                <input
+                                    type="checkbox"
+                                    name="confirm_existing_person_claim"
+                                    value="1"
+                                >
+                                <span>I confirm the selected existing record is me.</span>
+                            </label>
+
+                            <button
+                                type="submit"
+                                name="action"
+                                value="claim_existing_person"
+                                class="btn btn-primary lt-btn"
+                                onclick="return confirm('Are you sure this existing record is yours? Your Microsoft sign-in will be linked to it.');"
+                            >
+                                This is me — link my Microsoft sign-in
+                            </button>
+                        </div>
+                    </section>
+                <?php endif; ?>
 
                 <section class="onboarding-panel">
                     <h2>Role and section information</h2>
@@ -1118,7 +1784,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
 
                 <section class="onboarding-panel">
                     <div class="onboarding-save-row">
-                        <button type="submit" class="btn btn-primary btn-lg lt-btn">
+                        <button type="submit" name="action" value="complete_onboarding" class="btn btn-primary btn-lg lt-btn">
                             Save and continue
                         </button>
 
@@ -1138,12 +1804,13 @@ $pageTitle = 'Complete your profile | ' . $appName;
     var clearButton = document.getElementById('clear_accreditation_search');
     var selectedCount = document.getElementById('selected_accreditation_count');
     var selectedTags = document.getElementById('selected_accreditation_tags');
+    var existingRecordEmpty = document.getElementById('existing-record-empty');
 
     function normalise(value) {
         return String(value || '').toLowerCase().trim();
     }
 
-    function updateSectionVisibility() {
+    function selectedGroupMap() {
         var selectedGroups = {};
 
         document.querySelectorAll('[data-group-toggle]').forEach(function (checkbox) {
@@ -1151,6 +1818,12 @@ $pageTitle = 'Complete your profile | ' . $appName;
                 selectedGroups[checkbox.getAttribute('data-group-toggle')] = true;
             }
         });
+
+        return selectedGroups;
+    }
+
+    function updateSectionVisibility() {
+        var selectedGroups = selectedGroupMap();
 
         document.querySelectorAll('[data-section-group]').forEach(function (panel) {
             var groupId = panel.getAttribute('data-section-group');
@@ -1164,6 +1837,38 @@ $pageTitle = 'Complete your profile | ' . $appName;
                 });
             }
         });
+    }
+
+    function updateExistingRecordVisibility() {
+        var selectedGroups = selectedGroupMap();
+        var selectedCount = Object.keys(selectedGroups).length;
+        var visibleCount = 0;
+
+        document.querySelectorAll('[data-existing-record]').forEach(function (candidate) {
+            var groupId = candidate.getAttribute('data-group-id');
+            var hasMicrosoft = candidate.getAttribute('data-has-microsoft') === '1';
+            var visible = selectedCount > 0 && !!selectedGroups[groupId];
+
+            candidate.classList.toggle('is-hidden', !visible);
+
+            var input = candidate.querySelector('input[type="radio"]');
+
+            if (input) {
+                input.disabled = !visible || hasMicrosoft;
+
+                if (!visible && input.checked) {
+                    input.checked = false;
+                }
+            }
+
+            if (visible) {
+                visibleCount++;
+            }
+        });
+
+        if (existingRecordEmpty) {
+            existingRecordEmpty.classList.toggle('is-visible', selectedCount > 0 && visibleCount === 0);
+        }
     }
 
     function updateSearch() {
@@ -1240,7 +1945,10 @@ $pageTitle = 'Complete your profile | ' . $appName;
     }
 
     document.querySelectorAll('[data-group-toggle]').forEach(function (checkbox) {
-        checkbox.addEventListener('change', updateSectionVisibility);
+        checkbox.addEventListener('change', function () {
+            updateSectionVisibility();
+            updateExistingRecordVisibility();
+        });
     });
 
     if (searchInput) {
@@ -1260,6 +1968,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
     });
 
     updateSectionVisibility();
+    updateExistingRecordVisibility();
     updateSearch();
     updateSelectedSummary();
 }());
