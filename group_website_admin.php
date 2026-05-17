@@ -234,10 +234,20 @@ function gwa_log_action(int $actorPersonId, string $action, string $entityType, 
 function gwa_config_first(array $keys, string $default = ''): string
 {
     foreach ($keys as $key) {
-        $value = (string) app_config($key, '');
+        if (defined($key)) {
+            $value = (string) constant($key);
 
-        if ($value !== '') {
-            return $value;
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        if (function_exists('app_config')) {
+            $value = (string) app_config($key, '');
+
+            if ($value !== '') {
+                return $value;
+            }
         }
     }
 
