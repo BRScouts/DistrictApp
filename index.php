@@ -97,7 +97,7 @@ $modules = [
         'title' => 'Comms Tool',
         'description' => 'Prepare District communications and targeted volunteer messages.',
         'url' => '/comms-tool.php',
-        'status' => 'soon',
+        'status' => 'available',
         'image' => '/assets/img/dashboard/comms.jpg',
         'visible' => $isDistrictAdmin,
     ],
