@@ -216,7 +216,7 @@ require __DIR__ . '/../layout.php';
 
     .dc-review-table {
         width: 100%;
-        min-width: 920px;
+        min-width: 860px;
         border-collapse: collapse;
         margin: 0;
     }
@@ -232,6 +232,31 @@ require __DIR__ . '/../layout.php';
     .dc-review-table th {
         background: #f5f5f5;
         font-weight: 900;
+    }
+
+    .dc-clickable-row {
+        cursor: pointer;
+    }
+
+    .dc-clickable-row:hover {
+        background: #f5f5f5;
+    }
+
+    .dc-clickable-row:focus-within {
+        outline: 3px solid #ffdd00;
+        outline-offset: -3px;
+    }
+
+    .dc-row-link {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .dc-row-link:hover,
+    .dc-row-link:focus {
+        color: inherit;
+        text-decoration: underline;
+        outline: none;
     }
 
     .dc-event-title {
@@ -285,9 +310,25 @@ require __DIR__ . '/../layout.php';
     }
 
     .dc-mobile-review-card {
+        display: block;
         border: 1px solid #d8d8d8;
         background: #fff;
         padding: 0.75rem;
+        color: #000;
+        text-decoration: none;
+    }
+
+    .dc-mobile-review-card:hover,
+    .dc-mobile-review-card:focus {
+        background: #f5f5f5;
+        color: #000;
+        outline: 3px solid #ffdd00;
+        outline-offset: 0;
+        text-decoration: none;
+    }
+
+    .dc-mobile-review-card h3 {
+        color: #000;
     }
 
     @media (min-width: 768px) {
@@ -375,17 +416,25 @@ require __DIR__ . '/../layout.php';
                             <th>When</th>
                             <th>Days until</th>
                             <th>Risk assessments</th>
-                            <th>Review</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($events as $event): ?>
                             <?php
                                 $days = isset($event['days_until_event']) ? (int) $event['days_until_event'] : null;
+                                $reviewUrl = '/dc/reviewer/review-event.php?id=' . (int) $event['id'];
                             ?>
-                            <tr>
+                            <tr
+                                class="dc-clickable-row"
+                                data-href="<?= e($reviewUrl) ?>"
+                                tabindex="0"
+                                role="link"
+                                aria-label="Open review for <?= e((string) $event['title']) ?>"
+                            >
                                 <td>
-                                    <div class="dc-event-title"><?= e((string) $event['title']) ?></div>
+                                    <a class="dc-row-link" href="<?= e($reviewUrl) ?>">
+                                        <div class="dc-event-title"><?= e((string) $event['title']) ?></div>
+                                    </a>
                                     <?php if (!empty($event['location_name'])): ?>
                                         <div class="dc-event-meta"><?= e((string) $event['location_name']) ?></div>
                                     <?php endif; ?>
@@ -412,11 +461,6 @@ require __DIR__ . '/../layout.php';
                                     </span>
                                 </td>
                                 <td><?= (int) ($event['risk_count'] ?? 0) ?></td>
-                                <td>
-                                    <a class="btn btn-primary lt-btn" href="/dc/reviewer/review-event.php?id=<?= (int) $event['id'] ?>">
-                                        Open
-                                    </a>
-                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -425,12 +469,13 @@ require __DIR__ . '/../layout.php';
 
             <div class="dc-mobile-review-list">
                 <?php foreach ($events as $event): ?>
-                    <?php $days = isset($event['days_until_event']) ? (int) $event['days_until_event'] : null; ?>
-                    <article class="dc-mobile-review-card">
+                    <?php
+                        $days = isset($event['days_until_event']) ? (int) $event['days_until_event'] : null;
+                        $reviewUrl = '/dc/reviewer/review-event.php?id=' . (int) $event['id'];
+                    ?>
+                    <a class="dc-mobile-review-card" href="<?= e($reviewUrl) ?>">
                         <h3 class="mb-1">
-                            <a href="/dc/reviewer/review-event.php?id=<?= (int) $event['id'] ?>">
-                                <?= e((string) $event['title']) ?>
-                            </a>
+                            <?= e((string) $event['title']) ?>
                         </h3>
                         <p class="mb-1">
                             <strong><?= e((string) $event['group_name']) ?></strong><br>
@@ -445,11 +490,32 @@ require __DIR__ . '/../layout.php';
                         <span class="lt-badge dc-status dc-status-<?= e((string) $event['status']) ?>">
                             <?= e(str_replace('_', ' ', (string) $event['status'])) ?>
                         </span>
-                    </article>
+                    </a>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
     </section>
 </div>
+
+<script>
+(function () {
+    document.querySelectorAll('.dc-clickable-row[data-href]').forEach(function (row) {
+        row.addEventListener('click', function (event) {
+            if (event.target.closest('a, button, input, select, textarea')) {
+                return;
+            }
+
+            window.location.href = row.getAttribute('data-href');
+        });
+
+        row.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                window.location.href = row.getAttribute('data-href');
+            }
+        });
+    });
+})();
+</script>
 
 <?php require __DIR__ . '/../layout-footer.php'; ?>
