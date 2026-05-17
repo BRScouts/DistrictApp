@@ -157,7 +157,6 @@ $modules = array_values(array_filter(
     <div class="row mb-4">
         <div class="col-lg-8">
             <h2 class="lt-page-title">Welcome, <?= e($user['preferred_name'] ?: $user['full_name'] ?: $user['email']) ?></h2>
-            <p class="lt-lede">Your access is based on your active Group memberships. Section details are used for directory filtering and targeted emails, not to restrict access inside a Group.</p>
         </div>
         <div class="col-lg-4 mt-3 mt-lg-0">
             <div class="lt-panel-grey">
