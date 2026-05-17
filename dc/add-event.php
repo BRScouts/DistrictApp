@@ -14,9 +14,7 @@ $groupId = dc_selected_group_id($requestedGroupId);
 $groups = dc_accessible_groups();
 $showGroupPicker = count($groups) > 1;
 
-$sections = dc_fetch_sections($groupId);
 $people = dc_fetch_group_people($groupId);
-
 $errors = [];
 
 $isSsoUser = ($ctx['actor_type'] ?? '') === 'person' && !empty($ctx['person_id']);
@@ -32,6 +30,14 @@ $validEventTypes = [
     'other',
 ];
 
+$sectionCountFields = [
+    'squirrels_count' => 'Squirrels',
+    'beavers_count' => 'Beavers',
+    'cubs_count' => 'Cubs',
+    'scouts_count' => 'Scouts',
+    'explorers_count' => 'Explorers',
+];
+
 function old_value(string $key, string $default = ''): string
 {
     if (!array_key_exists($key, $_POST)) {
@@ -45,15 +51,6 @@ function old_value(string $key, string $default = ''): string
     }
 
     return (string) $value;
-}
-
-function old_array_value(string $key, string|int $index, string $default = ''): string
-{
-    if (!isset($_POST[$key]) || !is_array($_POST[$key])) {
-        return $default;
-    }
-
-    return isset($_POST[$key][$index]) ? (string) $_POST[$key][$index] : $default;
 }
 
 function parse_local_datetime(string $value): ?DateTimeImmutable
@@ -116,6 +113,22 @@ function dc_fetch_current_person_for_event(int $personId, int $groupId): ?array
     return $person ?: null;
 }
 
+function parse_count_value(string $field, string $label, array &$errors): ?int
+{
+    $value = trim((string) ($_POST[$field] ?? ''));
+
+    if ($value === '') {
+        return null;
+    }
+
+    if (!ctype_digit($value)) {
+        $errors[] = $label . ' must be a whole number.';
+        return null;
+    }
+
+    return (int) $value;
+}
+
 if ($isSsoUser) {
     $currentPerson = dc_fetch_current_person_for_event((int) $ctx['person_id'], $groupId);
 }
@@ -125,7 +138,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $isDraft = $saveAction === 'draft';
 
     $groupId = dc_selected_group_id((int) ($_POST['group_id'] ?? $groupId));
-    $sections = dc_fetch_sections($groupId);
     $people = dc_fetch_group_people($groupId);
 
     $isSsoUser = ($ctx['actor_type'] ?? '') === 'person' && !empty($ctx['person_id']);
@@ -171,7 +183,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $startsAt = parse_local_datetime($startsAtRaw);
     $endsAt = parse_local_datetime($endsAtRaw);
-
     $now = new DateTimeImmutable('now');
 
     if ($title === '') {
@@ -205,61 +216,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'The selected longitude is invalid.';
     }
 
-    $validSectionIds = array_map(
-        static fn (array $section): int => (int) $section['id'],
-        $sections
-    );
-
-    $selectedSectionIds = [];
-    $sectionCounts = [];
-
-    foreach ((array) ($_POST['section_ids'] ?? []) as $sectionId) {
-        $sectionId = (int) $sectionId;
-
-        if (in_array($sectionId, $validSectionIds, true)) {
-            $selectedSectionIds[] = $sectionId;
-        }
-    }
-
-    $selectedSectionIds = array_values(array_unique($selectedSectionIds));
-
-    foreach ((array) ($_POST['section_young_people_count'] ?? []) as $sectionId => $count) {
-        $sectionId = (int) $sectionId;
-        $count = trim((string) $count);
-
-        if (!in_array($sectionId, $validSectionIds, true)) {
-            continue;
-        }
-
-        if ($count === '') {
-            $sectionCounts[$sectionId] = null;
-            continue;
-        }
-
-        if (!ctype_digit($count)) {
-            $errors[] = 'Young people numbers by section must be whole numbers.';
-            break;
-        }
-
-        $sectionCounts[$sectionId] = (int) $count;
-    }
+    $squirrelsCount = parse_count_value('squirrels_count', 'Squirrels', $errors);
+    $beaversCount = parse_count_value('beavers_count', 'Beavers', $errors);
+    $cubsCount = parse_count_value('cubs_count', 'Cubs', $errors);
+    $scoutsCount = parse_count_value('scouts_count', 'Scouts', $errors);
+    $explorersCount = parse_count_value('explorers_count', 'Explorers', $errors);
 
     $youngPeopleTotal = 0;
-    $hasSectionCount = false;
+    $hasYoungPeopleCount = false;
 
-    foreach ($selectedSectionIds as $sectionId) {
-        if (isset($sectionCounts[$sectionId]) && $sectionCounts[$sectionId] !== null) {
-            $youngPeopleTotal += (int) $sectionCounts[$sectionId];
-            $hasSectionCount = true;
+    foreach ([$squirrelsCount, $beaversCount, $cubsCount, $scoutsCount, $explorersCount] as $count) {
+        if ($count !== null) {
+            $youngPeopleTotal += $count;
+            $hasYoungPeopleCount = true;
         }
     }
 
-    if (!$isDraft && $sections && !$selectedSectionIds) {
-        $errors[] = 'Choose at least one section involved in this event.';
-    }
-
-    if (!$isDraft && $selectedSectionIds && !$hasSectionCount) {
-        $errors[] = 'Enter the number of young people attending for at least one selected section.';
+    if (!$isDraft && !$hasYoungPeopleCount) {
+        $errors[] = 'Enter the number of young people attending for at least one section.';
     }
 
     $riskTitles = isset($_POST['risk_titles']) && is_array($_POST['risk_titles'])
@@ -313,6 +287,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     starts_at,
                     ends_at,
                     young_people_count,
+                    squirrels_count,
+                    beavers_count,
+                    cubs_count,
+                    scouts_count,
+                    explorers_count,
                     adult_count,
                     leader_name,
                     leader_email,
@@ -335,6 +314,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     :starts_at,
                     :ends_at,
                     :young_people_count,
+                    :squirrels_count,
+                    :beavers_count,
+                    :cubs_count,
+                    :scouts_count,
+                    :explorers_count,
                     :adult_count,
                     :leader_name,
                     :leader_email,
@@ -359,7 +343,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'location_lng' => $locationLng !== '' ? (float) $locationLng : null,
                 'starts_at' => $startsAt?->format('Y-m-d H:i:s'),
                 'ends_at' => $endsAt?->format('Y-m-d H:i:s'),
-                'young_people_count' => $hasSectionCount ? $youngPeopleTotal : null,
+                'young_people_count' => $hasYoungPeopleCount ? $youngPeopleTotal : null,
+                'squirrels_count' => $squirrelsCount,
+                'beavers_count' => $beaversCount,
+                'cubs_count' => $cubsCount,
+                'scouts_count' => $scoutsCount,
+                'explorers_count' => $explorersCount,
                 'adult_count' => ($_POST['adult_count'] ?? '') !== '' ? (int) $_POST['adult_count'] : null,
                 'leader_name' => (string) ($selectedLeader['full_name'] ?? ''),
                 'leader_email' => (string) ($selectedLeader['primary_email'] ?? ''),
@@ -372,26 +361,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $eventId = (int) $pdo->lastInsertId();
 
-            foreach ($selectedSectionIds as $sectionId) {
-                $stmt = $pdo->prepare("
-                    INSERT IGNORE INTO calendar_event_sections (
-                        calendar_event_id,
-                        group_section_id,
-                        young_people_count
-                    ) VALUES (
-                        :event_id,
-                        :section_id,
-                        :young_people_count
-                    )
-                ");
-
-                $stmt->execute([
-                    'event_id' => $eventId,
-                    'section_id' => $sectionId,
-                    'young_people_count' => $sectionCounts[$sectionId] ?? null,
-                ]);
-            }
-
             foreach ((array) ($_POST['existing_risk_assessment_ids'] ?? []) as $riskId) {
                 $riskId = (int) $riskId;
 
@@ -399,61 +368,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     continue;
                 }
 
-                if ($isSsoUser) {
-                    $stmt = $pdo->prepare("
-                        INSERT IGNORE INTO event_risk_assessments (
-                            calendar_event_id,
-                            risk_assessment_id,
-                            source_type
-                        )
-                        SELECT
-                            :event_id,
-                            id,
-                            'selected_existing'
-                        FROM risk_assessments
-                        WHERE id = :risk_id
-                          AND group_id = :group_id
-                          AND visibility = 'group'
-                          AND status = 'active'
-                          AND admin_review_status = 'available'
-                          AND uploaded_by_person_id = :person_id
-                          AND uploaded_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
-                        LIMIT 1
-                    ");
+                $stmt = $pdo->prepare("
+                    INSERT IGNORE INTO event_risk_assessments (
+                        calendar_event_id,
+                        risk_assessment_id,
+                        source_type
+                    )
+                    SELECT
+                        :event_id,
+                        id,
+                        'selected_existing'
+                    FROM risk_assessments
+                    WHERE id = :risk_id
+                      AND group_id = :group_id
+                      AND status = 'active'
+                      AND admin_review_status = 'available'
+                      AND uploaded_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+                    LIMIT 1
+                ");
 
-                    $stmt->execute([
-                        'event_id' => $eventId,
-                        'risk_id' => $riskId,
-                        'group_id' => $groupId,
-                        'person_id' => (int) $ctx['person_id'],
-                    ]);
-                } else {
-                    $stmt = $pdo->prepare("
-                        INSERT IGNORE INTO event_risk_assessments (
-                            calendar_event_id,
-                            risk_assessment_id,
-                            source_type
-                        )
-                        SELECT
-                            :event_id,
-                            id,
-                            'selected_existing'
-                        FROM risk_assessments
-                        WHERE id = :risk_id
-                          AND group_id = :group_id
-                          AND visibility = 'group'
-                          AND status = 'active'
-                          AND admin_review_status = 'available'
-                          AND uploaded_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
-                        LIMIT 1
-                    ");
-
-                    $stmt->execute([
-                        'event_id' => $eventId,
-                        'risk_id' => $riskId,
-                        'group_id' => $groupId,
-                    ]);
-                }
+                $stmt->execute([
+                    'event_id' => $eventId,
+                    'risk_id' => $riskId,
+                    'group_id' => $groupId,
+                ]);
             }
 
             if (
@@ -553,7 +491,7 @@ $stmt = db()->prepare("
     WHERE ra.status = 'active'
       AND ra.admin_review_status = 'available'
     ORDER BY ra.uploaded_at DESC
-    LIMIT 300
+    LIMIT 500
 ");
 
 $stmt->execute();
@@ -576,32 +514,25 @@ foreach ($allRiskAssessments as $risk) {
     }
 
     $isCurrentGroup = $riskGroupId === $groupId;
-    $isDistrict = $visibility === 'district';
     $isRecent = $uploadedAt instanceof DateTimeImmutable && $uploadedAt >= $ninetyDaysAgo;
 
-    $uploadedByCurrentPerson = $isSsoUser
-        && !empty($risk['uploaded_by_person_id'])
-        && (int) $risk['uploaded_by_person_id'] === (int) $ctx['person_id'];
-
-    if ($isDistrict) {
+    if ($isCurrentGroup && $isRecent) {
+        $canSelect = true;
+        $reason = 'This belongs to your Group and is less than 90 days old. You can attach it directly.';
+    } elseif ($isCurrentGroup && !$isRecent) {
         $canSelect = false;
-        $reason = 'District risk assessments must be downloaded, reviewed and re-uploaded before use.';
-    } elseif (!$isCurrentGroup) {
+        $reason = 'This belongs to your Group but is over 90 days old. Download it, review it and re-upload an updated version.';
+    } elseif ($visibility === 'district') {
+        $canSelect = false;
+        $reason = 'This is a District-shared risk assessment from another Group. Download it, review it and upload your checked version.';
+    } else {
         $canSelect = false;
         $reason = 'This belongs to another Group. Download it, review it and upload your own version if suitable.';
-    } elseif (!$isRecent) {
-        $canSelect = false;
-        $reason = 'This risk assessment is over 90 days old. Download it, review it and re-upload an updated version.';
-    } elseif ($isSsoUser && !$uploadedByCurrentPerson) {
-        $canSelect = false;
-        $reason = 'This was uploaded by someone else. Download it, review it and re-upload your own version if suitable.';
-    } else {
-        $canSelect = true;
-        $reason = 'You can use this risk assessment directly.';
     }
 
     $riskAssessmentCards[] = [
         'id' => $riskId,
+        'group_id' => $riskGroupId,
         'title' => (string) $risk['title'],
         'description' => (string) ($risk['description'] ?? ''),
         'visibility' => $visibility,
@@ -705,11 +636,6 @@ require __DIR__ . '/layout.php';
         background: #f5f5f5;
     }
 
-    .dc-hidden-field-summary {
-        font-size: 0.95rem;
-        color: #4a4a4a;
-    }
-
     .dc-section-count-grid {
         display: grid;
         gap: 0.75rem;
@@ -771,12 +697,6 @@ require __DIR__ . '/layout.php';
         font-weight: 800;
     }
 
-    .dc-risk-table input,
-    .dc-risk-table textarea,
-    .dc-risk-table select {
-        min-width: 180px;
-    }
-
     .dc-risk-file-name {
         font-weight: 800;
         display: block;
@@ -834,7 +754,7 @@ require __DIR__ . '/layout.php';
         z-index: 2000;
         background: rgba(0, 0, 0, 0.65);
         display: none;
-        padding: 1rem;
+        padding: 0.75rem;
         overflow-y: auto;
     }
 
@@ -846,7 +766,7 @@ require __DIR__ . '/layout.php';
         background: #fff;
         border: 4px solid #000;
         max-width: 1120px;
-        margin: 2rem auto;
+        margin: 1rem auto;
     }
 
     .dc-modal-header,
@@ -880,31 +800,51 @@ require __DIR__ . '/layout.php';
     .dc-risk-card-grid {
         display: grid;
         grid-template-columns: 1fr;
-        gap: 1rem;
-    }
-
-    @media (min-width: 768px) {
-        .dc-risk-card-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
+        gap: 0.5rem;
     }
 
     .dc-risk-card {
-        border: 2px solid #d8d8d8;
-        padding: 1rem;
+        border: 1px solid #d8d8d8;
+        padding: 0.75rem;
         background: #fff;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    @media (min-width: 768px) {
+        .dc-risk-card {
+            grid-template-columns: 1fr auto;
+            align-items: start;
+        }
     }
 
     .dc-risk-card h3 {
-        font-size: 1.2rem;
-        margin: 0 0 0.5rem;
+        font-size: 1rem;
+        margin: 0 0 0.25rem;
         font-weight: 900;
     }
 
     .dc-risk-meta {
-        font-size: 0.95rem;
+        font-size: 0.875rem;
         color: #4a4a4a;
-        margin-bottom: 0.75rem;
+    }
+
+    .dc-risk-reason {
+        font-size: 0.9rem;
+        margin-top: 0.35rem;
+    }
+
+    .dc-risk-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        justify-content: flex-start;
+    }
+
+    .dc-risk-card.is-selected {
+        border-color: #00a794;
+        box-shadow: inset 0 0 0 3px #00a794;
     }
 
     .dc-risk-warning {
@@ -912,18 +852,6 @@ require __DIR__ . '/layout.php';
         background: #fff8d6;
         padding: 0.75rem;
         margin: 0.75rem 0;
-    }
-
-    .dc-risk-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 0.75rem;
-    }
-
-    .dc-risk-card.is-selected {
-        border-color: #00a794;
-        box-shadow: inset 0 0 0 3px #00a794;
     }
 
     @media (max-width: 767.98px) {
@@ -1105,6 +1033,33 @@ require __DIR__ . '/layout.php';
             Day events default to two hours. Camps, sleepovers, expeditions and nights away default to two days.
         </p>
 
+        <fieldset class="form-group">
+            <legend>Young people attending</legend>
+
+            <p class="form-text">
+                Enter numbers by section. Leave sections blank if they are not attending.
+            </p>
+
+            <div class="dc-section-count-grid">
+                <?php foreach ($sectionCountFields as $field => $label): ?>
+                    <div class="dc-section-count-row">
+                        <strong><?= e($label) ?></strong>
+                        <div>
+                            <label for="<?= e($field) ?>">Number attending</label>
+                            <input
+                                type="number"
+                                min="0"
+                                id="<?= e($field) ?>"
+                                name="<?= e($field) ?>"
+                                class="form-control"
+                                value="<?= e(old_value($field)) ?>"
+                            >
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </fieldset>
+
         <div class="form-group">
             <label for="adult_count">Adults attending</label>
             <input
@@ -1116,58 +1071,6 @@ require __DIR__ . '/layout.php';
                 value="<?= e(old_value('adult_count')) ?>"
             >
         </div>
-
-        <?php if ($sections): ?>
-            <fieldset class="form-group">
-                <legend>Sections and young people attending</legend>
-
-                <p class="form-text">
-                    Select each section involved and enter the number of young people attending from that section.
-                </p>
-
-                <div class="dc-section-count-grid">
-                    <?php foreach ($sections as $section): ?>
-                        <?php
-                            $sectionId = (int) $section['id'];
-                            $checked = in_array(
-                                (string) $sectionId,
-                                array_map('strval', (array) ($_POST['section_ids'] ?? [])),
-                                true
-                            );
-                        ?>
-                        <div class="dc-section-count-row">
-                            <label class="lt-check mb-0">
-                                <input
-                                    type="checkbox"
-                                    name="section_ids[]"
-                                    value="<?= $sectionId ?>"
-                                    data-section-checkbox
-                                    data-section-id="<?= $sectionId ?>"
-                                    <?= $checked ? 'checked' : '' ?>
-                                >
-                                <?= e((string) $section['section_name']) ?>
-                            </label>
-
-                            <div>
-                                <label for="section_young_people_count_<?= $sectionId ?>">
-                                    Young people
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    id="section_young_people_count_<?= $sectionId ?>"
-                                    name="section_young_people_count[<?= $sectionId ?>]"
-                                    class="form-control"
-                                    data-section-count="<?= $sectionId ?>"
-                                    value="<?= e(old_array_value('section_young_people_count', $sectionId)) ?>"
-                                    <?= $checked ? '' : 'disabled' ?>
-                                >
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </fieldset>
-        <?php endif; ?>
     </section>
 
     <section class="lt-panel">
@@ -1246,7 +1149,7 @@ require __DIR__ . '/layout.php';
         <div class="dc-risk-warning">
             <strong>Review every risk assessment before use.</strong>
             <p class="mb-0">
-                District risk assessments and older risk assessments cannot be attached directly. Download them, review and update them, then upload your checked version.
+                You can attach risk assessments from your own Group if they are less than 90 days old. District-shared risk assessments from other Groups must be downloaded, reviewed and re-uploaded before use.
             </p>
         </div>
 
@@ -1352,7 +1255,7 @@ require __DIR__ . '/layout.php';
         <div class="dc-modal-header">
             <h2 id="risk_modal_title" class="mb-2">Select a previous risk assessment</h2>
             <p class="mb-0">
-                You can directly select your own Group risk assessments uploaded in the last 90 days. For District risk assessments, other Groups, or older files, download and review them before re-uploading.
+                Search the risk assessment library. Only current Group risk assessments less than 90 days old can be attached directly.
             </p>
         </div>
 
@@ -1373,7 +1276,7 @@ require __DIR__ . '/layout.php';
                     <select id="risk_modal_filter" class="form-control">
                         <option value="all">All risk assessments</option>
                         <option value="selectable">Can select now</option>
-                        <option value="district">District risk assessments</option>
+                        <option value="district">District-shared</option>
                         <option value="current_group">This Group</option>
                         <option value="other_group">Other Groups</option>
                         <option value="older">Older than 90 days</option>
@@ -1409,32 +1312,6 @@ const initiallySelectedRiskIds = <?= json_encode(
 
 <script>
 (function () {
-    const checkboxes = document.querySelectorAll('[data-section-checkbox]');
-
-    checkboxes.forEach(function (checkbox) {
-        const sectionId = checkbox.getAttribute('data-section-id');
-        const countInput = document.querySelector('[data-section-count="' + sectionId + '"]');
-
-        function sync() {
-            if (!countInput) {
-                return;
-            }
-
-            countInput.disabled = !checkbox.checked;
-
-            if (!checkbox.checked) {
-                countInput.value = '';
-            }
-        }
-
-        checkbox.addEventListener('change', sync);
-        sync();
-    });
-})();
-</script>
-
-<script>
-(function () {
     const modal = document.getElementById('risk_modal');
     const openButton = document.getElementById('open_risk_modal');
     const closeButton = document.getElementById('close_risk_modal');
@@ -1448,6 +1325,8 @@ const initiallySelectedRiskIds = <?= json_encode(
     if (!modal || !openButton || !closeButton || !searchInput || !filterInput || !grid || !selectedList || !selectedInputs) {
         return;
     }
+
+    const currentGroupId = <?= (int) $groupId ?>;
 
     const selected = new Set((initiallySelectedRiskIds || []).map(function (id) {
         return Number(id);
@@ -1479,11 +1358,11 @@ const initiallySelectedRiskIds = <?= json_encode(
         }
 
         if (filter === 'current_group') {
-            return risk.group_name && Number(risk.group_id || 0) === <?= (int) $groupId ?>;
+            return Number(risk.group_id || 0) === currentGroupId;
         }
 
         if (filter === 'other_group') {
-            return risk.group_name && Number(risk.group_id || 0) !== <?= (int) $groupId ?>;
+            return Number(risk.group_id || 0) !== currentGroupId;
         }
 
         if (filter === 'older') {
@@ -1510,7 +1389,9 @@ const initiallySelectedRiskIds = <?= json_encode(
             item.className = 'dc-selected-risk-item';
 
             const text = document.createElement('div');
-            text.innerHTML = '<strong>' + escapeText(risk.title) + '</strong><br><span class="form-text">' + escapeText(risk.group_name) + ' · uploaded ' + escapeText(risk.uploaded_at) + '</span>';
+            text.innerHTML =
+                '<strong>' + escapeText(risk.title) + '</strong><br>' +
+                '<span class="form-text">' + escapeText(risk.group_name) + ' · uploaded ' + escapeText(risk.uploaded_at) + '</span>';
 
             const remove = document.createElement('button');
             remove.type = 'button';
@@ -1554,29 +1435,42 @@ const initiallySelectedRiskIds = <?= json_encode(
             card.className = 'dc-risk-card' + (selected.has(Number(risk.id)) ? ' is-selected' : '');
 
             const ageText = risk.age_days === null ? 'Age unknown' : risk.age_days + ' days old';
-            const visibilityText = risk.visibility === 'district' ? 'District' : 'Group';
-            const selectedText = selected.has(Number(risk.id)) ? 'Selected' : 'Select this risk assessment';
+            const visibilityText = risk.visibility === 'district' ? 'District-shared' : 'Group-only';
+            const selectText = selected.has(Number(risk.id)) ? 'Selected' : 'Select';
 
-            let actions = '';
-
-            if (risk.can_select) {
-                actions += '<button type="button" class="btn btn-primary lt-btn" data-select-risk="' + risk.id + '">' + selectedText + '</button>';
-            }
-
-            actions += '<a class="btn lt-btn lt-btn-secondary" href="' + escapeText(risk.download_url) + '" target="_blank" rel="noopener">Download and review</a>';
-
-            card.innerHTML =
+            const title = document.createElement('div');
+            title.innerHTML =
                 '<h3>' + escapeText(risk.title) + '</h3>' +
                 '<div class="dc-risk-meta">' +
                     escapeText(visibilityText) + ' · ' +
-                    escapeText(risk.group_name) + '<br>' +
-                    'Uploaded by ' + escapeText(risk.uploaded_by_name || 'Unknown') + '<br>' +
+                    escapeText(risk.group_name) + ' · ' +
                     escapeText(ageText) +
+                    (risk.uploaded_by_name ? '<br>Uploaded by ' + escapeText(risk.uploaded_by_name) : '') +
                 '</div>' +
-                (risk.description ? '<p>' + escapeText(risk.description) + '</p>' : '') +
-                '<div class="dc-risk-warning"><strong>' + (risk.can_select ? 'Can be selected' : 'Download required') + '</strong><br>' + escapeText(risk.reason) + '</div>' +
-                '<div class="dc-risk-actions">' + actions + '</div>';
+                '<div class="dc-risk-reason">' + escapeText(risk.reason) + '</div>';
 
+            const actions = document.createElement('div');
+            actions.className = 'dc-risk-actions';
+
+            if (risk.can_select) {
+                const selectButton = document.createElement('button');
+                selectButton.type = 'button';
+                selectButton.className = 'btn btn-primary lt-btn';
+                selectButton.textContent = selectText;
+                selectButton.setAttribute('data-select-risk', String(risk.id));
+                actions.appendChild(selectButton);
+            }
+
+            const download = document.createElement('a');
+            download.className = 'btn lt-btn lt-btn-secondary';
+            download.href = risk.download_url;
+            download.target = '_blank';
+            download.rel = 'noopener';
+            download.textContent = 'Download';
+            actions.appendChild(download);
+
+            card.appendChild(title);
+            card.appendChild(actions);
             grid.appendChild(card);
         });
     }
