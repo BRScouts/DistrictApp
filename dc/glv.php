@@ -45,6 +45,23 @@ $requestedGroupId = isset($_GET['group_id']) ? (int) $_GET['group_id'] : null;
 $selectedGroupId = dc_selected_group_id($requestedGroupId);
 $showGroupPicker = count($groups) > 1;
 
+function dc_group_options_html(?int $selectedId = null): string
+{
+    $groups = dc_accessible_groups();
+    $html = '';
+
+    foreach ($groups as $group) {
+        $groupId = (int) ($group['id'] ?? $group['group_id'] ?? 0);
+        $groupName = (string) ($group['group_name'] ?? $group['name'] ?? 'Unknown Group');
+
+        $selected = ($groupId === (int) $selectedId) ? ' selected' : '';
+
+        $html .= '<option value="' . e((string) $groupId) . '"' . $selected . '>' . e($groupName) . '</option>';
+    }
+
+    return $html;
+}
+
 function dc_glv_column_exists(string $table, string $column): bool
 {
     static $cache = [];
