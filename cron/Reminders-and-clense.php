@@ -3,28 +3,44 @@
 declare(strict_types=1);
 
 /**
- * District Calendar data cleanse cron.
+ * District Calendar data cleanse and reminder cron.
  *
- * Run from CLI:
- * php /home/brscouts/app.irvalscouts.org.uk/dc/cron/data-cleanse.php
+ * Path:
+ * /cron/data-clense.php
+ *
+ * Run manually:
+ * php /home/brscouts/app.irvalscouts.org.uk/cron/data-clense.php
+ *
+ * Suggested cron:
+ * 10 6 * * * /usr/bin/php /home/brscouts/app.irvalscouts.org.uk/cron/data-clense.php >> /home/brscouts/app.irvalscouts.org.uk/storage/logs/dc-data-clense.log 2>&1
  */
 
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('This script can only be run from the command line.');
+}
 
 require_once __DIR__ . '/../app/bootstrap.php';
 
 $pdo = db();
 
-function dc_cron_log(string $message): void
+/**
+ * -----------------------------------------------------------------------------
+ * Basic helpers
+ * -----------------------------------------------------------------------------
+ */
+
+function dc_clense_log(string $message): void
 {
     echo '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL;
 }
 
-function dc_cron_config(string $key, mixed $default = null): mixed
+function dc_clense_config(string $key, mixed $default = null): mixed
 {
     return defined($key) ? constant($key) : $default;
 }
 
-function dc_cron_app_url(): string
+function dc_clense_app_url(): string
 {
     if (defined('APP_URL')) {
         return rtrim((string) APP_URL, '/');
@@ -37,7 +53,17 @@ function dc_cron_app_url(): string
     return 'https://app.irvalscouts.org.uk';
 }
 
-function dc_cron_table_exists(string $table): bool
+function dc_clense_event_url(int $eventId): string
+{
+    return dc_clense_app_url() . '/dc/manage-event.php?id=' . $eventId;
+}
+
+function dc_clense_quote_identifier(string $identifier): string
+{
+    return '`' . str_replace('`', '``', $identifier) . '`';
+}
+
+function dc_clense_table_exists(string $table): bool
 {
     static $cache = [];
 
@@ -60,9 +86,10 @@ function dc_cron_table_exists(string $table): bool
     }
 }
 
-function dc_cron_column_exists(string $table, string $column): bool
+function dc_clense_column_exists(string $table, string $column): bool
 {
     static $cache = [];
+
     $key = $table . '.' . $column;
 
     if (array_key_exists($key, $cache)) {
@@ -88,7 +115,7 @@ function dc_cron_column_exists(string $table, string $column): bool
     }
 }
 
-function dc_cron_columns(string $table): array
+function dc_clense_columns(string $table): array
 {
     static $cache = [];
 
@@ -111,17 +138,12 @@ function dc_cron_columns(string $table): array
     }
 }
 
-function dc_cron_quote_identifier(string $identifier): string
+function dc_clense_insert_compatible(string $table, array $data): int
 {
-    return '`' . str_replace('`', '``', $identifier) . '`';
-}
-
-function dc_cron_insert_compatible(string $table, array $data): int
-{
-    $columns = dc_cron_columns($table);
+    $columns = dc_clense_columns($table);
 
     if (!$columns) {
-        throw new RuntimeException("Table {$table} does not exist or has no columns.");
+        throw new RuntimeException("Table {$table} does not exist or has no readable columns.");
     }
 
     $insert = [];
@@ -136,23 +158,115 @@ function dc_cron_insert_compatible(string $table, array $data): int
         throw new RuntimeException("No compatible columns found for {$table}.");
     }
 
-    $quotedColumns = array_map('dc_cron_quote_identifier', array_keys($insert));
-    $placeholders = array_map(static fn(string $column): string => ':' . $column, array_keys($insert));
+    $quotedColumns = array_map('dc_clense_quote_identifier', array_keys($insert));
+    $placeholders = array_map(
+        static fn(string $column): string => ':' . $column,
+        array_keys($insert)
+    );
 
     $stmt = db()->prepare("
-        INSERT INTO " . dc_cron_quote_identifier($table) . "
+        INSERT INTO " . dc_clense_quote_identifier($table) . "
         (" . implode(', ', $quotedColumns) . ")
         VALUES
         (" . implode(', ', $placeholders) . ")
     ");
+
     $stmt->execute($insert);
 
     return (int) db()->lastInsertId();
 }
 
-function dc_cron_audit_exists(string $action, int $eventId): bool
+function dc_clense_escape(string $value): string
 {
-    if (!dc_cron_table_exists('audit_log')) {
+    return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+function dc_clense_html_from_text(string $text): string
+{
+    $text = trim($text);
+
+    if ($text === '') {
+        return '';
+    }
+
+    $paragraphs = preg_split("/\n\s*\n/", $text) ?: [];
+    $html = '';
+
+    foreach ($paragraphs as $paragraph) {
+        $lines = array_map('dc_clense_escape', explode("\n", trim($paragraph)));
+        $html .= '<p>' . implode('<br>', $lines) . '</p>' . "\n";
+    }
+
+    return $html;
+}
+
+function dc_clense_format_date(?string $date): string
+{
+    if (!$date || !strtotime($date)) {
+        return 'Unknown';
+    }
+
+    return date('j M Y H:i', strtotime($date));
+}
+
+/**
+ * -----------------------------------------------------------------------------
+ * Settings
+ * -----------------------------------------------------------------------------
+ */
+
+function dc_clense_get_setting(string $key, ?string $default = null): ?string
+{
+    if (!dc_clense_table_exists('app_settings')) {
+        return $default;
+    }
+
+    try {
+        $stmt = db()->prepare("
+            SELECT setting_value
+            FROM app_settings
+            WHERE setting_key = :setting_key
+            LIMIT 1
+        ");
+        $stmt->execute(['setting_key' => $key]);
+
+        $value = $stmt->fetchColumn();
+
+        return $value === false ? $default : (string) $value;
+    } catch (Throwable $e) {
+        return $default;
+    }
+}
+
+function dc_clense_split_emails(?string $value): array
+{
+    if (!$value) {
+        return [];
+    }
+
+    $parts = preg_split('/[;,\n]+/', $value) ?: [];
+    $emails = [];
+
+    foreach ($parts as $part) {
+        $email = strtolower(trim($part));
+
+        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $emails[$email] = $email;
+        }
+    }
+
+    return array_values($emails);
+}
+
+/**
+ * -----------------------------------------------------------------------------
+ * Audit and duplicate prevention
+ * -----------------------------------------------------------------------------
+ */
+
+function dc_clense_audit_exists(string $action, int $eventId): bool
+{
+    if (!dc_clense_table_exists('audit_log')) {
         return false;
     }
 
@@ -160,14 +274,14 @@ function dc_cron_audit_exists(string $action, int $eventId): bool
         $stmt = db()->prepare("
             SELECT id
             FROM audit_log
-            WHERE entity_id = :entity_id
-              AND action = :action
+            WHERE action = :action
+              AND entity_id = :entity_id
               AND entity_type IN ('calendar_event', 'event')
             LIMIT 1
         ");
         $stmt->execute([
-            'entity_id' => $eventId,
             'action' => $action,
+            'entity_id' => $eventId,
         ]);
 
         return (bool) $stmt->fetchColumn();
@@ -176,11 +290,13 @@ function dc_cron_audit_exists(string $action, int $eventId): bool
     }
 }
 
-function dc_cron_audit(string $action, int $eventId, ?int $groupId = null, array $details = []): void
+function dc_clense_audit(string $action, int $eventId, ?int $groupId = null, array $details = []): void
 {
-    if (!dc_cron_table_exists('audit_log')) {
+    if (!dc_clense_table_exists('audit_log')) {
         return;
     }
+
+    $detailsJson = json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
     $data = [
         'actor_type' => 'system',
@@ -190,43 +306,103 @@ function dc_cron_audit(string $action, int $eventId, ?int $groupId = null, array
         'entity_type' => 'calendar_event',
         'entity_id' => $eventId,
         'action' => $action,
-        'details_json' => json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        'details' => json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        'details_json' => $detailsJson,
+        'details' => $detailsJson,
         'ip_address' => null,
-        'user_agent' => 'dc-data-cleanse-cron',
+        'user_agent' => 'dc-data-clense-cron',
         'created_at' => date('Y-m-d H:i:s'),
     ];
 
     try {
-        dc_cron_insert_compatible('audit_log', $data);
+        dc_clense_insert_compatible('audit_log', $data);
     } catch (Throwable $e) {
-        dc_cron_log('Audit skipped: ' . $e->getMessage());
+        dc_clense_log('Audit skipped: ' . $e->getMessage());
     }
 }
 
-function dc_cron_email_html(string $body): string
+function dc_clense_queue_duplicate_exists(string $notificationType, int $eventId, string $toEmail): bool
 {
-    $body = trim($body);
-    $escaped = htmlspecialchars($body, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    if (!dc_clense_table_exists('email_queue')) {
+        return false;
+    }
 
-    return '<p>' . str_replace("\n", '<br>', $escaped) . '</p>';
+    $columns = dc_clense_columns('email_queue');
+
+    if (!in_array('to_email', $columns, true)) {
+        return false;
+    }
+
+    $where = ['LOWER(to_email) = :to_email'];
+    $params = ['to_email' => strtolower($toEmail)];
+
+    if (in_array('notification_type', $columns, true)) {
+        $where[] = 'notification_type = :notification_type';
+        $params['notification_type'] = $notificationType;
+    }
+
+    if (in_array('related_entity_type', $columns, true)) {
+        $where[] = "related_entity_type = 'calendar_event'";
+    }
+
+    if (in_array('related_entity_id', $columns, true)) {
+        $where[] = 'related_entity_id = :event_id';
+        $params['event_id'] = $eventId;
+    } elseif (in_array('body', $columns, true)) {
+        $where[] = 'body LIKE :event_marker';
+        $params['event_marker'] = '%Event ID: ' . $eventId . '%';
+    }
+
+    if (in_array('status', $columns, true)) {
+        $where[] = "status IN ('pending', 'processing', 'sent')";
+    }
+
+    try {
+        $stmt = db()->prepare("
+            SELECT id
+            FROM email_queue
+            WHERE " . implode(' AND ', $where) . "
+            LIMIT 1
+        ");
+        $stmt->execute($params);
+
+        return (bool) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
-function dc_cron_queue_email(
+/**
+ * -----------------------------------------------------------------------------
+ * Email queue
+ * -----------------------------------------------------------------------------
+ */
+
+function dc_clense_queue_email(
     string $toEmail,
     ?string $toName,
     string $subject,
     string $plainBody,
     string $notificationType,
     int $eventId
-): void {
+): bool {
     $toEmail = strtolower(trim($toEmail));
 
     if (!filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
-        return;
+        dc_clense_log("Skipped invalid email for event #{$eventId}: {$toEmail}");
+        return false;
     }
 
-    $htmlBody = dc_cron_email_html($plainBody);
+    if (!dc_clense_table_exists('email_queue')) {
+        throw new RuntimeException('email_queue table does not exist.');
+    }
+
+    if (dc_clense_queue_duplicate_exists($notificationType, $eventId, $toEmail)) {
+        dc_clense_log("Skipped duplicate queued email: {$notificationType} event #{$eventId} to {$toEmail}");
+        return false;
+    }
+
+    $plainBody = trim($plainBody) . "\n\nEvent ID: {$eventId}";
+    $htmlBody = dc_clense_html_from_text($plainBody);
 
     $data = [
         'to_email' => $toEmail,
@@ -234,27 +410,30 @@ function dc_cron_queue_email(
         'subject' => $subject,
         'body' => $plainBody,
         'body_html' => $htmlBody,
+        'body_markdown' => null,
         'status' => 'pending',
+        'attempt_count' => 0,
         'notification_type' => $notificationType,
         'related_entity_type' => 'calendar_event',
         'related_entity_id' => $eventId,
+        'created_by_person_id' => null,
         'created_at' => date('Y-m-d H:i:s'),
     ];
 
-    dc_cron_insert_compatible('email_queue', $data);
+    $queueId = dc_clense_insert_compatible('email_queue', $data);
+
+    dc_clense_log("Queued email #{$queueId}: {$notificationType} event #{$eventId} to {$toEmail}");
+
+    return true;
 }
 
-function dc_cron_event_url(int $eventId): string
-{
-    return dc_cron_app_url() . '/dc/manage-event.php?id=' . $eventId;
-}
+/**
+ * -----------------------------------------------------------------------------
+ * Risk assessment mapping cleanup
+ * -----------------------------------------------------------------------------
+ */
 
-function dc_cron_public_calendar_url(): string
-{
-    return dc_cron_app_url() . '/dc/';
-}
-
-function dc_cron_find_event_risk_mapping(): ?array
+function dc_clense_find_event_risk_mapping(): ?array
 {
     static $mapping = null;
     static $checked = false;
@@ -275,11 +454,11 @@ function dc_cron_find_event_risk_mapping(): ?array
     ];
 
     foreach ($preferredTables as $table) {
-        if (!dc_cron_table_exists($table)) {
+        if (!dc_clense_table_exists($table)) {
             continue;
         }
 
-        if (dc_cron_column_exists($table, 'event_id') && dc_cron_column_exists($table, 'risk_assessment_id')) {
+        if (dc_clense_column_exists($table, 'event_id') && dc_clense_column_exists($table, 'risk_assessment_id')) {
             return $mapping = [
                 'table' => $table,
                 'event_column' => 'event_id',
@@ -287,7 +466,7 @@ function dc_cron_find_event_risk_mapping(): ?array
             ];
         }
 
-        if (dc_cron_column_exists($table, 'calendar_event_id') && dc_cron_column_exists($table, 'risk_assessment_id')) {
+        if (dc_clense_column_exists($table, 'calendar_event_id') && dc_clense_column_exists($table, 'risk_assessment_id')) {
             return $mapping = [
                 'table' => $table,
                 'event_column' => 'calendar_event_id',
@@ -312,7 +491,7 @@ function dc_cron_find_event_risk_mapping(): ?array
                 continue;
             }
 
-            if (dc_cron_column_exists($table, 'event_id') && dc_cron_column_exists($table, 'risk_assessment_id')) {
+            if (dc_clense_column_exists($table, 'event_id') && dc_clense_column_exists($table, 'risk_assessment_id')) {
                 return $mapping = [
                     'table' => $table,
                     'event_column' => 'event_id',
@@ -320,7 +499,7 @@ function dc_cron_find_event_risk_mapping(): ?array
                 ];
             }
 
-            if (dc_cron_column_exists($table, 'calendar_event_id') && dc_cron_column_exists($table, 'risk_assessment_id')) {
+            if (dc_clense_column_exists($table, 'calendar_event_id') && dc_clense_column_exists($table, 'risk_assessment_id')) {
                 return $mapping = [
                     'table' => $table,
                     'event_column' => 'calendar_event_id',
@@ -335,7 +514,7 @@ function dc_cron_find_event_risk_mapping(): ?array
     return $mapping = null;
 }
 
-function dc_cron_delete_event_risk_links(array $eventIds): int
+function dc_clense_delete_event_risk_links(array $eventIds): int
 {
     $eventIds = array_values(array_unique(array_filter(array_map('intval', $eventIds))));
 
@@ -343,14 +522,14 @@ function dc_cron_delete_event_risk_links(array $eventIds): int
         return 0;
     }
 
-    $mapping = dc_cron_find_event_risk_mapping();
+    $mapping = dc_clense_find_event_risk_mapping();
 
     if (!$mapping) {
         return 0;
     }
 
-    $table = dc_cron_quote_identifier((string) $mapping['table']);
-    $eventColumn = dc_cron_quote_identifier((string) $mapping['event_column']);
+    $table = dc_clense_quote_identifier((string) $mapping['table']);
+    $eventColumn = dc_clense_quote_identifier((string) $mapping['event_column']);
     $placeholders = implode(',', array_fill(0, count($eventIds), '?'));
 
     $stmt = db()->prepare("
@@ -362,27 +541,29 @@ function dc_cron_delete_event_risk_links(array $eventIds): int
     return $stmt->rowCount();
 }
 
-function dc_cron_fetch_reviewer_recipients(): array
+/**
+ * -----------------------------------------------------------------------------
+ * Recipients
+ * -----------------------------------------------------------------------------
+ */
+
+function dc_clense_reviewer_recipients(): array
 {
-    $configured = '';
-
-    if (function_exists('dc_setting')) {
-        $configured = (string) dc_setting('event_notification_recipients', '');
-    }
-
     $recipients = [];
 
-    foreach (preg_split('/[;,\n]+/', $configured) ?: [] as $email) {
-        $email = strtolower(trim($email));
+    $configured = dc_clense_get_setting('event_notification_recipients', '');
 
-        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $recipients[$email] = [
-                'email' => $email,
-                'name' => null,
-            ];
-        }
+    foreach (dc_clense_split_emails($configured) as $email) {
+        $recipients[$email] = [
+            'email' => $email,
+            'name' => null,
+            'source' => 'app_settings',
+        ];
     }
 
+    /*
+     * Pull district admins/reviewers from group memberships where available.
+     */
     try {
         $stmt = db()->query("
             SELECT DISTINCT
@@ -405,42 +586,84 @@ function dc_cron_fetch_reviewer_recipients(): array
                 $recipients[$email] = [
                     'email' => $email,
                     'name' => (string) ($row['full_name'] ?? ''),
+                    'source' => 'group_memberships',
                 ];
             }
         }
     } catch (Throwable $e) {
-        // Some installs may not hold district permissions at membership level.
+        dc_clense_log('Reviewer lookup from group_memberships skipped: ' . $e->getMessage());
+    }
+
+    /*
+     * Pull district admins/reviewers from people.highest_access_level where available.
+     */
+    if (dc_clense_column_exists('people', 'highest_access_level')) {
+        try {
+            $stmt = db()->query("
+                SELECT DISTINCT
+                    full_name,
+                    primary_email
+                FROM people
+                WHERE status = 'active'
+                  AND primary_email IS NOT NULL
+                  AND primary_email <> ''
+                  AND highest_access_level IN ('district_reviewer', 'district_admin', 'system_admin')
+            ");
+
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $email = strtolower(trim((string) $row['primary_email']));
+
+                if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $recipients[$email] = [
+                        'email' => $email,
+                        'name' => (string) ($row['full_name'] ?? ''),
+                        'source' => 'people.highest_access_level',
+                    ];
+                }
+            }
+        } catch (Throwable $e) {
+            dc_clense_log('Reviewer lookup from people.highest_access_level skipped: ' . $e->getMessage());
+        }
     }
 
     return array_values($recipients);
 }
 
-function dc_cron_queue_draft_reminder(array $event, string $type): bool
+/**
+ * -----------------------------------------------------------------------------
+ * Reminder queueing
+ * -----------------------------------------------------------------------------
+ */
+
+function dc_clense_queue_draft_reminder(array $event, string $type): bool
 {
     $eventId = (int) $event['id'];
+    $groupId = (int) $event['group_id'];
 
     $action = match ($type) {
-        'eight_day' => 'calendar_draft_reminder_8_days_queued',
         'day_before' => 'calendar_draft_reminder_day_before_queued',
-        default => throw new RuntimeException('Invalid reminder type.'),
+        'eight_day' => 'calendar_draft_reminder_8_days_queued',
+        default => throw new RuntimeException('Unknown draft reminder type.'),
     };
 
-    if (dc_cron_audit_exists($action, $eventId)) {
+    if (dc_clense_audit_exists($action, $eventId)) {
+        dc_clense_log("Skipped already-audited draft reminder {$type} for event #{$eventId}");
         return false;
     }
 
     $recipient = strtolower(trim((string) ($event['leader_email'] ?? '')));
 
     if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+        dc_clense_log("Skipped draft reminder for event #{$eventId}; no valid leader_email.");
         return false;
     }
 
-    $leaderName = trim((string) ($event['leader_name'] ?? ''));
-    $helloName = $leaderName !== '' ? $leaderName : 'there';
     $eventTitle = (string) ($event['title'] ?? 'Untitled event');
     $groupName = (string) ($event['group_name'] ?? 'Unknown Group');
-    $start = date('j M Y H:i', strtotime((string) $event['starts_at']));
-    $eventUrl = dc_cron_event_url($eventId);
+    $leaderName = trim((string) ($event['leader_name'] ?? ''));
+    $helloName = $leaderName !== '' ? $leaderName : 'there';
+    $start = dc_clense_format_date((string) ($event['starts_at'] ?? ''));
+    $eventUrl = dc_clense_event_url($eventId);
 
     if ($type === 'day_before') {
         $subject = 'Draft event still not submitted: ' . $eventTitle;
@@ -450,70 +673,78 @@ function dc_cron_queue_draft_reminder(array $event, string $type): bool
             . "Group: {$groupName}\n"
             . "Start: {$start}\n\n"
             . "If the event is still going ahead, please open the draft and submit it as soon as possible:\n"
-            . "{$eventUrl}\n";
+            . "{$eventUrl}";
     } else {
         $subject = 'Reminder: submit your draft District Calendar event';
         $body = "Hello {$helloName},\n\n"
-            . "You have a District Calendar event saved as a draft with less than 8 days to g until the scheduled start.\n\n"
+            . "You have a District Calendar event saved as a draft with less than 8 days to go.\n\n"
             . "Event: {$eventTitle}\n"
             . "Group: {$groupName}\n"
             . "Start: {$start}\n\n"
             . "Please submit it for review if the event is still going ahead:\n"
-            . "{$eventUrl}\n";
+            . "{$eventUrl}";
     }
 
-    dc_cron_queue_email(
+    $queued = dc_clense_queue_email(
         $recipient,
         $leaderName !== '' ? $leaderName : null,
         $subject,
         $body,
-        'calendar_draft_reminder',
+        'calendar_draft_reminder_' . $type,
         $eventId
     );
 
-    dc_cron_audit($action, $eventId, (int) $event['group_id'], [
-        'recipient' => $recipient,
-        'event_title' => $eventTitle,
-        'starts_at' => $event['starts_at'],
-    ]);
+    if ($queued) {
+        dc_clense_audit($action, $eventId, $groupId, [
+            'recipient' => $recipient,
+            'type' => $type,
+            'title' => $eventTitle,
+            'starts_at' => $event['starts_at'] ?? null,
+        ]);
+    }
 
-    return true;
+    return $queued;
 }
 
-function dc_cron_queue_reviewer_reminder(array $event): int
+function dc_clense_queue_review_reminder(array $event): int
 {
     $eventId = (int) $event['id'];
+    $groupId = (int) $event['group_id'];
     $action = 'calendar_review_reminder_queued';
 
-    if (dc_cron_audit_exists($action, $eventId)) {
+    if (dc_clense_audit_exists($action, $eventId)) {
+        dc_clense_log("Skipped already-audited review reminder for event #{$eventId}");
         return 0;
     }
 
-    $recipients = dc_cron_fetch_reviewer_recipients();
+    $recipients = dc_clense_reviewer_recipients();
 
     if (!$recipients) {
+        dc_clense_log("No reviewer recipients found for event #{$eventId}");
         return 0;
     }
 
     $eventTitle = (string) ($event['title'] ?? 'Untitled event');
     $groupName = (string) ($event['group_name'] ?? 'Unknown Group');
-    $start = date('j M Y H:i', strtotime((string) $event['starts_at']));
-    $eventUrl = dc_cron_event_url($eventId);
+    $status = (string) ($event['status'] ?? 'unknown');
+    $start = dc_clense_format_date((string) ($event['starts_at'] ?? ''));
+    $eventUrl = dc_clense_event_url($eventId);
 
     $subject = 'Event waiting for review: ' . $eventTitle;
+
     $body = "A District Calendar event is waiting for review and is coming up soon.\n\n"
         . "Event: {$eventTitle}\n"
         . "Group: {$groupName}\n"
         . "Start: {$start}\n"
-        . "Status: {$event['status']}\n\n"
+        . "Status: {$status}\n\n"
         . "Review the event here:\n"
-        . "{$eventUrl}\n";
+        . "{$eventUrl}";
 
-    $queued = 0;
+    $queuedCount = 0;
 
     foreach ($recipients as $recipient) {
-        dc_cron_queue_email(
-            $recipient['email'],
+        $queued = dc_clense_queue_email(
+            (string) $recipient['email'],
             $recipient['name'] ?: null,
             $subject,
             $body,
@@ -521,65 +752,58 @@ function dc_cron_queue_reviewer_reminder(array $event): int
             $eventId
         );
 
-        $queued++;
+        if ($queued) {
+            $queuedCount++;
+        }
     }
 
-    dc_cron_audit($action, $eventId, (int) $event['group_id'], [
-        'recipient_count' => $queued,
-        'event_title' => $eventTitle,
-        'starts_at' => $event['starts_at'],
-    ]);
+    if ($queuedCount > 0) {
+        dc_clense_audit($action, $eventId, $groupId, [
+            'recipient_count' => $queuedCount,
+            'title' => $eventTitle,
+            'starts_at' => $event['starts_at'] ?? null,
+            'status' => $status,
+        ]);
+    }
 
-    return $queued;
+    return $queuedCount;
 }
 
-try {
-    dc_cron_log('Starting District Calendar data cleanse.');
+/**
+ * -----------------------------------------------------------------------------
+ * Main runner
+ * -----------------------------------------------------------------------------
+ */
 
-    if (!dc_cron_table_exists('calendar_events')) {
+try {
+    dc_clense_log('Starting District Calendar data clense.');
+
+    if (!dc_clense_table_exists('calendar_events')) {
         throw new RuntimeException('calendar_events table not found.');
     }
 
-    $pdo->beginTransaction();
-
-    /*
-    |--------------------------------------------------------------------------
-    | 1. Delete expired draft events
-    |--------------------------------------------------------------------------
-    */
-    $stmt = $pdo->prepare("
-        SELECT id
-        FROM calendar_events
-        WHERE status = 'draft'
-          AND ends_at < NOW()
-    ");
-    $stmt->execute();
-
-    $expiredDraftIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
-    $deletedRiskLinks = 0;
-
-    if ($expiredDraftIds) {
-        $deletedRiskLinks = dc_cron_delete_event_risk_links($expiredDraftIds);
-
-        $placeholders = implode(',', array_fill(0, count($expiredDraftIds), '?'));
-
-        $deleteEvents = $pdo->prepare("
-            DELETE FROM calendar_events
-            WHERE id IN ({$placeholders})
-              AND status = 'draft'
-              AND ends_at < NOW()
-        ");
-        $deleteEvents->execute($expiredDraftIds);
+    if (!dc_clense_table_exists('email_queue')) {
+        throw new RuntimeException('email_queue table not found.');
     }
 
-    dc_cron_log('Deleted expired draft events: ' . count($expiredDraftIds));
-    dc_cron_log('Deleted expired draft risk links: ' . $deletedRiskLinks);
+    $deleteAfterDays = (int) dc_clense_config('DC_EVENT_DELETE_AFTER_DAYS', 365);
+    $deleteAfterDays = max(365, $deleteAfterDays);
+
+    $draftReminderDays = (int) dc_clense_config('DC_DRAFT_REMINDER_DAYS_BEFORE_START', 8);
+    $draftReminderDays = max(2, min($draftReminderDays, 30));
+
+    $reviewReminderDays = (int) dc_clense_config('DC_REVIEW_REMINDER_DAYS_BEFORE_START', 7);
+    $reviewReminderDays = max(1, min($reviewReminderDays, 30));
+
+    dc_clense_log("Delete threshold: events ended more than {$deleteAfterDays} days ago.");
+    dc_clense_log("Draft reminder threshold: less than {$draftReminderDays} days before start.");
+    dc_clense_log("Review reminder threshold: less than {$reviewReminderDays} days before start.");
 
     /*
-    |--------------------------------------------------------------------------
-    | 2. Day-before draft reminders
-    |--------------------------------------------------------------------------
-    */
+     * -------------------------------------------------------------------------
+     * 1. Queue day-before draft reminders
+     * -------------------------------------------------------------------------
+     */
     $stmt = $pdo->prepare("
         SELECT
             ce.*,
@@ -590,27 +814,31 @@ try {
         WHERE ce.status = 'draft'
           AND ce.leader_email IS NOT NULL
           AND ce.leader_email <> ''
-          AND DATE(ce.starts_at) = DATE(DATE_ADD(NOW(), INTERVAL 1 DAY))
+          AND ce.starts_at >= DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+          AND ce.starts_at < DATE_ADD(CURDATE(), INTERVAL 2 DAY)
+        ORDER BY ce.starts_at ASC
     ");
     $stmt->execute();
-
     $dayBeforeDrafts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    dc_clense_log('Day-before draft candidates: ' . count($dayBeforeDrafts));
+
     $dayBeforeQueued = 0;
 
     foreach ($dayBeforeDrafts as $event) {
-        if (dc_cron_queue_draft_reminder($event, 'day_before')) {
+        if (dc_clense_queue_draft_reminder($event, 'day_before')) {
             $dayBeforeQueued++;
         }
     }
 
-    dc_cron_log('Queued day-before draft reminders: ' . $dayBeforeQueued);
+    dc_clense_log('Day-before draft reminders queued: ' . $dayBeforeQueued);
 
     /*
-    |--------------------------------------------------------------------------
-    | 3. Less-than-8-days draft reminders
-    | Excludes tomorrow because those get the stronger day-before reminder.
-    |--------------------------------------------------------------------------
-    */
+     * -------------------------------------------------------------------------
+     * 2. Queue less-than-8-days draft reminders
+     * Excludes tomorrow because those get the stronger day-before reminder.
+     * -------------------------------------------------------------------------
+     */
     $stmt = $pdo->prepare("
         SELECT
             ce.*,
@@ -621,30 +849,30 @@ try {
         WHERE ce.status = 'draft'
           AND ce.leader_email IS NOT NULL
           AND ce.leader_email <> ''
-          AND ce.starts_at > DATE_ADD(NOW(), INTERVAL 1 DAY)
-          AND ce.starts_at < DATE_ADD(NOW(), INTERVAL 8 DAY)
+          AND ce.starts_at >= DATE_ADD(CURDATE(), INTERVAL 2 DAY)
+          AND ce.starts_at < DATE_ADD(NOW(), INTERVAL {$draftReminderDays} DAY)
+        ORDER BY ce.starts_at ASC
     ");
     $stmt->execute();
-
     $eightDayDrafts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    dc_clense_log('Less-than-' . $draftReminderDays . '-days draft candidates: ' . count($eightDayDrafts));
+
     $eightDayQueued = 0;
 
     foreach ($eightDayDrafts as $event) {
-        if (dc_cron_queue_draft_reminder($event, 'eight_day')) {
+        if (dc_clense_queue_draft_reminder($event, 'eight_day')) {
             $eightDayQueued++;
         }
     }
 
-    dc_cron_log('Queued less-than-8-days draft reminders: ' . $eightDayQueued);
+    dc_clense_log('Less-than-' . $draftReminderDays . '-days draft reminders queued: ' . $eightDayQueued);
 
     /*
-    |--------------------------------------------------------------------------
-    | 4. Reviewer reminders for events still waiting review
-    |--------------------------------------------------------------------------
-    */
-    $reviewReminderDays = (int) dc_cron_config('DC_REVIEW_REMINDER_DAYS_BEFORE_START', 7);
-    $reviewReminderDays = max(1, min($reviewReminderDays, 30));
-
+     * -------------------------------------------------------------------------
+     * 3. Queue reviewer reminders
+     * -------------------------------------------------------------------------
+     */
     $stmt = $pdo->prepare("
         SELECT
             ce.*,
@@ -655,15 +883,18 @@ try {
         WHERE ce.status IN ('submitted', 'under_review', 'changes_requested')
           AND ce.starts_at >= NOW()
           AND ce.starts_at < DATE_ADD(NOW(), INTERVAL {$reviewReminderDays} DAY)
+        ORDER BY ce.starts_at ASC
     ");
     $stmt->execute();
-
     $reviewEvents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $reviewEmailsQueued = 0;
+
+    dc_clense_log('Reviewer reminder candidates: ' . count($reviewEvents));
+
     $reviewEventsQueued = 0;
+    $reviewEmailsQueued = 0;
 
     foreach ($reviewEvents as $event) {
-        $queued = dc_cron_queue_reviewer_reminder($event);
+        $queued = dc_clense_queue_review_reminder($event);
 
         if ($queued > 0) {
             $reviewEventsQueued++;
@@ -671,15 +902,51 @@ try {
         }
     }
 
-    dc_cron_log('Review reminder events queued: ' . $reviewEventsQueued);
-    dc_cron_log('Review reminder emails queued: ' . $reviewEmailsQueued);
+    dc_clense_log('Reviewer reminder events queued: ' . $reviewEventsQueued);
+    dc_clense_log('Reviewer reminder emails queued: ' . $reviewEmailsQueued);
 
-     
-} catch (Throwable $e) {
-    if ($pdo->inTransaction()) {
-        $pdo->rollBack();
+    /*
+     * -------------------------------------------------------------------------
+     * 4. Delete old draft/cancelled/rejected events only after one year minimum
+     * -------------------------------------------------------------------------
+     */
+    $stmt = $pdo->prepare("
+        SELECT id
+        FROM calendar_events
+        WHERE status IN ('draft', 'cancelled', 'rejected')
+          AND ends_at < DATE_SUB(NOW(), INTERVAL {$deleteAfterDays} DAY)
+    ");
+    $stmt->execute();
+
+    $oldEventIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+
+    dc_clense_log('Old draft/cancelled/rejected candidates for deletion: ' . count($oldEventIds));
+
+    $deletedRiskLinks = 0;
+    $deletedEvents = 0;
+
+    if ($oldEventIds) {
+        $deletedRiskLinks = dc_clense_delete_event_risk_links($oldEventIds);
+
+        $placeholders = implode(',', array_fill(0, count($oldEventIds), '?'));
+
+        $deleteStmt = $pdo->prepare("
+            DELETE FROM calendar_events
+            WHERE id IN ({$placeholders})
+              AND status IN ('draft', 'cancelled', 'rejected')
+              AND ends_at < DATE_SUB(NOW(), INTERVAL {$deleteAfterDays} DAY)
+        ");
+        $deleteStmt->execute($oldEventIds);
+
+        $deletedEvents = $deleteStmt->rowCount();
     }
 
-    dc_cron_log('ERROR: ' . $e->getMessage());
+    dc_clense_log('Deleted old risk assessment links: ' . $deletedRiskLinks);
+    dc_clense_log('Deleted old draft/cancelled/rejected events: ' . $deletedEvents);
+
+    dc_clense_log('District Calendar data clense completed.');
+    exit(0);
+} catch (Throwable $e) {
+    dc_clense_log('ERROR: ' . $e->getMessage());
     exit(1);
 }
