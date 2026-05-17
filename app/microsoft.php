@@ -14,7 +14,6 @@ function microsoft_provider(): GenericProvider
         'clientId' => app_config('MS_CLIENT_ID'),
         'clientSecret' => app_config('MS_CLIENT_SECRET'),
         'redirectUri' => app_config('MS_REDIRECT_URI'),
-
         'urlAuthorize' => "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/authorize",
         'urlAccessToken' => "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/token",
         'urlResourceOwnerDetails' => '',
@@ -27,8 +26,7 @@ function decode_microsoft_id_token(string $idToken): array
     $tenantId = app_config('MS_TENANT_ID');
     $clientId = app_config('MS_CLIENT_ID');
 
-    $jwksUrl = "https://login.microsoftonline.com/{$tenantId}/discovery/v2.0/keys";
-    $jwksJson = file_get_contents($jwksUrl);
+    $jwksJson = file_get_contents("https://login.microsoftonline.com/{$tenantId}/discovery/v2.0/keys");
 
     if ($jwksJson === false) {
         throw new RuntimeException('Unable to fetch Microsoft signing keys.');
@@ -40,17 +38,16 @@ function decode_microsoft_id_token(string $idToken): array
         throw new RuntimeException('Invalid Microsoft signing key response.');
     }
 
-    $keys = JWK::parseKeySet($jwks, 'RS256');    $decoded = JWT::decode($idToken, $keys);
-    $decoded = JWT::decode($idToken, $keys);
+    $decoded = JWT::decode($idToken, JWK::parseKeySet($jwks, 'RS256'));
     $claims = json_decode(json_encode($decoded), true);
 
     if (($claims['aud'] ?? null) !== $clientId) {
         throw new RuntimeException('Invalid Microsoft token audience.');
     }
 
-    if (!isset($claims['iss']) || !str_contains($claims['iss'], (string) $tenantId)) {
+    if (!isset($claims['iss']) || !str_contains((string) $claims['iss'], (string) $tenantId)) {
         throw new RuntimeException('Invalid Microsoft token issuer.');
     }
 
-    return $claims;
+    return is_array($claims) ? $claims : [];
 }

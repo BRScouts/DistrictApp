@@ -25,12 +25,27 @@ function login_user(array $user): void
 
     $_SESSION['portal_user'] = [
         'id' => (int) $user['id'],
+        'person_id' => (int) $user['id'],
         'full_name' => $user['full_name'] ?? '',
-        'email' => $user['email'] ?? '',
-        'role' => $user['role'] ?? 'user',
+        'preferred_name' => $user['preferred_name'] ?? null,
+        'email' => $user['primary_email'] ?? $user['email'] ?? '',
+        'role' => $user['highest_access_level'] ?? 'member',
+        'highest_access_level' => $user['highest_access_level'] ?? 'member',
         'microsoft_oid' => $user['microsoft_oid'] ?? null,
         'auth_provider' => $user['auth_provider'] ?? 'microsoft',
+        'status' => $user['status'] ?? 'pending',
     ];
+}
+
+function refresh_current_user_session(): void
+{
+    $user = current_user();
+
+    if (!$user) {
+        return;
+    }
+
+    login_user(get_user_by_id((int) $user['id']));
 }
 
 function logout_user(): void
@@ -57,7 +72,7 @@ function logout_user(): void
 function find_or_create_microsoft_user(array $claims): array
 {
     $microsoftOid = $claims['oid'] ?? null;
-    $email = $claims['preferred_username'] ?? $claims['email'] ?? null;
+    $email = $claims['preferred_username'] ?? $claims['email'] ?? $claims['upn'] ?? null;
     $fullName = $claims['name'] ?? $email;
 
     if (!$microsoftOid || !$email) {
@@ -65,111 +80,62 @@ function find_or_create_microsoft_user(array $claims): array
     }
 
     $pdo = db();
+    $pdo->beginTransaction();
 
-    /*
-     * 1. Match by Microsoft Object ID.
-     */
-    $stmt = $pdo->prepare("
-        SELECT *
-        FROM admin_users
-        WHERE microsoft_oid = :microsoft_oid
-        LIMIT 1
-    ");
+    try {
+        $stmt = $pdo->prepare("\n            SELECT p.id\n            FROM user_accounts ua\n            JOIN people p ON p.id = ua.person_id\n            WHERE ua.provider = 'microsoft'\n              AND ua.provider_subject = :provider_subject\n            LIMIT 1\n        ");
 
-    $stmt->execute([
-        'microsoft_oid' => $microsoftOid,
-    ]);
+        $stmt->execute(['provider_subject' => $microsoftOid]);
+        $personId = $stmt->fetchColumn();
 
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$personId) {
+            $stmt = $pdo->prepare("\n                SELECT id\n                FROM people\n                WHERE LOWER(primary_email) = LOWER(:email)\n                LIMIT 1\n            ");
 
-    if ($user) {
-        touch_sso_login((int) $user['id']);
-        return get_user_by_id((int) $user['id']);
-    }
+            $stmt->execute(['email' => $email]);
+            $personId = $stmt->fetchColumn();
+        }
 
-    /*
-     * 2. Match by email.
-     * This links existing admin_users records to Microsoft SSO.
-     */
-    $stmt = $pdo->prepare("
-        SELECT *
-        FROM admin_users
-        WHERE LOWER(email) = LOWER(:email)
-        LIMIT 1
-    ");
+        if ($personId) {
+            $stmt = $pdo->prepare("\n                UPDATE people\n                SET full_name = CASE\n                        WHEN full_name IS NULL OR full_name = '' THEN :full_name\n                        ELSE full_name\n                    END,\n                    primary_email = COALESCE(primary_email, :email),\n                    status = CASE WHEN status = 'inactive' THEN status ELSE 'active' END\n                WHERE id = :person_id\n            ");
 
-    $stmt->execute([
-        'email' => $email,
-    ]);
+            $stmt->execute([
+                'full_name' => $fullName,
+                'email' => $email,
+                'person_id' => (int) $personId,
+            ]);
+        } else {
+            $stmt = $pdo->prepare("\n                INSERT INTO people (full_name, primary_email, status)\n                VALUES (:full_name, :email, 'active')\n            ");
 
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt->execute([
+                'full_name' => $fullName,
+                'email' => $email,
+            ]);
 
-    if ($user) {
-        $stmt = $pdo->prepare("
-            UPDATE admin_users
-            SET microsoft_oid = :microsoft_oid,
-                auth_provider = 'microsoft',
-                full_name = CASE
-                    WHEN full_name IS NULL OR full_name = '' THEN :full_name
-                    ELSE full_name
-                END,
-                last_sso_login_at = NOW()
-            WHERE id = :id
-        ");
+            $personId = (int) $pdo->lastInsertId();
+        }
+
+        $stmt = $pdo->prepare("\n            INSERT INTO user_accounts (person_id, provider, provider_subject, email, last_login_at)\n            VALUES (:person_id, 'microsoft', :provider_subject, :email, NOW())\n            ON DUPLICATE KEY UPDATE\n                person_id = VALUES(person_id),\n                email = VALUES(email),\n                last_login_at = NOW()\n        ");
 
         $stmt->execute([
-            'microsoft_oid' => $microsoftOid,
-            'full_name' => $fullName,
-            'id' => (int) $user['id'],
+            'person_id' => (int) $personId,
+            'provider_subject' => $microsoftOid,
+            'email' => $email,
         ]);
 
-        return get_user_by_id((int) $user['id']);
+        $pdo->commit();
+
+        return get_user_by_id((int) $personId);
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
     }
-
-    /*
-     * 3. Create new user.
-     * New Microsoft users start with role = user.
-     */
-    $stmt = $pdo->prepare("
-        INSERT INTO admin_users (
-            full_name,
-            email,
-            role,
-            microsoft_oid,
-            auth_provider,
-            last_sso_login_at
-        ) VALUES (
-            :full_name,
-            :email,
-            'user',
-            :microsoft_oid,
-            'microsoft',
-            NOW()
-        )
-    ");
-
-    $stmt->execute([
-        'full_name' => $fullName,
-        'email' => $email,
-        'microsoft_oid' => $microsoftOid,
-    ]);
-
-    return get_user_by_id((int) $pdo->lastInsertId());
 }
 
 function get_user_by_id(int $userId): array
 {
-    $stmt = db()->prepare("
-        SELECT *
-        FROM admin_users
-        WHERE id = :id
-        LIMIT 1
-    ");
+    $stmt = db()->prepare("\n        SELECT\n            p.*,\n            ua.provider_subject AS microsoft_oid,\n            ua.provider AS auth_provider,\n            COALESCE((\n                SELECT gm.access_level\n                FROM group_memberships gm\n                WHERE gm.person_id = p.id\n                  AND gm.status = 'active'\n                ORDER BY FIELD(gm.access_level, 'system_admin', 'district_admin', 'district_reviewer', 'group_admin', 'member') ASC\n                LIMIT 1\n            ), 'member') AS highest_access_level\n        FROM people p\n        LEFT JOIN user_accounts ua\n            ON ua.person_id = p.id\n           AND ua.provider = 'microsoft'\n        WHERE p.id = :id\n        LIMIT 1\n    ");
 
-    $stmt->execute([
-        'id' => $userId,
-    ]);
-
+    $stmt->execute(['id' => $userId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$user) {
@@ -179,30 +145,27 @@ function get_user_by_id(int $userId): array
     return $user;
 }
 
-function touch_sso_login(int $userId): void
+function user_group_memberships(int $personId, bool $activeOnly = true): array
 {
-    $stmt = db()->prepare("
-        UPDATE admin_users
-        SET last_sso_login_at = NOW()
-        WHERE id = :id
-    ");
+    $sql = "\n        SELECT gm.*, g.group_name, g.slug\n        FROM group_memberships gm\n        JOIN groups g ON g.id = gm.group_id\n        WHERE gm.person_id = :person_id\n    ";
 
-    $stmt->execute([
-        'id' => $userId,
-    ]);
+    if ($activeOnly) {
+        $sql .= " AND gm.status = 'active' AND g.is_active = 1";
+    }
+
+    $sql .= " ORDER BY gm.is_primary DESC, g.group_name ASC";
+
+    $stmt = db()->prepare($sql);
+    $stmt->execute(['person_id' => $personId]);
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function user_has_group_mapping(int $userId): bool
+function user_has_group_mapping(int $personId): bool
 {
-    $stmt = db()->prepare("
-        SELECT COUNT(*)
-        FROM user_groups
-        WHERE user_id = :user_id
-    ");
+    $stmt = db()->prepare("\n        SELECT COUNT(*)\n        FROM group_memberships gm\n        JOIN groups g ON g.id = gm.group_id\n        WHERE gm.person_id = :person_id\n          AND gm.status = 'active'\n          AND g.is_active = 1\n    ");
 
-    $stmt->execute([
-        'user_id' => $userId,
-    ]);
+    $stmt->execute(['person_id' => $personId]);
 
     return ((int) $stmt->fetchColumn()) > 0;
 }
@@ -215,7 +178,7 @@ function user_needs_group_onboarding(): bool
         return false;
     }
 
-    if (($user['role'] ?? '') === ROLE_ADMIN) {
+    if (in_array(($user['highest_access_level'] ?? 'member'), ['district_admin', 'system_admin'], true)) {
         return false;
     }
 

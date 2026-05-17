@@ -6,6 +6,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../config.php';
 
 require_once __DIR__ . '/db-bridge.php';
+require_once __DIR__ . '/options.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/microsoft.php';
 
@@ -27,5 +28,20 @@ if (!function_exists('app_url')) {
         $path = '/' . ltrim($path, '/');
 
         return $base . $path;
+    }
+}
+
+if (!function_exists('e')) {
+    function e($value): string
+    {
+        return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('redirect')) {
+    function redirect(string $path): void
+    {
+        header('Location: ' . $path);
+        exit;
     }
 }

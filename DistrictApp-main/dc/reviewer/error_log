@@ -1,9 +1,0 @@
-[18-Apr-2026 11:17:37 UTC] PHP Warning:  require_once(/home/brscouts/test.brscouts.org.uk/reviewer/auth.php): Failed to open stream: No such file or directory in /home/brscouts/test.brscouts.org.uk/reviewer/index.php on line 4
-[18-Apr-2026 11:17:37 UTC] PHP Fatal error:  Uncaught Error: Failed opening required '/home/brscouts/test.brscouts.org.uk/reviewer/auth.php' (include_path='.:/opt/cpanel/ea-php83/root/usr/share/pear') in /home/brscouts/test.brscouts.org.uk/reviewer/index.php:4
-Stack trace:
-#0 {main}
-  thrown in /home/brscouts/test.brscouts.org.uk/reviewer/index.php on line 4
-[18-Apr-2026 11:52:15 UTC] PHP Fatal error:  strict_types declaration must be the very first statement in the script in /home/brscouts/test.brscouts.org.uk/reviewer/events.php on line 2
-[18-Apr-2026 12:06:07 UTC] PHP Fatal error:  strict_types declaration must be the very first statement in the script in /home/brscouts/test.brscouts.org.uk/reviewer/events.php on line 2
-[02-May-2026 20:19:25 UTC] PHP Fatal error:  strict_types declaration must be the very first statement in the script in /home/brscouts/test.brscouts.org.uk/reviewer/events.php on line 2
-[02-May-2026 20:19:28 UTC] PHP Fatal error:  strict_types declaration must be the very first statement in the script in /home/brscouts/test.brscouts.org.uk/reviewer/events.php on line 2
