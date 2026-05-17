@@ -74,22 +74,6 @@ function parse_local_datetime(string $value): ?DateTimeImmutable
     }
 }
 
-function dc_group_options_html(?int $selectedId = null): string
-{
-    $groups = dc_accessible_groups();
-    $html = '';
-
-    foreach ($groups as $group) {
-        $groupId = (int) ($group['id'] ?? $group['group_id'] ?? 0);
-        $groupName = (string) ($group['group_name'] ?? $group['name'] ?? 'Unknown Group');
-
-        $selected = ($groupId === (int) $selectedId) ? ' selected' : '';
-
-        $html .= '<option value="' . e((string) $groupId) . '"' . $selected . '>' . e($groupName) . '</option>';
-    }
-
-    return $html;
-}
 
 function uploaded_file_from_multiple(array $files, int $index): array
 {

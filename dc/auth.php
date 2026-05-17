@@ -567,8 +567,12 @@ function dc_group_options_html(?int $selectedId = null): string
     $html = '';
 
     foreach ($groups as $group) {
-        $selected = ((int) $group['id'] === (int) $selectedId) ? ' selected' : '';
-        $html .= '<option value="' . e($group['id']) . '"' . $selected . '>' . e($group['group_name']) . '</option>';
+        $groupId = (int) ($group['id'] ?? $group['group_id'] ?? 0);
+        $groupName = (string) ($group['group_name'] ?? $group['name'] ?? 'Unknown Group');
+
+        $selected = ($groupId === (int) $selectedId) ? ' selected' : '';
+
+        $html .= '<option value="' . e((string) $groupId) . '"' . $selected . '>' . e($groupName) . '</option>';
     }
 
     return $html;
