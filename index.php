@@ -15,10 +15,11 @@ $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
 
 $pageTitle = 'Home | ' . $appName;
 $heroTitle = 'District Dashboard';
-$heroText = 'Open the tools connected to your Group, District Calendar, Directory and local administration.';
+$heroText = 'Tools for Irwell Valley Scout District volunteers.';
 $breadcrumb = '<a href="/index.php">Home</a>';
 
 $memberships = user_group_memberships((int) $user['id']);
+
 $groupNames = array_values(array_unique(array_filter(array_map(
     static fn(array $membership): string => (string) ($membership['group_name'] ?? ''),
     $memberships
@@ -41,7 +42,6 @@ $membershipRoles = array_values(array_unique(array_filter($membershipRoles)));
 
 $isSystemAdmin = in_array('system_admin', $accessLevels, true);
 $isDistrictAdmin = $isSystemAdmin || in_array('district_admin', $accessLevels, true);
-$isDistrictReviewer = $isDistrictAdmin || in_array('district_reviewer', $accessLevels, true);
 $isGroupAdmin = $isDistrictAdmin
     || in_array('group_admin', $accessLevels, true)
     || in_array('group_lead_volunteer', $membershipRoles, true);
@@ -51,73 +51,73 @@ $displayName = trim((string) ($user['preferred_name'] ?? $user['full_name'] ?? $
 $modules = [
     [
         'title' => 'District Calendar',
-        'description' => 'Submit away-from-hut notifications, view Group activity and share risk assessments.',
+        'description' => 'Add activities away from the hut, review events and share risk assessments.',
         'url' => '/dc/',
         'status' => 'available',
         'visibility' => true,
         'image' => '/assets/img/dashboard/calendar.jpg',
-        'fallback' => 'calendar',
-        'tag' => 'Calendar',
+        'label' => 'Open calendar',
+        'colour' => 'purple',
     ],
     [
         'title' => 'My profile',
-        'description' => 'Update your details, directory visibility, role information and accreditations.',
+        'description' => 'Update your contact details, directory preferences and accreditations.',
         'url' => '/profile.php',
         'status' => 'available',
         'visibility' => true,
         'image' => '/assets/img/dashboard/profile.jpg',
-        'fallback' => 'profile',
-        'tag' => 'Your details',
+        'label' => 'Update profile',
+        'colour' => 'yellow',
     ],
     [
         'title' => 'District Directory',
-        'description' => 'Find leaders and volunteers by name, Group, role, section or accreditation.',
+        'description' => 'Find volunteers by Group, role, section or accreditation.',
         'url' => '/directory.php',
         'status' => 'available',
         'visibility' => true,
         'image' => '/assets/img/dashboard/directory.jpg',
-        'fallback' => 'directory',
-        'tag' => 'People',
+        'label' => 'Open directory',
+        'colour' => 'purple',
     ],
     [
         'title' => 'Group Admin',
-        'description' => 'Add leaders to your Group, request District Microsoft 365 access and manage active Group people.',
+        'description' => 'Add leaders to your Group and request District Microsoft 365 accounts.',
         'url' => '/group-manager.php',
         'status' => 'available',
         'visibility' => $isGroupAdmin,
         'image' => '/assets/img/dashboard/group-admin.jpg',
-        'fallback' => 'group',
-        'tag' => 'GLV',
+        'label' => 'Manage Group',
+        'colour' => 'yellow',
     ],
     [
         'title' => 'District Admin',
-        'description' => 'Create Groups, assign GLVs, rotate Group links and manage reviewer or admin permissions.',
+        'description' => 'Create Groups, assign GLVs, rotate calendar links and manage permissions.',
         'url' => '/district-admin.php',
         'status' => 'available',
         'visibility' => $isDistrictAdmin,
         'image' => '/assets/img/dashboard/district-admin.jpg',
-        'fallback' => 'admin',
-        'tag' => 'Admin',
+        'label' => 'Open admin',
+        'colour' => 'purple',
     ],
     [
         'title' => 'Comms Tool',
-        'description' => 'Prepare District communications, targeted messages and admin announcements.',
+        'description' => 'Prepare District messages and targeted volunteer communications.',
         'url' => '/comms-tool.php',
         'status' => 'soon',
         'visibility' => $isDistrictAdmin,
         'image' => '/assets/img/dashboard/comms.jpg',
-        'fallback' => 'comms',
-        'tag' => 'Comms',
+        'label' => 'Coming soon',
+        'colour' => 'yellow',
     ],
     [
         'title' => 'Technical Support',
-        'description' => 'Report a problem, request help with access or ask for a change to the District Dashboard.',
+        'description' => 'Report a problem, request access help or ask for a dashboard change.',
         'url' => '/technical-support.php',
         'status' => 'soon',
         'visibility' => true,
         'image' => '/assets/img/dashboard/support.jpg',
-        'fallback' => 'support',
-        'tag' => 'Help',
+        'label' => 'Coming soon',
+        'colour' => 'purple',
     ],
 ];
 
@@ -129,15 +129,15 @@ $visibleModules = array_values(array_filter(
 $externalLinks = [
     [
         'title' => 'My Scout Membership',
-        'description' => 'Open your Scouts membership record, learning and personal details.',
+        'description' => 'Membership record, learning and personal details.',
         'url' => 'https://membership.scouts.org.uk',
         'label' => 'Open My Scout Membership',
     ],
     [
         'title' => 'Online Scout Manager',
-        'description' => 'Open OSM for programme planning, section administration and parent communications.',
+        'description' => 'Programme planning, section administration and parent communications.',
         'url' => 'https://www.onlinescoutmanager.co.uk/login.php',
-        'label' => 'Open Online Scout Manager',
+        'label' => 'Open OSM',
     ],
 ];
 
@@ -145,87 +145,83 @@ $externalLinks = [
 <?php include __DIR__ . '/header.php'; ?>
 
 <style>
-    .dashboard-welcome {
-        display: grid;
-        gap: 1rem;
-        margin-bottom: 1.5rem;
+    :root {
+        --iv-purple: #7413dc;
+        --iv-purple-dark: #4d0b93;
+        --iv-yellow: #ffb81c;
+        --iv-black: #1d1d1b;
+        --iv-grey: #f3f2f1;
+        --iv-border: #b1b4b6;
     }
 
-    @media (min-width: 992px) {
-        .dashboard-welcome {
+    .dashboard-intro {
+        display: grid;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    @media (min-width: 900px) {
+        .dashboard-intro {
             grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
             align-items: stretch;
         }
     }
 
-    .dashboard-welcome-card {
-        background: #ffffff;
-        border: 1px solid #e8e4f1;
-        border-left: .45rem solid var(--iv-purple, #7413dc);
-        border-radius: .85rem;
+    .dashboard-welcome {
+        background: var(--iv-purple);
+        color: #ffffff;
         padding: 1.25rem;
-        box-shadow: 0 2px 14px rgba(0, 0, 0, .06);
+        border-bottom: 8px solid var(--iv-yellow);
     }
 
-    .dashboard-welcome-card h2 {
+    .dashboard-welcome h2 {
         margin: 0;
-        color: var(--iv-purple-dark, #4d0b93);
-        font-size: clamp(1.6rem, 5vw, 2.4rem);
-        line-height: 1.05;
+        color: #ffffff;
+        font-size: clamp(1.8rem, 6vw, 3rem);
+        line-height: 1;
         font-weight: 900;
     }
 
-    .dashboard-welcome-card p {
-        margin: .75rem 0 0;
-        max-width: 760px;
-        color: #333;
-        font-size: 1.05rem;
+    .dashboard-welcome p {
+        margin: .85rem 0 0;
+        max-width: 720px;
+        color: #ffffff;
+        font-size: 1.1rem;
+        line-height: 1.4;
         font-weight: 700;
-        line-height: 1.45;
     }
 
-    .dashboard-group-card {
-        background: #f5f3ff;
-        border: 1px solid #e3d8ff;
-        border-radius: .85rem;
-        padding: 1.25rem;
-        box-shadow: 0 2px 14px rgba(0, 0, 0, .05);
+    .dashboard-groups {
+        background: var(--iv-grey);
+        border: 3px solid var(--iv-black);
+        padding: 1rem;
     }
 
-    .dashboard-group-card h3 {
+    .dashboard-groups h2 {
         margin: 0 0 .75rem;
-        color: var(--iv-purple-dark, #4d0b93);
+        color: var(--iv-black);
+        font-size: 1.2rem;
         font-weight: 900;
     }
 
-    .dashboard-group-card ul {
+    .dashboard-groups ul {
         margin: 0;
         padding-left: 1.25rem;
-        font-weight: 800;
+        font-weight: 900;
     }
 
-    .dashboard-group-card li + li {
+    .dashboard-groups li + li {
         margin-top: .25rem;
     }
 
-    .dashboard-section-header {
-        display: flex;
-        flex-direction: column;
-        gap: .35rem;
-        margin: 2rem 0 1rem;
-    }
-
-    .dashboard-section-header h2 {
-        margin: 0;
-        color: var(--iv-purple-dark, #4d0b93);
+    .dashboard-section-heading {
+        margin: 0 0 1rem;
+        padding-bottom: .45rem;
+        border-bottom: 5px solid var(--iv-yellow);
+        color: var(--iv-black);
+        font-size: 1.6rem;
+        line-height: 1.1;
         font-weight: 900;
-        font-size: 1.55rem;
-    }
-
-    .dashboard-section-header p {
-        margin: 0;
-        color: #555;
-        font-weight: 700;
     }
 
     .dashboard-grid {
@@ -233,7 +229,7 @@ $externalLinks = [
         gap: 1rem;
     }
 
-    @media (min-width: 620px) {
+    @media (min-width: 700px) {
         .dashboard-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
@@ -252,51 +248,35 @@ $externalLinks = [
         height: 100%;
     }
 
-    .dashboard-card-link:hover,
-    .dashboard-card-link:focus {
+    .dashboard-card-link:hover {
         color: inherit;
         text-decoration: none;
     }
 
+    .dashboard-card-link:focus {
+        outline: 4px solid var(--iv-yellow);
+        outline-offset: 4px;
+    }
+
     .dashboard-card {
-        position: relative;
         display: flex;
         flex-direction: column;
         min-height: 100%;
-        overflow: hidden;
         background: #ffffff;
-        border: 1px solid #e6e6e6;
-        border-radius: 1rem;
-        box-shadow: 0 4px 18px rgba(0, 0, 0, .08);
-        transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
-    }
-
-    .dashboard-card-link:hover .dashboard-card,
-    .dashboard-card-link:focus .dashboard-card {
-        transform: translateY(-2px);
-        border-color: var(--iv-purple, #7413dc);
-        box-shadow: 0 10px 30px rgba(0, 0, 0, .13);
-    }
-
-    .dashboard-card-link:focus {
-        outline: 4px solid rgba(255, 184, 28, .75);
-        outline-offset: 4px;
-        border-radius: 1rem;
+        border: 3px solid var(--iv-black);
     }
 
     .dashboard-card-media {
         position: relative;
         min-height: 132px;
-        background:
-            radial-gradient(circle at top left, rgba(255,255,255,.35), transparent 35%),
-            linear-gradient(135deg, #7413dc, #4d0b93);
-        overflow: hidden;
+        background: var(--iv-purple);
+        border-bottom: 3px solid var(--iv-black);
     }
 
     .dashboard-card-media img {
         display: block;
         width: 100%;
-        height: 160px;
+        height: 150px;
         object-fit: cover;
     }
 
@@ -304,97 +284,100 @@ $externalLinks = [
         content: "";
         position: absolute;
         inset: 0;
-        background: linear-gradient(180deg, rgba(0,0,0,.05), rgba(0,0,0,.38));
-        pointer-events: none;
+        background: rgba(0, 0, 0, .18);
     }
 
-    .dashboard-card-icon {
+    .dashboard-card-colour-yellow .dashboard-card-media {
+        background: var(--iv-yellow);
+    }
+
+    .dashboard-card-colour-yellow .dashboard-card-media::after {
+        background: rgba(0, 0, 0, .05);
+    }
+
+    .dashboard-card-title-strip {
+        display: inline-block;
         position: absolute;
         left: 1rem;
         bottom: 1rem;
         z-index: 2;
-        width: 54px;
-        height: 54px;
-        border-radius: 999px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: #ffb81c;
-        color: #1d1d1b;
+        background: #ffffff;
+        color: var(--iv-black);
+        padding: .35rem .55rem;
+        font-size: .9rem;
         font-weight: 900;
-        font-size: 1.35rem;
-        box-shadow: 0 8px 18px rgba(0,0,0,.2);
-    }
-
-    .dashboard-card-tag {
-        position: absolute;
-        right: 1rem;
-        top: 1rem;
-        z-index: 2;
-        display: inline-block;
-        padding: .25rem .55rem;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, .94);
-        color: var(--iv-purple-dark, #4d0b93);
-        font-size: .78rem;
-        font-weight: 900;
+        border: 3px solid var(--iv-black);
     }
 
     .dashboard-card-body {
         display: flex;
-        flex: 1;
         flex-direction: column;
-        padding: 1.1rem;
+        flex: 1;
+        padding: 1rem;
     }
 
     .dashboard-card h3 {
         margin: 0;
-        color: var(--iv-purple-dark, #4d0b93);
-        font-size: 1.25rem;
-        line-height: 1.15;
+        color: var(--iv-black);
+        font-size: 1.35rem;
+        line-height: 1.1;
         font-weight: 900;
     }
 
     .dashboard-card p {
-        margin: .65rem 0 1rem;
-        color: #333;
+        margin: .75rem 0 1rem;
+        color: var(--iv-black);
+        font-size: 1rem;
+        line-height: 1.4;
         font-weight: 700;
-        line-height: 1.42;
     }
 
-    .dashboard-card-action {
-        margin-top: auto;
-        display: inline-flex;
-        align-items: center;
-        gap: .35rem;
-        color: var(--iv-purple-dark, #4d0b93);
-        font-weight: 900;
-    }
-
-    .dashboard-card-action::after {
-        content: "›";
-        font-size: 1.4rem;
-        line-height: 1;
-    }
-
-    .dashboard-badge-soon {
+    .dashboard-action {
         display: inline-block;
         align-self: flex-start;
-        margin-bottom: .75rem;
-        padding: .25rem .55rem;
-        border-radius: .35rem;
-        background: #fff3cd;
-        color: #664d03;
-        font-size: .78rem;
+        margin-top: auto;
+        background: var(--iv-purple);
+        color: #ffffff;
+        padding: .65rem .9rem;
         font-weight: 900;
+        text-decoration: none;
+        border: 3px solid var(--iv-purple-dark);
+    }
+
+    .dashboard-card-link:hover .dashboard-action {
+        background: var(--iv-purple-dark);
+    }
+
+    .dashboard-card-colour-yellow .dashboard-action {
+        background: var(--iv-yellow);
+        color: var(--iv-black);
+        border-color: var(--iv-black);
     }
 
     .dashboard-card-soon {
-        opacity: .82;
+        background: var(--iv-grey);
     }
 
-    .dashboard-card-soon .dashboard-card-action {
-        color: #555;
+    .dashboard-card-soon .dashboard-action {
+        background: #505a5f;
+        border-color: #505a5f;
+        color: #ffffff;
+    }
+
+    .dashboard-soon-badge {
+        display: inline-block;
+        align-self: flex-start;
+        margin-bottom: .75rem;
+        padding: .25rem .5rem;
+        background: var(--iv-yellow);
+        color: var(--iv-black);
+        border: 2px solid var(--iv-black);
+        font-size: .8rem;
+        font-weight: 900;
+    }
+
+    .dashboard-external {
+        margin-top: 2rem;
     }
 
     .dashboard-external-grid {
@@ -402,7 +385,7 @@ $externalLinks = [
         gap: 1rem;
     }
 
-    @media (min-width: 768px) {
+    @media (min-width: 760px) {
         .dashboard-external-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
@@ -410,52 +393,59 @@ $externalLinks = [
 
     .dashboard-external-card {
         background: #ffffff;
-        border: 1px solid #e6e6e6;
-        border-radius: .85rem;
-        padding: 1.25rem;
-        box-shadow: 0 2px 14px rgba(0, 0, 0, .05);
+        border: 3px solid var(--iv-black);
+        padding: 1rem;
     }
 
     .dashboard-external-card h3 {
         margin: 0;
-        color: var(--iv-purple-dark, #4d0b93);
+        color: var(--iv-black);
+        font-size: 1.25rem;
         font-weight: 900;
     }
 
     .dashboard-external-card p {
-        margin: .5rem 0 .85rem;
-        color: #333;
+        margin: .65rem 0 .85rem;
+        color: var(--iv-black);
         font-weight: 700;
+        line-height: 1.4;
     }
 
     .dashboard-external-card a {
+        color: var(--iv-purple-dark);
         font-weight: 900;
+        text-decoration: underline;
+        text-decoration-thickness: 3px;
+        text-underline-offset: 4px;
     }
 
-    @media (prefers-reduced-motion: reduce) {
-        .dashboard-card {
-            transition: none;
+    @media (max-width: 520px) {
+        .dashboard-welcome,
+        .dashboard-groups,
+        .dashboard-card-body,
+        .dashboard-external-card {
+            padding: .9rem;
         }
 
-        .dashboard-card-link:hover .dashboard-card,
-        .dashboard-card-link:focus .dashboard-card {
-            transform: none;
+        .dashboard-card-media img {
+            height: 125px;
         }
     }
 </style>
 
 <main class="lt-main">
-    <section class="dashboard-welcome" aria-label="Welcome">
-        <div class="dashboard-welcome-card">
+    <section class="dashboard-intro" aria-label="Dashboard summary">
+        <div class="dashboard-welcome">
             <h2>Welcome, <?= e($displayName) ?></h2>
             <p>
-                Your dashboard shows the tools available to you based on your active Group memberships and District permissions.
-                Use the tiles below to open the District Calendar, update your profile, manage your Group or access admin tools.
+                Use this dashboard to open the District Calendar, update your profile,
+                find volunteers and manage the tools available to your role.
             </p>
         </div>
 
-        <aside class="dashboard-group-card">
-            <h3>Your Groups</h3>
+        <aside class="dashboard-groups">
+            <h2>Your Group<?= count($groupNames) === 1 ? '' : 's' ?></h2>
+
             <?php if ($groupNames): ?>
                 <ul>
                     <?php foreach ($groupNames as $groupName): ?>
@@ -463,50 +453,43 @@ $externalLinks = [
                     <?php endforeach; ?>
                 </ul>
             <?php else: ?>
-                <p class="mb-0">No Groups linked yet.</p>
+                <p class="mb-0 font-weight-bold">No Groups linked yet.</p>
             <?php endif; ?>
         </aside>
     </section>
 
     <section aria-labelledby="tasks-heading">
-        <div class="dashboard-section-header">
-            <h2 id="tasks-heading">Things you can do</h2>
-            <p>Choose a tool to get started.</p>
-        </div>
+        <h2 id="tasks-heading" class="dashboard-section-heading">Things you can do</h2>
 
         <div class="dashboard-grid">
             <?php foreach ($visibleModules as $module): ?>
-                <?php
-                $isAvailable = $module['status'] === 'available';
-                $fallbackLetter = strtoupper(substr((string) $module['title'], 0, 1));
-                ?>
+                <?php $isAvailable = $module['status'] === 'available'; ?>
 
                 <?php if ($isAvailable): ?>
                     <a href="<?= e($module['url']) ?>" class="dashboard-card-link">
                 <?php endif; ?>
 
-                <article class="dashboard-card <?= $isAvailable ? '' : 'dashboard-card-soon' ?>">
-                    <div class="dashboard-card-media dashboard-card-media-<?= e($module['fallback']) ?>">
+                <article class="dashboard-card dashboard-card-colour-<?= e($module['colour']) ?> <?= $isAvailable ? '' : 'dashboard-card-soon' ?>">
+                    <div class="dashboard-card-media">
                         <img
                             src="<?= e($module['image']) ?>"
                             alt=""
                             loading="lazy"
                             onerror="this.style.display='none';"
                         >
-                        <span class="dashboard-card-tag"><?= e($module['tag']) ?></span>
-                        <span class="dashboard-card-icon" aria-hidden="true"><?= e($fallbackLetter) ?></span>
+                        <span class="dashboard-card-title-strip"><?= e($module['title']) ?></span>
                     </div>
 
                     <div class="dashboard-card-body">
                         <?php if (!$isAvailable): ?>
-                            <span class="dashboard-badge-soon">Coming soon</span>
+                            <span class="dashboard-soon-badge">Coming soon</span>
                         <?php endif; ?>
 
                         <h3><?= e($module['title']) ?></h3>
                         <p><?= e($module['description']) ?></p>
 
-                        <span class="dashboard-card-action">
-                            <?= $isAvailable ? 'Open' : 'Not available yet' ?>
+                        <span class="dashboard-action">
+                            <?= e($module['label']) ?>
                         </span>
                     </div>
                 </article>
@@ -518,11 +501,8 @@ $externalLinks = [
         </div>
     </section>
 
-    <section class="mt-4" aria-labelledby="external-heading">
-        <div class="dashboard-section-header">
-            <h2 id="external-heading">Useful external links</h2>
-            <p>Common external systems used by Scout volunteers.</p>
-        </div>
+    <section class="dashboard-external" aria-labelledby="external-heading">
+        <h2 id="external-heading" class="dashboard-section-heading">Useful external links</h2>
 
         <div class="dashboard-external-grid">
             <?php foreach ($externalLinks as $link): ?>
