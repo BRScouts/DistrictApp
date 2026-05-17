@@ -10,10 +10,34 @@ $selectedGroupId = dc_selected_group_id($groupId);
 $groups = dc_accessible_groups();
 $showGroupPicker = count($groups) > 1;
 
-$stmt = db()->prepare("\n    SELECT ce.*, g.group_name,\n           GROUP_CONCAT(DISTINCT gs.section_name ORDER BY gs.sort_order, gs.section_name SEPARATOR ', ') AS sections\n    FROM calendar_events ce\n    JOIN groups g ON g.id = ce.group_id\n    LEFT JOIN calendar_event_sections ces ON ces.calendar_event_id = ce.id\n    LEFT JOIN group_sections gs ON gs.id = ces.group_section_id\n    WHERE (:reviewer = 1 OR ce.group_id IN (" . implode(',', array_fill(0, max(1, count($ctx['group_ids'])), '?')) . "))\n      AND (:selected_group_id = 0 OR ce.group_id = :selected_group_id2)\n      AND ce.ends_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)\n      AND ce.status <> 'cancelled'\n    GROUP BY ce.id\n    ORDER BY ce.starts_at ASC\n    LIMIT 100\n");
-$params = ['reviewer' => $ctx['is_reviewer'] ? 1 : 0, 'selected_group_id' => $showGroupPicker ? $selectedGroupId : 0, 'selected_group_id2' => $showGroupPicker ? $selectedGroupId : 0];
-$i = 1;
-foreach ($ctx['group_ids'] ?: [0] as $gid) { $params[$i++] = $gid; }
+$allowedGroupIds = $ctx['group_ids'] ?: [0];
+$groupPlaceholders = [];
+$params = [
+    'reviewer' => $ctx['is_reviewer'] ? 1 : 0,
+    'selected_group_id' => $showGroupPicker ? $selectedGroupId : 0,
+    'selected_group_id2' => $showGroupPicker ? $selectedGroupId : 0,
+];
+foreach ($allowedGroupIds as $index => $gid) {
+    $key = 'allowed_group_' . $index;
+    $groupPlaceholders[] = ':' . $key;
+    $params[$key] = (int) $gid;
+}
+
+$stmt = db()->prepare("
+    SELECT ce.*, g.group_name,
+           GROUP_CONCAT(DISTINCT gs.section_name ORDER BY gs.sort_order, gs.section_name SEPARATOR ', ') AS sections
+    FROM calendar_events ce
+    JOIN groups g ON g.id = ce.group_id
+    LEFT JOIN calendar_event_sections ces ON ces.calendar_event_id = ce.id
+    LEFT JOIN group_sections gs ON gs.id = ces.group_section_id
+    WHERE (:reviewer = 1 OR ce.group_id IN (" . implode(',', $groupPlaceholders) . "))
+      AND (:selected_group_id = 0 OR ce.group_id = :selected_group_id2)
+      AND ce.ends_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      AND ce.status <> 'cancelled'
+    GROUP BY ce.id
+    ORDER BY ce.starts_at ASC
+    LIMIT 100
+");
 $stmt->execute($params);
 $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
