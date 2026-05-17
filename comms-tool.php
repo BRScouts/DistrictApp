@@ -170,109 +170,6 @@ function comms_split_manual_recipients(string $value): array
     return array_values($recipients);
 }
 
-function comms_markdown_inline(string $text): string
-{
-    $text = e($text);
-
-    $text = preg_replace('/\*\*(.*?)\*\*/s', '<strong>$1</strong>', $text) ?? $text;
-    $text = preg_replace('/__(.*?)__/s', '<strong>$1</strong>', $text) ?? $text;
-    $text = preg_replace('/(?<!\*)\*(?!\s)(.*?)(?<!\s)\*(?!\*)/s', '<em>$1</em>', $text) ?? $text;
-    $text = preg_replace('/(?<!_)_(?!\s)(.*?)(?<!\s)_(?!_)/s', '<em>$1</em>', $text) ?? $text;
-    $text = preg_replace('/`([^`]+)`/', '<code>$1</code>', $text) ?? $text;
-    $text = preg_replace(
-        '/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/',
-        '<a href="$2">$1</a>',
-        $text
-    ) ?? $text;
-
-    return $text;
-}
-
-function comms_markdown_to_html(string $markdown): string
-{
-    $markdown = str_replace(["\r\n", "\r"], "\n", trim($markdown));
-    $lines = explode("\n", $markdown);
-
-    $html = '';
-    $paragraph = [];
-    $inList = false;
-
-    $flushParagraph = static function () use (&$html, &$paragraph): void {
-        if (!$paragraph) {
-            return;
-        }
-
-        $text = implode(' ', array_map('trim', $paragraph));
-        $html .= '<p>' . comms_markdown_inline($text) . '</p>' . "\n";
-        $paragraph = [];
-    };
-
-    $closeList = static function () use (&$html, &$inList): void {
-        if ($inList) {
-            $html .= '</ul>' . "\n";
-            $inList = false;
-        }
-    };
-
-    foreach ($lines as $line) {
-        $trimmed = trim($line);
-
-        if ($trimmed === '') {
-            $flushParagraph();
-            $closeList();
-            continue;
-        }
-
-        if (preg_match('/^###\s+(.+)$/', $trimmed, $matches)) {
-            $flushParagraph();
-            $closeList();
-            $html .= '<h3>' . comms_markdown_inline($matches[1]) . '</h3>' . "\n";
-            continue;
-        }
-
-        if (preg_match('/^##\s+(.+)$/', $trimmed, $matches)) {
-            $flushParagraph();
-            $closeList();
-            $html .= '<h2>' . comms_markdown_inline($matches[1]) . '</h2>' . "\n";
-            continue;
-        }
-
-        if (preg_match('/^#\s+(.+)$/', $trimmed, $matches)) {
-            $flushParagraph();
-            $closeList();
-            $html .= '<h1>' . comms_markdown_inline($matches[1]) . '</h1>' . "\n";
-            continue;
-        }
-
-        if (preg_match('/^[-*]\s+(.+)$/', $trimmed, $matches)) {
-            $flushParagraph();
-
-            if (!$inList) {
-                $html .= '<ul>' . "\n";
-                $inList = true;
-            }
-
-            $html .= '<li>' . comms_markdown_inline($matches[1]) . '</li>' . "\n";
-            continue;
-        }
-
-        $paragraph[] = $trimmed;
-    }
-
-    $flushParagraph();
-    $closeList();
-
-    return $html;
-}
-
-function comms_plain_preview(string $markdown): string
-{
-    $plain = preg_replace('/\[(.*?)\]\((.*?)\)/', '$1 ($2)', $markdown) ?? $markdown;
-    $plain = str_replace(['**', '__', '*', '_', '`', '#'], '', $plain);
-
-    return trim($plain);
-}
-
 function comms_extract_email_queue_columns(): array
 {
     static $columns = null;
@@ -372,6 +269,91 @@ function comms_log(int $actorPersonId, string $action, array $details = []): voi
     }
 }
 
+function comms_plain_from_html(string $html): string
+{
+    $html = preg_replace('/<\s*br\s*\/?>/i', "\n", $html) ?? $html;
+    $html = preg_replace('/<\/p>/i', "\n\n", $html) ?? $html;
+    $html = preg_replace('/<\/li>/i', "\n", $html) ?? $html;
+    $text = trim(html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+
+    return preg_replace("/\n{3,}/", "\n\n", $text) ?? $text;
+}
+
+function comms_preview_snippet(string $html, int $limit = 150): string
+{
+    $plain = preg_replace('/\s+/', ' ', comms_plain_from_html($html)) ?? '';
+
+    if (function_exists('mb_strlen') && mb_strlen($plain) > $limit) {
+        return mb_substr($plain, 0, $limit - 1) . '…';
+    }
+
+    if (strlen($plain) > $limit) {
+        return substr($plain, 0, $limit - 1) . '…';
+    }
+
+    return $plain;
+}
+
+function comms_sanitise_html(string $html): string
+{
+    $html = trim($html);
+
+    if ($html === '') {
+        return '';
+    }
+
+    $html = preg_replace('#<(script|style|iframe|object|embed|form|input|button|textarea|select|option|meta|link)[^>]*>.*?</\1>#is', '', $html) ?? $html;
+    $html = preg_replace('#</?(script|style|iframe|object|embed|form|input|button|textarea|select|option|meta|link)[^>]*>#is', '', $html) ?? $html;
+    $html = preg_replace('/\s+on[a-z]+\s*=\s*(".*?"|\'.*?\'|[^\s>]+)/is', '', $html) ?? $html;
+    $html = preg_replace('/\s+style\s*=\s*(".*?"|\'.*?\'|[^\s>]+)/is', '', $html) ?? $html;
+
+    $allowedTags = '<p><br><strong><b><em><i><u><ul><ol><li><a><h2><h3><blockquote>';
+
+    $html = strip_tags($html, $allowedTags);
+
+    $html = preg_replace_callback('/<a\s+([^>]+)>/i', static function (array $matches): string {
+        $attrs = $matches[1];
+
+        if (!preg_match('/href\s*=\s*("|\')(.*?)\1/i', $attrs, $hrefMatch)) {
+            return '<a>';
+        }
+
+        $href = trim(html_entity_decode($hrefMatch[2], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+
+        if (!preg_match('#^https?://#i', $href) && !preg_match('#^mailto:#i', $href)) {
+            return '<a>';
+        }
+
+        return '<a href="' . e($href) . '">';
+    }, $html) ?? $html;
+
+    return trim($html);
+}
+
+function comms_normalise_html(string $html): string
+{
+    $html = comms_sanitise_html($html);
+
+    if ($html === '') {
+        return '';
+    }
+
+    if (!preg_match('/<(p|h2|h3|ul|ol|blockquote)\b/i', $html)) {
+        $html = '<p>' . nl2br(e(trim(strip_tags($html)))) . '</p>';
+    }
+
+    return $html;
+}
+
+function comms_personalise_html(string $html, array $recipient): string
+{
+    return str_replace(
+        ['{{name}}', '{{email}}'],
+        [e($recipient['name'] ?: 'there'), e($recipient['email'])],
+        $html
+    );
+}
+
 function comms_fetch_recipients(array $filters, array $user): array
 {
     $where = [
@@ -382,51 +364,48 @@ function comms_fetch_recipients(array $filters, array $user): array
 
     $params = [];
 
+    $audienceMode = (string) ($filters['audience_mode'] ?? 'filtered');
     $groupIds = array_values(array_filter(array_map('intval', (array) ($filters['group_ids'] ?? []))));
     $roleTitles = array_values(array_filter(array_map('strval', (array) ($filters['role_titles'] ?? []))));
     $accreditations = array_values(array_filter(array_map('strval', (array) ($filters['accreditations'] ?? []))));
     $keyword = trim((string) ($filters['keyword'] ?? ''));
-    $microsoftFilter = (string) ($filters['microsoft_filter'] ?? 'all');
 
-    if ($groupIds) {
-        $where[] = "gm.group_id IN (" . implode(',', array_fill(0, count($groupIds), '?')) . ")";
-        foreach ($groupIds as $id) {
-            $params[] = $id;
+    if ($audienceMode !== 'all_people') {
+        if ($groupIds) {
+            $where[] = "gm.group_id IN (" . implode(',', array_fill(0, count($groupIds), '?')) . ")";
+            foreach ($groupIds as $id) {
+                $params[] = $id;
+            }
         }
-    }
 
-    if ($roleTitles) {
-        $where[] = "dp.role_title IN (" . implode(',', array_fill(0, count($roleTitles), '?')) . ")";
-        foreach ($roleTitles as $roleTitle) {
-            $params[] = $roleTitle;
+        if ($roleTitles) {
+            $where[] = "dp.role_title IN (" . implode(',', array_fill(0, count($roleTitles), '?')) . ")";
+            foreach ($roleTitles as $roleTitle) {
+                $params[] = $roleTitle;
+            }
         }
-    }
 
-    foreach ($accreditations as $index => $accreditation) {
-        $where[] = "dp.accreditations_json LIKE ?";
-        $params[] = '%' . $accreditation . '%';
-    }
-
-    if ($keyword !== '') {
-        $where[] = "(
-            p.full_name LIKE ?
-            OR p.primary_email LIKE ?
-            OR dp.role_title LIKE ?
-            OR dp.about_me LIKE ?
-            OR g.group_name LIKE ?
-            OR dp.accreditations_json LIKE ?
-        )";
-
-        $like = '%' . $keyword . '%';
-        for ($i = 0; $i < 6; $i++) {
-            $params[] = $like;
+        foreach ($accreditations as $accreditation) {
+            $where[] = "dp.accreditations_json LIKE ?";
+            $params[] = '%' . $accreditation . '%';
         }
-    }
 
-    if ($microsoftFilter === 'linked') {
-        $where[] = "ua.id IS NOT NULL";
-    } elseif ($microsoftFilter === 'not_linked') {
-        $where[] = "ua.id IS NULL";
+        if ($keyword !== '') {
+            $where[] = "(
+                p.full_name LIKE ?
+                OR p.primary_email LIKE ?
+                OR dp.role_title LIKE ?
+                OR dp.about_me LIKE ?
+                OR g.group_name LIKE ?
+                OR dp.accreditations_json LIKE ?
+            )";
+
+            $like = '%' . $keyword . '%';
+
+            for ($i = 0; $i < 6; $i++) {
+                $params[] = $like;
+            }
+        }
     }
 
     $whereSql = implode("\n      AND ", $where);
@@ -438,8 +417,7 @@ function comms_fetch_recipients(array $filters, array $user): array
             p.primary_email,
             dp.role_title,
             dp.accreditations_json,
-            GROUP_CONCAT(DISTINCT g.group_name ORDER BY g.group_name SEPARATOR ', ') AS group_names,
-            MAX(CASE WHEN ua.provider = 'microsoft' THEN 1 ELSE 0 END) AS has_microsoft_account
+            GROUP_CONCAT(DISTINCT g.group_name ORDER BY g.group_name SEPARATOR ', ') AS group_names
         FROM people p
         LEFT JOIN directory_profiles dp
           ON dp.person_id = p.id
@@ -449,9 +427,6 @@ function comms_fetch_recipients(array $filters, array $user): array
         LEFT JOIN groups g
           ON g.id = gm.group_id
          AND g.is_active = 1
-        LEFT JOIN user_accounts ua
-          ON ua.person_id = p.id
-         AND ua.provider = 'microsoft'
         WHERE {$whereSql}
         GROUP BY
             p.id,
@@ -460,7 +435,7 @@ function comms_fetch_recipients(array $filters, array $user): array
             dp.role_title,
             dp.accreditations_json
         ORDER BY p.full_name ASC
-        LIMIT 2000
+        LIMIT 5000
     ";
 
     $stmt = db()->prepare($sql);
@@ -483,7 +458,6 @@ function comms_fetch_recipients(array $filters, array $user): array
             'groups' => (string) ($row['group_names'] ?? ''),
             'role_title' => (string) ($row['role_title'] ?? ''),
             'accreditations' => comms_decode_json_list($row['accreditations_json'] ?? null),
-            'has_microsoft_account' => (int) ($row['has_microsoft_account'] ?? 0) === 1,
         ];
     }
 
@@ -506,12 +480,38 @@ function comms_fetch_recipients(array $filters, array $user): array
                 'groups' => '',
                 'role_title' => 'Self copy',
                 'accreditations' => [],
-                'has_microsoft_account' => true,
             ];
         }
     }
 
     return array_values($recipients);
+}
+
+function comms_hidden_state_inputs(array $form, bool $includeMessage = true): void
+{
+    ?>
+    <input type="hidden" name="audience_mode" value="<?= e((string) $form['audience_mode']) ?>">
+    <input type="hidden" name="keyword" value="<?= e((string) $form['keyword']) ?>">
+    <input type="hidden" name="manual_recipients" value="<?= e((string) $form['manual_recipients']) ?>">
+    <input type="hidden" name="copy_self" value="<?= (int) $form['copy_self'] ?>">
+
+    <?php foreach ((array) $form['group_ids'] as $groupId): ?>
+        <input type="hidden" name="group_ids[]" value="<?= (int) $groupId ?>">
+    <?php endforeach; ?>
+
+    <?php foreach ((array) $form['role_titles'] as $roleTitle): ?>
+        <input type="hidden" name="role_titles[]" value="<?= e((string) $roleTitle) ?>">
+    <?php endforeach; ?>
+
+    <?php foreach ((array) $form['accreditations'] as $accreditation): ?>
+        <input type="hidden" name="accreditations[]" value="<?= e((string) $accreditation) ?>">
+    <?php endforeach; ?>
+
+    <?php if ($includeMessage): ?>
+        <input type="hidden" name="subject" value="<?= e((string) $form['subject']) ?>">
+        <input type="hidden" name="body_html" value="<?= e((string) $form['body_html']) ?>">
+    <?php endif; ?>
+    <?php
 }
 
 if (!comms_is_admin($user)) {
@@ -536,18 +536,26 @@ $allowedAccreditations = portal_flatten_options($accreditationOptions);
 
 $errors = [];
 $success = null;
-$mode = (string) ($_POST['action'] ?? 'compose');
+
+$step = (string) ($_POST['step'] ?? $_GET['step'] ?? 'recipients');
+$action = (string) ($_POST['action'] ?? '');
+
+$validSteps = ['recipients', 'write', 'preview'];
+
+if (!in_array($step, $validSteps, true)) {
+    $step = 'recipients';
+}
 
 $form = [
+    'audience_mode' => (string) ($_POST['audience_mode'] ?? 'filtered'),
     'keyword' => trim((string) ($_POST['keyword'] ?? '')),
     'group_ids' => $_POST['group_ids'] ?? [],
     'role_titles' => $_POST['role_titles'] ?? [],
     'accreditations' => $_POST['accreditations'] ?? [],
-    'microsoft_filter' => (string) ($_POST['microsoft_filter'] ?? 'all'),
     'manual_recipients' => (string) ($_POST['manual_recipients'] ?? ''),
-    'copy_self' => isset($_POST['copy_self']) ? 1 : 0,
+    'copy_self' => isset($_POST['copy_self']) ? (int) ($_POST['copy_self'] === '1' || $_POST['copy_self'] === 'on') : 0,
     'subject' => trim((string) ($_POST['subject'] ?? '')),
-    'body_markdown' => (string) ($_POST['body_markdown'] ?? ''),
+    'body_html' => (string) ($_POST['body_html'] ?? ''),
 ];
 
 if (!is_array($form['group_ids'])) {
@@ -577,49 +585,80 @@ $form['accreditations'] = array_values(array_intersect(
     $allowedAccreditations
 ));
 
-if (!in_array($form['microsoft_filter'], ['all', 'linked', 'not_linked'], true)) {
-    $form['microsoft_filter'] = 'all';
+if (!in_array($form['audience_mode'], ['filtered', 'all_people'], true)) {
+    $form['audience_mode'] = 'filtered';
 }
 
+$form['body_html'] = comms_normalise_html($form['body_html']);
+
 $recipients = [];
-$previewHtml = '';
-$previewPlain = '';
+$previewHtml = $form['body_html'];
+$previewPlain = comms_plain_from_html($previewHtml);
+$previewSnippet = comms_preview_snippet($previewHtml);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $recipients = comms_fetch_recipients($form, $user);
+    if ($action === 'to_write') {
+        $recipients = comms_fetch_recipients($form, $user);
 
-    if ($form['subject'] === '') {
-        $errors[] = 'Enter an email subject.';
-    }
+        if (!$recipients) {
+            $errors[] = 'No recipients matched this selection. Choose all active people, select at least one filter, or add manual recipients.';
+            $step = 'recipients';
+        } else {
+            $step = 'write';
+        }
+    } elseif ($action === 'back_to_recipients') {
+        $step = 'recipients';
+    } elseif ($action === 'to_preview') {
+        $recipients = comms_fetch_recipients($form, $user);
 
-    if (trim($form['body_markdown']) === '') {
-        $errors[] = 'Enter the email message.';
-    }
+        if (!$recipients) {
+            $errors[] = 'No recipients matched this selection.';
+            $step = 'recipients';
+        }
 
-    if (!$recipients) {
-        $errors[] = 'No recipients matched this query. Adjust the filters or add manual recipients.';
-    }
+        if ($form['subject'] === '') {
+            $errors[] = 'Enter an email subject.';
+            $step = 'write';
+        }
 
-    if (!$errors) {
-        $previewHtml = comms_markdown_to_html($form['body_markdown']);
-        $previewPlain = comms_plain_preview($form['body_markdown']);
+        if (trim(strip_tags($form['body_html'])) === '') {
+            $errors[] = 'Enter the email message.';
+            $step = 'write';
+        }
 
-        if ($mode === 'send') {
+        if (!$errors) {
+            $previewHtml = $form['body_html'];
+            $previewPlain = comms_plain_from_html($previewHtml);
+            $previewSnippet = comms_preview_snippet($previewHtml);
+            $step = 'preview';
+        }
+    } elseif ($action === 'back_to_write') {
+        $step = 'write';
+    } elseif ($action === 'send') {
+        $recipients = comms_fetch_recipients($form, $user);
+
+        if (!$recipients) {
+            $errors[] = 'No recipients matched this selection.';
+            $step = 'recipients';
+        }
+
+        if ($form['subject'] === '') {
+            $errors[] = 'Enter an email subject.';
+            $step = 'write';
+        }
+
+        if (trim(strip_tags($form['body_html'])) === '') {
+            $errors[] = 'Enter the email message.';
+            $step = 'write';
+        }
+
+        if (!$errors) {
             $pdo->beginTransaction();
 
             try {
                 foreach ($recipients as $recipient) {
-                    $personalisedHtml = str_replace(
-                        ['{{name}}', '{{email}}'],
-                        [e($recipient['name'] ?: 'there'), e($recipient['email'])],
-                        $previewHtml
-                    );
-
-                    $personalisedPlain = str_replace(
-                        ['{{name}}', '{{email}}'],
-                        [$recipient['name'] ?: 'there', $recipient['email']],
-                        $previewPlain
-                    );
+                    $personalisedHtml = comms_personalise_html($form['body_html'], $recipient);
+                    $personalisedPlain = comms_plain_from_html($personalisedHtml);
 
                     $queueData = [
                         'to_email' => $recipient['email'],
@@ -627,7 +666,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'subject' => $form['subject'],
                         'body' => comms_column_exists('email_queue', 'body_html') ? $personalisedPlain : $personalisedHtml,
                         'body_html' => $personalisedHtml,
-                        'body_markdown' => $form['body_markdown'],
+                        'body_markdown' => null,
                         'status' => 'pending',
                         'created_by_person_id' => (int) $user['id'],
                         'notification_type' => 'district_comms',
@@ -642,11 +681,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'recipient_count' => count($recipients),
                     'subject' => $form['subject'],
                     'filters' => [
+                        'audience_mode' => $form['audience_mode'],
                         'keyword' => $form['keyword'],
                         'group_ids' => $form['group_ids'],
                         'role_titles' => $form['role_titles'],
                         'accreditations' => $form['accreditations'],
-                        'microsoft_filter' => $form['microsoft_filter'],
                         'copy_self' => (bool) $form['copy_self'],
                         'manual_recipient_count' => count(comms_split_manual_recipients($form['manual_recipients'])),
                     ],
@@ -655,28 +694,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->commit();
 
                 $success = count($recipients) . ' email' . (count($recipients) === 1 ? '' : 's') . ' added to the email queue.';
-                $mode = 'compose';
+
+                $step = 'recipients';
+                $form = [
+                    'audience_mode' => 'filtered',
+                    'keyword' => '',
+                    'group_ids' => [],
+                    'role_titles' => [],
+                    'accreditations' => [],
+                    'manual_recipients' => '',
+                    'copy_self' => 0,
+                    'subject' => '',
+                    'body_html' => '',
+                ];
                 $recipients = [];
                 $previewHtml = '';
                 $previewPlain = '';
-
-                $form['subject'] = '';
-                $form['body_markdown'] = '';
-                $form['manual_recipients'] = '';
+                $previewSnippet = '';
             } catch (Throwable $e) {
                 $pdo->rollBack();
                 $errors[] = 'The emails could not be queued. ' . $e->getMessage();
+                $step = 'preview';
             }
-        } else {
-            $mode = 'preview';
         }
     }
+}
+
+if (!$recipients && in_array($step, ['write', 'preview'], true)) {
+    $recipients = comms_fetch_recipients($form, $user);
 }
 
 ?>
 <?php include __DIR__ . '/header.php'; ?>
 
 <style>
+    .comms-steps {
+        display: grid;
+        gap: .5rem;
+        margin-bottom: 1rem;
+    }
+
+    @media (min-width: 760px) {
+        .comms-steps {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    .comms-step {
+        background: #ffffff;
+        border: 1px solid #e6e6e6;
+        border-left: 6px solid #d8d8d8;
+        padding: .85rem 1rem;
+        font-weight: 900;
+    }
+
+    .comms-step span {
+        display: block;
+        color: #555;
+        font-size: .85rem;
+        font-weight: 700;
+        margin-top: .2rem;
+    }
+
+    .comms-step.active {
+        border-left-color: #7413dc;
+        background: #f7f5fb;
+        color: #4d0b93;
+    }
+
     .comms-layout {
         display: grid;
         gap: 1rem;
@@ -719,7 +804,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .comms-check-grid {
         display: grid;
         gap: .45rem;
-        max-height: 220px;
+        max-height: 230px;
         overflow-y: auto;
         border: 1px solid #e6e6e6;
         border-radius: .5rem;
@@ -731,8 +816,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         margin-bottom: 0;
     }
 
+    .comms-select-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4rem;
+        margin-bottom: .5rem;
+    }
+
+    .comms-select-actions button {
+        border: 1px solid #d8d8d8;
+        background: #ffffff;
+        color: #4d0b93;
+        font-weight: 900;
+        border-radius: .3rem;
+        padding: .25rem .5rem;
+        cursor: pointer;
+    }
+
+    .comms-select-actions button:hover,
+    .comms-select-actions button:focus {
+        background: #f7f5fb;
+    }
+
     .comms-accreditations {
-        max-height: 260px;
+        max-height: 280px;
         overflow-y: auto;
     }
 
@@ -741,14 +848,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flex-wrap: wrap;
         gap: .75rem;
         align-items: center;
-    }
-
-    .comms-markdown-help {
-        background: #f7f5fb;
-        border-left: 5px solid #7413dc;
-        padding: .85rem;
-        font-weight: 700;
-        margin-top: .75rem;
     }
 
     .comms-recipient-list {
@@ -800,30 +899,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         color: #4d0b93;
     }
 
-    .comms-preview {
-        border: 1px solid #e6e6e6;
-        border-radius: .5rem;
-        background: #ffffff;
-        padding: 1rem;
-    }
-
-    .comms-preview h1,
-    .comms-preview h2,
-    .comms-preview h3 {
-        color: #4d0b93;
-        font-weight: 900;
-    }
-
-    .comms-preview p {
-        line-height: 1.5;
-    }
-
-    .comms-preview code {
-        background: #f3f2f1;
-        padding: .1rem .25rem;
-        border-radius: .25rem;
-    }
-
     .comms-sticky {
         position: sticky;
         top: 1rem;
@@ -833,6 +908,150 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .comms-sticky {
             position: static;
         }
+    }
+
+    .comms-editor-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .35rem;
+        padding: .5rem;
+        border: 1px solid #d8d8d8;
+        border-bottom: 0;
+        border-radius: .5rem .5rem 0 0;
+        background: #f7f5fb;
+    }
+
+    .comms-editor-toolbar button,
+    .comms-editor-toolbar select {
+        border: 1px solid #d8d8d8;
+        background: #ffffff;
+        color: #1d1d1b;
+        font-weight: 900;
+        border-radius: .25rem;
+        padding: .35rem .55rem;
+        min-height: 36px;
+    }
+
+    .comms-editor-toolbar button {
+        cursor: pointer;
+    }
+
+    .comms-editor-toolbar button:hover,
+    .comms-editor-toolbar button:focus {
+        outline: 3px solid #ffdd00;
+        outline-offset: 1px;
+    }
+
+    .comms-editor {
+        min-height: 320px;
+        border: 1px solid #d8d8d8;
+        border-radius: 0 0 .5rem .5rem;
+        padding: 1rem;
+        background: #ffffff;
+        line-height: 1.5;
+    }
+
+    .comms-editor:focus {
+        outline: 3px solid #ffdd00;
+        outline-offset: 2px;
+    }
+
+    .comms-editor p {
+        margin-top: 0;
+    }
+
+    .comms-editor-help {
+        background: #f7f5fb;
+        border-left: 5px solid #7413dc;
+        padding: .85rem;
+        font-weight: 700;
+        margin-top: .75rem;
+    }
+
+    .comms-inbox-preview {
+        border: 1px solid #d8d8d8;
+        border-radius: .75rem;
+        overflow: hidden;
+        background: #ffffff;
+    }
+
+    .comms-inbox-row {
+        display: grid;
+        gap: .15rem;
+        padding: 1rem;
+        border-bottom: 1px solid #e6e6e6;
+    }
+
+    @media (min-width: 700px) {
+        .comms-inbox-row {
+            grid-template-columns: 180px minmax(0, 1fr);
+            align-items: start;
+        }
+    }
+
+    .comms-inbox-from {
+        font-weight: 900;
+        color: #1d1d1b;
+    }
+
+    .comms-inbox-subject {
+        font-weight: 900;
+        color: #1d1d1b;
+    }
+
+    .comms-inbox-snippet {
+        color: #555;
+        font-weight: 700;
+    }
+
+    .comms-email-preview {
+        padding: 1rem;
+        background: #ffffff;
+    }
+
+    .comms-email-preview h1,
+    .comms-email-preview h2,
+    .comms-email-preview h3 {
+        color: #4d0b93;
+        font-weight: 900;
+    }
+
+    .comms-email-preview p {
+        line-height: 1.5;
+    }
+
+    .comms-summary-grid {
+        display: grid;
+        gap: .75rem;
+    }
+
+    @media (min-width: 760px) {
+        .comms-summary-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    .comms-summary-card {
+        background: #f7f5fb;
+        border: 1px solid #e6e6e6;
+        border-radius: .5rem;
+        padding: .9rem;
+    }
+
+    .comms-summary-card strong {
+        display: block;
+        color: #4d0b93;
+        font-size: 1.7rem;
+        line-height: 1;
+        font-weight: 900;
+    }
+
+    .comms-all-people-box {
+        border: 2px solid #7413dc;
+        border-radius: .5rem;
+        padding: 1rem;
+        background: #f7f5fb;
+        margin-bottom: 1rem;
     }
 </style>
 
@@ -852,182 +1071,339 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     <?php endif; ?>
 
-    <form method="post">
-        <div class="comms-layout">
-            <section>
-                <div class="comms-panel">
-                    <h2>1. Choose recipients</h2>
+    <div class="comms-steps" aria-label="Comms Tool progress">
+        <div class="comms-step <?= $step === 'recipients' ? 'active' : '' ?>">
+            1. Choose recipients
+            <span>Select all people or build a filtered list.</span>
+        </div>
+        <div class="comms-step <?= $step === 'write' ? 'active' : '' ?>">
+            2. Write email
+            <span>Use the rich-text editor.</span>
+        </div>
+        <div class="comms-step <?= $step === 'preview' ? 'active' : '' ?>">
+            3. Preview and confirm
+            <span>Check before queueing.</span>
+        </div>
+    </div>
 
-                    <div class="form-group">
-                        <label for="keyword">Search people</label>
-                        <input
-                            type="search"
-                            id="keyword"
-                            name="keyword"
-                            class="form-control"
-                            value="<?= e($form['keyword']) ?>"
-                            placeholder="Name, email, Group, role or accreditation"
-                        >
-                    </div>
+    <?php if ($step === 'recipients'): ?>
+        <form method="post">
+            <input type="hidden" name="step" value="recipients">
 
-                    <div class="comms-filter-grid">
-                        <div class="form-group">
-                            <label>Groups</label>
-                            <div class="comms-check-grid">
-                                <?php foreach ($groups as $group): ?>
-                                    <?php $gid = (int) $group['id']; ?>
-                                    <label class="lt-check">
-                                        <input
-                                            type="checkbox"
-                                            name="group_ids[]"
-                                            value="<?= $gid ?>"
-                                            <?= in_array($gid, $form['group_ids'], true) ? 'checked' : '' ?>
-                                        >
-                                        <span><?= e((string) $group['group_name']) ?></span>
-                                    </label>
-                                <?php endforeach; ?>
-                            </div>
+            <div class="comms-layout">
+                <section>
+                    <div class="comms-panel">
+                        <h2>1. Choose recipients</h2>
+
+                        <div class="comms-all-people-box">
+                            <label class="lt-check mb-0">
+                                <input
+                                    type="radio"
+                                    name="audience_mode"
+                                    value="all_people"
+                                    <?= $form['audience_mode'] === 'all_people' ? 'checked' : '' ?>
+                                    data-audience-mode
+                                >
+                                <span><strong>Send to all active people</strong></span>
+                            </label>
+                            <p class="mb-0 mt-2">This includes every active person with an email address, plus any manual recipients you add below.</p>
                         </div>
 
-                        <div class="form-group">
-                            <label>Roles</label>
-                            <div class="comms-check-grid">
-                                <?php foreach ($roleOptions as $roleOption): ?>
-                                    <label class="lt-check">
-                                        <input
-                                            type="checkbox"
-                                            name="role_titles[]"
-                                            value="<?= e($roleOption) ?>"
-                                            <?= in_array($roleOption, $form['role_titles'], true) ? 'checked' : '' ?>
-                                        >
-                                        <span><?= e($roleOption) ?></span>
-                                    </label>
-                                <?php endforeach; ?>
+                        <label class="lt-check mb-3">
+                            <input
+                                type="radio"
+                                name="audience_mode"
+                                value="filtered"
+                                <?= $form['audience_mode'] !== 'all_people' ? 'checked' : '' ?>
+                                data-audience-mode
+                            >
+                            <span><strong>Build a targeted list</strong></span>
+                        </label>
+
+                        <div id="targeted-filters">
+                            <div class="form-group">
+                                <label for="keyword">Search people</label>
+                                <input
+                                    type="search"
+                                    id="keyword"
+                                    name="keyword"
+                                    class="form-control"
+                                    value="<?= e($form['keyword']) ?>"
+                                    placeholder="Name, email, Group, role or accreditation"
+                                >
                             </div>
-                        </div>
-                    </div>
 
-                    <div class="form-group">
-                        <label for="microsoft_filter">Microsoft 365 status</label>
-                        <select id="microsoft_filter" name="microsoft_filter" class="form-control">
-                            <option value="all" <?= $form['microsoft_filter'] === 'all' ? 'selected' : '' ?>>All active people</option>
-                            <option value="linked" <?= $form['microsoft_filter'] === 'linked' ? 'selected' : '' ?>>Only people linked to Microsoft 365</option>
-                            <option value="not_linked" <?= $form['microsoft_filter'] === 'not_linked' ? 'selected' : '' ?>>Only people not linked to Microsoft 365</option>
-                        </select>
-                    </div>
+                            <div class="comms-filter-grid">
+                                <div class="form-group">
+                                    <label>Groups</label>
 
-                    <details class="mb-3" <?= $form['accreditations'] ? 'open' : '' ?>>
-                        <summary class="font-weight-bold">Filter by accreditations</summary>
+                                    <div class="comms-select-actions">
+                                        <button type="button" data-check-all="group_ids[]">Select all Groups</button>
+                                        <button type="button" data-clear-all="group_ids[]">Clear Groups</button>
+                                    </div>
 
-                        <div class="comms-check-grid comms-accreditations mt-3">
-                            <?php foreach ($accreditationOptions as $category => $items): ?>
-                                <div>
-                                    <strong><?= e((string) $category) ?></strong>
+                                    <div class="comms-check-grid">
+                                        <?php foreach ($groups as $group): ?>
+                                            <?php $gid = (int) $group['id']; ?>
+                                            <label class="lt-check">
+                                                <input
+                                                    type="checkbox"
+                                                    name="group_ids[]"
+                                                    value="<?= $gid ?>"
+                                                    <?= in_array($gid, $form['group_ids'], true) ? 'checked' : '' ?>
+                                                >
+                                                <span><?= e((string) $group['group_name']) ?></span>
+                                            </label>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
 
-                                    <?php foreach ($items as $item): ?>
-                                        <label class="lt-check">
-                                            <input
-                                                type="checkbox"
-                                                name="accreditations[]"
-                                                value="<?= e($item) ?>"
-                                                <?= in_array($item, $form['accreditations'], true) ? 'checked' : '' ?>
-                                            >
-                                            <span><?= e($item) ?></span>
-                                        </label>
+                                <div class="form-group">
+                                    <label>Roles</label>
+
+                                    <div class="comms-select-actions">
+                                        <button type="button" data-check-all="role_titles[]">Select all Roles</button>
+                                        <button type="button" data-clear-all="role_titles[]">Clear Roles</button>
+                                    </div>
+
+                                    <div class="comms-check-grid">
+                                        <?php foreach ($roleOptions as $roleOption): ?>
+                                            <label class="lt-check">
+                                                <input
+                                                    type="checkbox"
+                                                    name="role_titles[]"
+                                                    value="<?= e($roleOption) ?>"
+                                                    <?= in_array($roleOption, $form['role_titles'], true) ? 'checked' : '' ?>
+                                                >
+                                                <span><?= e($roleOption) ?></span>
+                                            </label>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <details class="mb-3" <?= $form['accreditations'] ? 'open' : '' ?>>
+                                <summary class="font-weight-bold">Filter by accreditations</summary>
+
+                                <div class="comms-select-actions mt-3">
+                                    <button type="button" data-check-all="accreditations[]">Select all Accreditations</button>
+                                    <button type="button" data-clear-all="accreditations[]">Clear Accreditations</button>
+                                </div>
+
+                                <div class="comms-check-grid comms-accreditations mt-2">
+                                    <?php foreach ($accreditationOptions as $category => $items): ?>
+                                        <div>
+                                            <strong><?= e((string) $category) ?></strong>
+
+                                            <?php foreach ($items as $item): ?>
+                                                <label class="lt-check">
+                                                    <input
+                                                        type="checkbox"
+                                                        name="accreditations[]"
+                                                        value="<?= e($item) ?>"
+                                                        <?= in_array($item, $form['accreditations'], true) ? 'checked' : '' ?>
+                                                    >
+                                                    <span><?= e($item) ?></span>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        </div>
                                     <?php endforeach; ?>
                                 </div>
-                            <?php endforeach; ?>
+                            </details>
                         </div>
-                    </details>
 
-                    <div class="form-group">
-                        <label for="manual_recipients">Additional recipients</label>
-                        <textarea
-                            id="manual_recipients"
-                            name="manual_recipients"
-                            class="form-control"
-                            rows="3"
-                            placeholder="One per line, or comma separated. Example: Jane Smith <jane@example.com>"
-                        ><?= e($form['manual_recipients']) ?></textarea>
+                        <div class="form-group">
+                            <label for="manual_recipients">Additional recipients</label>
+                            <textarea
+                                id="manual_recipients"
+                                name="manual_recipients"
+                                class="form-control"
+                                rows="3"
+                                placeholder="One per line, or comma separated. Example: Jane Smith <jane@example.com>"
+                            ><?= e($form['manual_recipients']) ?></textarea>
+                        </div>
+
+                        <label class="lt-check">
+                            <input
+                                type="checkbox"
+                                name="copy_self"
+                                value="1"
+                                <?= $form['copy_self'] ? 'checked' : '' ?>
+                            >
+                            <span>Send me a copy</span>
+                        </label>
+
+                        <div class="comms-actions mt-3">
+                            <button class="btn btn-primary lt-btn" type="submit" name="action" value="to_write">
+                                Continue to write email
+                            </button>
+                            <a class="btn lt-btn lt-btn-secondary" href="/comms-tool.php">Reset</a>
+                        </div>
                     </div>
+                </section>
 
-                    <label class="lt-check">
-                        <input
-                            type="checkbox"
-                            name="copy_self"
-                            value="1"
-                            <?= $form['copy_self'] ? 'checked' : '' ?>
-                        >
-                        <span>Send me a copy</span>
-                    </label>
-                </div>
-
-                <div class="comms-panel">
-                    <h2>2. Write email</h2>
-
-                    <div class="form-group">
-                        <label for="subject">Subject</label>
-                        <input
-                            type="text"
-                            id="subject"
-                            name="subject"
-                            class="form-control"
-                            value="<?= e($form['subject']) ?>"
-                            required
-                        >
-                    </div>
-
-                    <div class="form-group">
-                        <label for="body_markdown">Message</label>
-                        <textarea
-                            id="body_markdown"
-                            name="body_markdown"
-                            class="form-control"
-                            rows="14"
-                            required
-                            placeholder="Write your email using Markdown..."
-                        ><?= e($form['body_markdown']) ?></textarea>
-                    </div>
-
-                    <div class="comms-markdown-help">
-                        Markdown examples:
-                        <code>**bold**</code>,
-                        <code>*italic*</code>,
-                        <code>- bullet</code>,
-                        <code>## heading</code>,
-                        <code>[link text](https://example.com)</code>.
-                        You can also use <code>{{name}}</code> and <code>{{email}}</code>.
-                    </div>
-
-                    <div class="comms-actions mt-3">
-                        <button class="btn btn-primary lt-btn" type="submit" name="action" value="preview">
-                            Preview email
-                        </button>
-
-                        <a class="btn lt-btn lt-btn-secondary" href="/comms-tool.php">
-                            Reset
-                        </a>
-                    </div>
-                </div>
-
-                <?php if ($mode === 'preview' && !$errors): ?>
+                <aside class="comms-sticky">
                     <div class="comms-panel">
-                        <h2>3. Preview and queue</h2>
-
-                        <p class="font-weight-bold">
-                            This will queue <?= count($recipients) ?> email<?= count($recipients) === 1 ? '' : 's' ?>.
+                        <h2>Recipient rules</h2>
+                        <p>
+                            Choose <strong>all active people</strong> for a whole-District message, or build a targeted list using Group, role, accreditation and search filters.
                         </p>
+                        <p class="mb-0">
+                            Recipients are deduplicated by email address before queueing.
+                        </p>
+                    </div>
+                </aside>
+            </div>
+        </form>
+    <?php elseif ($step === 'write'): ?>
+        <form method="post" id="comms-write-form">
+            <input type="hidden" name="step" value="write">
+            <?php comms_hidden_state_inputs($form, false); ?>
+            <input type="hidden" name="body_html" id="body_html" value="<?= e($form['body_html']) ?>">
 
-                        <div class="mb-3">
-                            <strong>Subject:</strong>
-                            <?= e($form['subject']) ?>
+            <div class="comms-layout">
+                <section>
+                    <div class="comms-panel">
+                        <h2>2. Write email</h2>
+
+                        <div class="form-group">
+                            <label for="subject">Subject</label>
+                            <input
+                                type="text"
+                                id="subject"
+                                name="subject"
+                                class="form-control"
+                                value="<?= e($form['subject']) ?>"
+                                required
+                            >
                         </div>
 
-                        <div class="comms-preview">
-                            <?= $previewHtml ?>
+                        <div class="form-group">
+                            <label for="editor">Message</label>
+
+                            <div class="comms-editor-toolbar" aria-label="Editor toolbar">
+                                <select id="formatBlock" aria-label="Text style">
+                                    <option value="p">Paragraph</option>
+                                    <option value="h2">Heading</option>
+                                    <option value="h3">Subheading</option>
+                                </select>
+
+                                <button type="button" data-command="bold"><strong>B</strong></button>
+                                <button type="button" data-command="italic"><em>I</em></button>
+                                <button type="button" data-command="underline"><u>U</u></button>
+                                <button type="button" data-command="insertUnorderedList">Bullets</button>
+                                <button type="button" data-command="insertOrderedList">Numbers</button>
+                                <button type="button" data-link>Link</button>
+                                <button type="button" data-command="removeFormat">Clear format</button>
+                            </div>
+
+                            <div
+                                id="editor"
+                                class="comms-editor"
+                                contenteditable="true"
+                                role="textbox"
+                                aria-multiline="true"
+                            ><?= $form['body_html'] ?: '<p>Hello {{name}},</p><p></p>' ?></div>
+
+                            <div class="comms-editor-help">
+                                Use <code>{{name}}</code> to insert the recipient’s name and <code>{{email}}</code> to insert their email address.
+                            </div>
                         </div>
 
                         <div class="comms-actions mt-3">
+                            <button class="btn lt-btn lt-btn-secondary" type="submit" name="action" value="back_to_recipients">
+                                Back
+                            </button>
+
+                            <button class="btn btn-primary lt-btn" type="submit" name="action" value="to_preview">
+                                Preview email
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <aside class="comms-sticky">
+                    <div class="comms-panel">
+                        <h2>Selected audience</h2>
+
+                        <p class="font-weight-bold mb-2">
+                            <?= count($recipients) ?> recipient<?= count($recipients) === 1 ? '' : 's' ?>
+                        </p>
+
+                        <div class="comms-recipient-list">
+                            <?php foreach (array_slice($recipients, 0, 30) as $recipient): ?>
+                                <div class="comms-recipient-row">
+                                    <strong><?= e($recipient['name'] ?: $recipient['email']) ?></strong>
+                                    <span class="comms-recipient-meta"><?= e($recipient['email']) ?></span>
+                                    <?php if (!empty($recipient['groups'])): ?>
+                                        <span class="comms-recipient-meta"><?= e($recipient['groups']) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <?php if (count($recipients) > 30): ?>
+                            <p class="mt-2 mb-0 font-weight-bold">Showing first 30 recipients.</p>
+                        <?php endif; ?>
+                    </div>
+                </aside>
+            </div>
+        </form>
+    <?php elseif ($step === 'preview'): ?>
+        <form method="post">
+            <input type="hidden" name="step" value="preview">
+            <?php comms_hidden_state_inputs($form, true); ?>
+
+            <div class="comms-layout">
+                <section>
+                    <div class="comms-panel">
+                        <h2>3. Preview and confirm</h2>
+
+                        <div class="comms-summary-grid mb-4">
+                            <div class="comms-summary-card">
+                                <strong><?= count($recipients) ?></strong>
+                                <span>recipient<?= count($recipients) === 1 ? '' : 's' ?></span>
+                            </div>
+
+                            <div class="comms-summary-card">
+                                <strong><?= e($form['audience_mode'] === 'all_people' ? 'All' : 'Filtered') ?></strong>
+                                <span>audience type</span>
+                            </div>
+
+                            <div class="comms-summary-card">
+                                <strong>Queue</strong>
+                                <span>emails are sent by the cron job</span>
+                            </div>
+                        </div>
+
+                        <h3 class="h5 font-weight-bold">Inbox preview</h3>
+
+                        <div class="comms-inbox-preview mb-4">
+                            <div class="comms-inbox-row">
+                                <div class="comms-inbox-from">
+                                    <?= e((string) app_config('SMTP_FROM_NAME', 'Irwell Valley Scout District')) ?>
+                                </div>
+                                <div>
+                                    <div class="comms-inbox-subject"><?= e($form['subject']) ?></div>
+                                    <div class="comms-inbox-snippet"><?= e($previewSnippet) ?></div>
+                                </div>
+                            </div>
+
+                            <div class="comms-email-preview">
+                                <?= $previewHtml ?>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <strong>Check carefully before confirming.</strong>
+                            This will add one pending email per recipient into the email queue.
+                        </div>
+
+                        <div class="comms-actions mt-3">
+                            <button class="btn lt-btn lt-btn-secondary" type="submit" name="action" value="back_to_write">
+                                Back to edit
+                            </button>
+
                             <button
                                 class="btn btn-primary lt-btn"
                                 type="submit"
@@ -1035,28 +1411,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 value="send"
                                 onclick="return confirm('Queue this email to <?= count($recipients) ?> recipient<?= count($recipients) === 1 ? '' : 's' ?>?');"
                             >
-                                Queue emails
-                            </button>
-
-                            <button class="btn lt-btn lt-btn-secondary" type="submit" name="action" value="preview">
-                                Refresh preview
+                                Confirm and queue emails
                             </button>
                         </div>
                     </div>
-                <?php endif; ?>
-            </section>
+                </section>
 
-            <aside class="comms-sticky">
-                <div class="comms-panel">
-                    <h2>Recipients</h2>
+                <aside class="comms-sticky">
+                    <div class="comms-panel">
+                        <h2>Recipients</h2>
 
-                    <?php if ($_SERVER['REQUEST_METHOD'] !== 'POST'): ?>
-                        <p class="mb-0">
-                            Build your filters and click <strong>Preview email</strong> to see the matching recipients.
-                        </p>
-                    <?php elseif (!$recipients): ?>
-                        <p class="mb-0">No recipients matched.</p>
-                    <?php else: ?>
                         <p class="font-weight-bold">
                             <?= count($recipients) ?> recipient<?= count($recipients) === 1 ? '' : 's' ?>
                         </p>
@@ -1088,21 +1452,115 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 </div>
                             <?php endforeach; ?>
                         </div>
-                    <?php endif; ?>
-                </div>
-
-                <div class="comms-panel">
-                    <h2>Sending notes</h2>
-                    <p>
-                        Emails are added to the queue as pending. Your cron job will pick them up and send them using your HTML email template.
-                    </p>
-                    <p class="mb-0">
-                        Recipients are deduplicated by email address before queueing.
-                    </p>
-                </div>
-            </aside>
-        </div>
-    </form>
+                    </div>
+                </aside>
+            </div>
+        </form>
+    <?php endif; ?>
 </main>
+
+<script>
+(function () {
+    function syncEditor() {
+        var editor = document.getElementById('editor');
+        var hidden = document.getElementById('body_html');
+
+        if (editor && hidden) {
+            hidden.value = editor.innerHTML;
+        }
+    }
+
+    document.querySelectorAll('[data-check-all]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var name = button.getAttribute('data-check-all');
+            document.querySelectorAll('input[name="' + CSS.escape(name) + '"]').forEach(function (checkbox) {
+                checkbox.checked = true;
+            });
+        });
+    });
+
+    document.querySelectorAll('[data-clear-all]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var name = button.getAttribute('data-clear-all');
+            document.querySelectorAll('input[name="' + CSS.escape(name) + '"]').forEach(function (checkbox) {
+                checkbox.checked = false;
+            });
+        });
+    });
+
+    function updateAudienceMode() {
+        var selected = document.querySelector('[data-audience-mode]:checked');
+        var filters = document.getElementById('targeted-filters');
+
+        if (!selected || !filters) {
+            return;
+        }
+
+        filters.style.display = selected.value === 'all_people' ? 'none' : '';
+    }
+
+    document.querySelectorAll('[data-audience-mode]').forEach(function (radio) {
+        radio.addEventListener('change', updateAudienceMode);
+    });
+
+    updateAudienceMode();
+
+    document.querySelectorAll('[data-command]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var command = button.getAttribute('data-command');
+            document.execCommand(command, false, null);
+            syncEditor();
+
+            var editor = document.getElementById('editor');
+            if (editor) editor.focus();
+        });
+    });
+
+    var formatBlock = document.getElementById('formatBlock');
+
+    if (formatBlock) {
+        formatBlock.addEventListener('change', function () {
+            document.execCommand('formatBlock', false, formatBlock.value);
+            syncEditor();
+
+            var editor = document.getElementById('editor');
+            if (editor) editor.focus();
+        });
+    }
+
+    document.querySelectorAll('[data-link]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var url = window.prompt('Enter the link URL');
+
+            if (!url) {
+                return;
+            }
+
+            if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
+                url = 'https://' + url;
+            }
+
+            document.execCommand('createLink', false, url);
+            syncEditor();
+
+            var editor = document.getElementById('editor');
+            if (editor) editor.focus();
+        });
+    });
+
+    var editor = document.getElementById('editor');
+
+    if (editor) {
+        editor.addEventListener('input', syncEditor);
+        editor.addEventListener('blur', syncEditor);
+    }
+
+    var writeForm = document.getElementById('comms-write-form');
+
+    if (writeForm) {
+        writeForm.addEventListener('submit', syncEditor);
+    }
+}());
+</script>
 
 <?php include __DIR__ . '/footer.php'; ?>
