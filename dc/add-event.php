@@ -393,29 +393,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             foreach ((array) ($_POST['existing_risk_assessment_ids'] ?? []) as $riskId) {
-                $stmt = $pdo->prepare("
-                    INSERT IGNORE INTO event_risk_assessments (
-                        calendar_event_id,
-                        risk_assessment_id,
-                        source_type
-                    )
-                    SELECT
-                        :event_id,
-                        id,
-                        'selected_existing'
-                    FROM risk_assessments
-                    WHERE id = :risk_id
-                      AND status = 'active'
-                      AND admin_review_status = 'available'
-                      AND (group_id = :group_id OR visibility = 'district')
-                    LIMIT 1
-                ");
+                $riskId = (int) $riskId;
 
-                $stmt->execute([
-                    'event_id' => $eventId,
-                    'risk_id' => (int) $riskId,
-                    'group_id' => $groupId,
-                ]);
+                if ($riskId <= 0) {
+                    continue;
+                }
+
+                if ($isSsoUser) {
+                    $stmt = $pdo->prepare("
+                        INSERT IGNORE INTO event_risk_assessments (
+                            calendar_event_id,
+                            risk_assessment_id,
+                            source_type
+                        )
+                        SELECT
+                            :event_id,
+                            id,
+                            'selected_existing'
+                        FROM risk_assessments
+                        WHERE id = :risk_id
+                          AND group_id = :group_id
+                          AND visibility = 'group'
+                          AND status = 'active'
+                          AND admin_review_status = 'available'
+                          AND uploaded_by_person_id = :person_id
+                          AND uploaded_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+                        LIMIT 1
+                    ");
+
+                    $stmt->execute([
+                        'event_id' => $eventId,
+                        'risk_id' => $riskId,
+                        'group_id' => $groupId,
+                        'person_id' => (int) $ctx['person_id'],
+                    ]);
+                } else {
+                    $stmt = $pdo->prepare("
+                        INSERT IGNORE INTO event_risk_assessments (
+                            calendar_event_id,
+                            risk_assessment_id,
+                            source_type
+                        )
+                        SELECT
+                            :event_id,
+                            id,
+                            'selected_existing'
+                        FROM risk_assessments
+                        WHERE id = :risk_id
+                          AND group_id = :group_id
+                          AND visibility = 'group'
+                          AND status = 'active'
+                          AND admin_review_status = 'available'
+                          AND uploaded_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+                        LIMIT 1
+                    ");
+
+                    $stmt->execute([
+                        'event_id' => $eventId,
+                        'risk_id' => $riskId,
+                        'group_id' => $groupId,
+                    ]);
+                }
             }
 
             if (
@@ -498,21 +536,96 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $stmt = db()->prepare("
     SELECT
-        id,
-        title,
-        visibility,
-        uploaded_by_name,
-        uploaded_at
-    FROM risk_assessments
-    WHERE status = 'active'
-      AND admin_review_status = 'available'
-      AND (group_id = :group_id OR visibility = 'district')
-    ORDER BY visibility DESC, uploaded_at DESC
-    LIMIT 75
+        ra.id,
+        ra.group_id,
+        g.group_name,
+        ra.title,
+        ra.description,
+        ra.visibility,
+        ra.uploaded_by_person_id,
+        ra.uploaded_by_name,
+        ra.uploaded_by_email,
+        ra.uploaded_at,
+        DATEDIFF(CURDATE(), DATE(ra.uploaded_at)) AS age_days
+    FROM risk_assessments ra
+    JOIN groups g
+      ON g.id = ra.group_id
+    WHERE ra.status = 'active'
+      AND ra.admin_review_status = 'available'
+    ORDER BY ra.uploaded_at DESC
+    LIMIT 300
 ");
 
-$stmt->execute(['group_id' => $groupId]);
-$riskAssessments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$stmt->execute();
+$allRiskAssessments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$riskAssessmentCards = [];
+$ninetyDaysAgo = new DateTimeImmutable('-90 days');
+
+foreach ($allRiskAssessments as $risk) {
+    $riskId = (int) $risk['id'];
+    $riskGroupId = (int) $risk['group_id'];
+    $visibility = (string) $risk['visibility'];
+
+    $uploadedAt = null;
+
+    try {
+        $uploadedAt = new DateTimeImmutable((string) $risk['uploaded_at']);
+    } catch (Throwable $e) {
+        $uploadedAt = null;
+    }
+
+    $isCurrentGroup = $riskGroupId === $groupId;
+    $isDistrict = $visibility === 'district';
+    $isRecent = $uploadedAt instanceof DateTimeImmutable && $uploadedAt >= $ninetyDaysAgo;
+
+    $uploadedByCurrentPerson = $isSsoUser
+        && !empty($risk['uploaded_by_person_id'])
+        && (int) $risk['uploaded_by_person_id'] === (int) $ctx['person_id'];
+
+    if ($isDistrict) {
+        $canSelect = false;
+        $reason = 'District risk assessments must be downloaded, reviewed and re-uploaded before use.';
+    } elseif (!$isCurrentGroup) {
+        $canSelect = false;
+        $reason = 'This belongs to another Group. Download it, review it and upload your own version if suitable.';
+    } elseif (!$isRecent) {
+        $canSelect = false;
+        $reason = 'This risk assessment is over 90 days old. Download it, review it and re-upload an updated version.';
+    } elseif ($isSsoUser && !$uploadedByCurrentPerson) {
+        $canSelect = false;
+        $reason = 'This was uploaded by someone else. Download it, review it and re-upload your own version if suitable.';
+    } else {
+        $canSelect = true;
+        $reason = 'You can use this risk assessment directly.';
+    }
+
+    $riskAssessmentCards[] = [
+        'id' => $riskId,
+        'title' => (string) $risk['title'],
+        'description' => (string) ($risk['description'] ?? ''),
+        'visibility' => $visibility,
+        'group_name' => (string) $risk['group_name'],
+        'uploaded_by_name' => (string) ($risk['uploaded_by_name'] ?? ''),
+        'uploaded_at' => (string) $risk['uploaded_at'],
+        'age_days' => isset($risk['age_days']) ? (int) $risk['age_days'] : null,
+        'can_select' => $canSelect,
+        'reason' => $reason,
+        'download_url' => '/dc/download-risk-assessment.php?id=' . $riskId,
+        'search_text' => strtolower(trim(
+            (string) $risk['title'] . ' ' .
+            (string) ($risk['description'] ?? '') . ' ' .
+            (string) $risk['group_name'] . ' ' .
+            (string) ($risk['uploaded_by_name'] ?? '') . ' ' .
+            $visibility
+        )),
+    ];
+}
+
+$selectedExistingRiskIds = array_map(
+    'intval',
+    (array) ($_POST['existing_risk_assessment_ids'] ?? [])
+);
 
 $nowLocalMin = (new DateTimeImmutable('now'))->format('Y-m-d\TH:i');
 
@@ -699,9 +812,127 @@ require __DIR__ . '/layout.php';
         opacity: 0;
     }
 
+    .dc-selected-risk-list {
+        display: grid;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .dc-selected-risk-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        border: 1px solid #d8d8d8;
+        background: #fff;
+        padding: 0.75rem;
+    }
+
+    .dc-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        background: rgba(0, 0, 0, 0.65);
+        display: none;
+        padding: 1rem;
+        overflow-y: auto;
+    }
+
+    .dc-modal-backdrop[aria-hidden="false"] {
+        display: block;
+    }
+
+    .dc-modal {
+        background: #fff;
+        border: 4px solid #000;
+        max-width: 1120px;
+        margin: 2rem auto;
+    }
+
+    .dc-modal-header,
+    .dc-modal-footer {
+        padding: 1rem;
+        border-bottom: 1px solid #d8d8d8;
+    }
+
+    .dc-modal-footer {
+        border-top: 1px solid #d8d8d8;
+        border-bottom: 0;
+    }
+
+    .dc-modal-body {
+        padding: 1rem;
+    }
+
+    .dc-risk-search-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    @media (min-width: 768px) {
+        .dc-risk-search-grid {
+            grid-template-columns: 1fr 220px;
+        }
+    }
+
+    .dc-risk-card-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    @media (min-width: 768px) {
+        .dc-risk-card-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    .dc-risk-card {
+        border: 2px solid #d8d8d8;
+        padding: 1rem;
+        background: #fff;
+    }
+
+    .dc-risk-card h3 {
+        font-size: 1.2rem;
+        margin: 0 0 0.5rem;
+        font-weight: 900;
+    }
+
+    .dc-risk-meta {
+        font-size: 0.95rem;
+        color: #4a4a4a;
+        margin-bottom: 0.75rem;
+    }
+
+    .dc-risk-warning {
+        border-left: 5px solid #ffdd00;
+        background: #fff8d6;
+        padding: 0.75rem;
+        margin: 0.75rem 0;
+    }
+
+    .dc-risk-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+    }
+
+    .dc-risk-card.is-selected {
+        border-color: #00a794;
+        box-shadow: inset 0 0 0 3px #00a794;
+    }
+
     @media (max-width: 767.98px) {
         .dc-location-map {
             height: 300px;
+        }
+
+        .dc-modal {
+            margin: 0;
         }
     }
 </style>
@@ -815,7 +1046,7 @@ require __DIR__ . '/layout.php';
                     $selectedEventType = old_value('event_type', 'meeting_away_from_hut');
                     $eventTypeLabels = [
                         'meeting_away_from_hut' => 'Meeting away from hut',
-                        'day_activity' => 'Day activity',
+                        'day_activity' => 'Day event',
                         'nights_away' => 'Nights away',
                         'camp' => 'Camp',
                         'hike' => 'Hike',
@@ -871,7 +1102,7 @@ require __DIR__ . '/layout.php';
         </div>
 
         <p class="form-text">
-            Camps, sleepovers and expeditions default to a two-day event after you choose the start date.
+            Day events default to two hours. Camps, sleepovers, expeditions and nights away default to two days.
         </p>
 
         <div class="form-group">
@@ -1012,35 +1243,21 @@ require __DIR__ . '/layout.php';
     <section class="lt-panel">
         <h2 class="lt-section-title">Risk assessments</h2>
 
-        <?php if ($riskAssessments): ?>
-            <fieldset class="form-group">
-                <legend>Select existing risk assessments</legend>
+        <div class="dc-risk-warning">
+            <strong>Review every risk assessment before use.</strong>
+            <p class="mb-0">
+                District risk assessments and older risk assessments cannot be attached directly. Download them, review and update them, then upload your checked version.
+            </p>
+        </div>
 
-                <div class="lt-check-list">
-                    <?php foreach ($riskAssessments as $risk): ?>
-                        <?php
-                            $checked = in_array(
-                                (string) $risk['id'],
-                                array_map('strval', (array) ($_POST['existing_risk_assessment_ids'] ?? [])),
-                                true
-                            );
-                        ?>
-                        <label class="lt-check">
-                            <input
-                                type="checkbox"
-                                name="existing_risk_assessment_ids[]"
-                                value="<?= (int) $risk['id'] ?>"
-                                <?= $checked ? 'checked' : '' ?>
-                            >
-                            <?= e((string) $risk['title']) ?>
-                            <span class="lt-badge ml-1"><?= e((string) $risk['visibility']) ?></span>
-                        </label>
-                    <?php endforeach; ?>
-                </div>
-            </fieldset>
-        <?php endif; ?>
+        <button type="button" class="btn btn-primary lt-btn" id="open_risk_modal">
+            Select a previous risk assessment
+        </button>
 
-        <fieldset class="form-group">
+        <div id="selected_risk_list" class="dc-selected-risk-list"></div>
+        <div id="selected_risk_inputs"></div>
+
+        <fieldset class="form-group mt-4">
             <legend>Upload new risk assessments</legend>
 
             <p class="form-text">
@@ -1123,7 +1340,72 @@ require __DIR__ . '/layout.php';
     </div>
 </form>
 
+<div
+    id="risk_modal"
+    class="dc-modal-backdrop"
+    aria-hidden="true"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="risk_modal_title"
+>
+    <div class="dc-modal">
+        <div class="dc-modal-header">
+            <h2 id="risk_modal_title" class="mb-2">Select a previous risk assessment</h2>
+            <p class="mb-0">
+                You can directly select your own Group risk assessments uploaded in the last 90 days. For District risk assessments, other Groups, or older files, download and review them before re-uploading.
+            </p>
+        </div>
+
+        <div class="dc-modal-body">
+            <div class="dc-risk-search-grid">
+                <div class="form-group mb-0">
+                    <label for="risk_modal_search">Search risk assessments</label>
+                    <input
+                        type="search"
+                        id="risk_modal_search"
+                        class="form-control"
+                        placeholder="Search by title, Group, uploader or description"
+                    >
+                </div>
+
+                <div class="form-group mb-0">
+                    <label for="risk_modal_filter">Filter</label>
+                    <select id="risk_modal_filter" class="form-control">
+                        <option value="all">All risk assessments</option>
+                        <option value="selectable">Can select now</option>
+                        <option value="district">District risk assessments</option>
+                        <option value="current_group">This Group</option>
+                        <option value="other_group">Other Groups</option>
+                        <option value="older">Older than 90 days</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="risk_card_grid" class="dc-risk-card-grid"></div>
+            <div id="risk_no_results" class="dc-risk-empty" hidden>No matching risk assessments found.</div>
+        </div>
+
+        <div class="dc-modal-footer">
+            <button type="button" class="btn lt-btn lt-btn-secondary" id="close_risk_modal">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+const riskAssessments = <?= json_encode(
+    $riskAssessmentCards,
+    JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
+) ?>;
+
+const initiallySelectedRiskIds = <?= json_encode(
+    array_values($selectedExistingRiskIds),
+    JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
+) ?>;
+</script>
 
 <script>
 (function () {
@@ -1148,6 +1430,209 @@ require __DIR__ . '/layout.php';
         checkbox.addEventListener('change', sync);
         sync();
     });
+})();
+</script>
+
+<script>
+(function () {
+    const modal = document.getElementById('risk_modal');
+    const openButton = document.getElementById('open_risk_modal');
+    const closeButton = document.getElementById('close_risk_modal');
+    const searchInput = document.getElementById('risk_modal_search');
+    const filterInput = document.getElementById('risk_modal_filter');
+    const grid = document.getElementById('risk_card_grid');
+    const noResults = document.getElementById('risk_no_results');
+    const selectedList = document.getElementById('selected_risk_list');
+    const selectedInputs = document.getElementById('selected_risk_inputs');
+
+    if (!modal || !openButton || !closeButton || !searchInput || !filterInput || !grid || !selectedList || !selectedInputs) {
+        return;
+    }
+
+    const selected = new Set((initiallySelectedRiskIds || []).map(function (id) {
+        return Number(id);
+    }));
+
+    function escapeText(value) {
+        return String(value || '').replace(/[&<>"']/g, function (char) {
+            return {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            }[char];
+        });
+    }
+
+    function isOlderThan90(risk) {
+        return Number(risk.age_days || 0) > 90;
+    }
+
+    function matchesFilter(risk, filter) {
+        if (filter === 'selectable') {
+            return Boolean(risk.can_select);
+        }
+
+        if (filter === 'district') {
+            return risk.visibility === 'district';
+        }
+
+        if (filter === 'current_group') {
+            return risk.group_name && Number(risk.group_id || 0) === <?= (int) $groupId ?>;
+        }
+
+        if (filter === 'other_group') {
+            return risk.group_name && Number(risk.group_id || 0) !== <?= (int) $groupId ?>;
+        }
+
+        if (filter === 'older') {
+            return isOlderThan90(risk);
+        }
+
+        return true;
+    }
+
+    function renderSelected() {
+        selectedList.innerHTML = '';
+        selectedInputs.innerHTML = '';
+
+        Array.from(selected).forEach(function (id) {
+            const risk = riskAssessments.find(function (item) {
+                return Number(item.id) === Number(id);
+            });
+
+            if (!risk) {
+                return;
+            }
+
+            const item = document.createElement('div');
+            item.className = 'dc-selected-risk-item';
+
+            const text = document.createElement('div');
+            text.innerHTML = '<strong>' + escapeText(risk.title) + '</strong><br><span class="form-text">' + escapeText(risk.group_name) + ' · uploaded ' + escapeText(risk.uploaded_at) + '</span>';
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'dc-remove-risk-file';
+            remove.textContent = 'Remove';
+            remove.addEventListener('click', function () {
+                selected.delete(Number(id));
+                renderSelected();
+                renderCards();
+            });
+
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'existing_risk_assessment_ids[]';
+            input.value = String(id);
+
+            item.appendChild(text);
+            item.appendChild(remove);
+
+            selectedList.appendChild(item);
+            selectedInputs.appendChild(input);
+        });
+    }
+
+    function renderCards() {
+        const query = searchInput.value.trim().toLowerCase();
+        const filter = filterInput.value;
+        grid.innerHTML = '';
+
+        const filtered = riskAssessments.filter(function (risk) {
+            const textMatch = !query || String(risk.search_text || '').includes(query);
+            const filterMatch = matchesFilter(risk, filter);
+
+            return textMatch && filterMatch;
+        });
+
+        noResults.hidden = filtered.length > 0;
+
+        filtered.forEach(function (risk) {
+            const card = document.createElement('article');
+            card.className = 'dc-risk-card' + (selected.has(Number(risk.id)) ? ' is-selected' : '');
+
+            const ageText = risk.age_days === null ? 'Age unknown' : risk.age_days + ' days old';
+            const visibilityText = risk.visibility === 'district' ? 'District' : 'Group';
+            const selectedText = selected.has(Number(risk.id)) ? 'Selected' : 'Select this risk assessment';
+
+            let actions = '';
+
+            if (risk.can_select) {
+                actions += '<button type="button" class="btn btn-primary lt-btn" data-select-risk="' + risk.id + '">' + selectedText + '</button>';
+            }
+
+            actions += '<a class="btn lt-btn lt-btn-secondary" href="' + escapeText(risk.download_url) + '" target="_blank" rel="noopener">Download and review</a>';
+
+            card.innerHTML =
+                '<h3>' + escapeText(risk.title) + '</h3>' +
+                '<div class="dc-risk-meta">' +
+                    escapeText(visibilityText) + ' · ' +
+                    escapeText(risk.group_name) + '<br>' +
+                    'Uploaded by ' + escapeText(risk.uploaded_by_name || 'Unknown') + '<br>' +
+                    escapeText(ageText) +
+                '</div>' +
+                (risk.description ? '<p>' + escapeText(risk.description) + '</p>' : '') +
+                '<div class="dc-risk-warning"><strong>' + (risk.can_select ? 'Can be selected' : 'Download required') + '</strong><br>' + escapeText(risk.reason) + '</div>' +
+                '<div class="dc-risk-actions">' + actions + '</div>';
+
+            grid.appendChild(card);
+        });
+    }
+
+    grid.addEventListener('click', function (event) {
+        const button = event.target.closest('[data-select-risk]');
+
+        if (!button) {
+            return;
+        }
+
+        const id = Number(button.getAttribute('data-select-risk'));
+
+        if (selected.has(id)) {
+            selected.delete(id);
+        } else {
+            selected.add(id);
+        }
+
+        renderSelected();
+        renderCards();
+    });
+
+    function openModal() {
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        searchInput.focus();
+        renderCards();
+    }
+
+    function closeModal() {
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+        openButton.focus();
+    }
+
+    openButton.addEventListener('click', openModal);
+    closeButton.addEventListener('click', closeModal);
+
+    modal.addEventListener('click', function (event) {
+        if (event.target === modal) {
+            closeModal();
+        }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && modal.getAttribute('aria-hidden') === 'false') {
+            closeModal();
+        }
+    });
+
+    searchInput.addEventListener('input', renderCards);
+    filterInput.addEventListener('change', renderCards);
+
+    renderSelected();
+    renderCards();
 })();
 </script>
 
@@ -1222,10 +1707,6 @@ require __DIR__ . '/layout.php';
             fileTd.appendChild(fileSize);
 
             const titleTd = document.createElement('td');
-            const titleLabel = document.createElement('label');
-            titleLabel.className = 'sr-only';
-            titleLabel.textContent = 'Risk assessment title';
-
             const titleInput = document.createElement('input');
             titleInput.className = 'form-control';
             titleInput.name = 'risk_titles[]';
@@ -1237,14 +1718,9 @@ require __DIR__ . '/layout.php';
                 item.title = titleInput.value;
             });
 
-            titleTd.appendChild(titleLabel);
             titleTd.appendChild(titleInput);
 
             const visibilityTd = document.createElement('td');
-            const visibilityLabel = document.createElement('label');
-            visibilityLabel.className = 'sr-only';
-            visibilityLabel.textContent = 'Sharing';
-
             const visibilitySelect = document.createElement('select');
             visibilitySelect.className = 'form-control';
             visibilitySelect.name = 'risk_visibilities[]';
@@ -1265,14 +1741,9 @@ require __DIR__ . '/layout.php';
                 item.visibility = visibilitySelect.value;
             });
 
-            visibilityTd.appendChild(visibilityLabel);
             visibilityTd.appendChild(visibilitySelect);
 
             const descriptionTd = document.createElement('td');
-            const descriptionLabel = document.createElement('label');
-            descriptionLabel.className = 'sr-only';
-            descriptionLabel.textContent = 'Description';
-
             const descriptionInput = document.createElement('textarea');
             descriptionInput.className = 'form-control';
             descriptionInput.name = 'risk_descriptions[]';
@@ -1284,7 +1755,6 @@ require __DIR__ . '/layout.php';
                 item.description = descriptionInput.value;
             });
 
-            descriptionTd.appendChild(descriptionLabel);
             descriptionTd.appendChild(descriptionInput);
 
             const removeTd = document.createElement('td');
@@ -1349,6 +1819,9 @@ require __DIR__ . '/layout.php';
     const titleInput = document.getElementById('title');
     const descriptionInput = document.getElementById('description');
 
+    let endWasManuallyChanged = false;
+    let settingEndAutomatically = false;
+
     function pad(value) {
         return String(value).padStart(2, '0');
     }
@@ -1381,16 +1854,12 @@ require __DIR__ . '/layout.php';
             || text.includes('expedition');
     }
 
-    function maybeDefaultEndDate() {
+    function defaultEndDate(force) {
         if (!startInput || !endInput || !startInput.value) {
             return;
         }
 
-        if (endInput.value && !looksLikeMultiDayEvent()) {
-            return;
-        }
-
-        if (!looksLikeMultiDayEvent()) {
+        if (!force && endWasManuallyChanged) {
             return;
         }
 
@@ -1401,26 +1870,50 @@ require __DIR__ . '/layout.php';
         }
 
         const endDate = new Date(startDate.getTime());
-        endDate.setDate(endDate.getDate() + 2);
 
+        if (looksLikeMultiDayEvent()) {
+            endDate.setDate(endDate.getDate() + 2);
+        } else {
+            endDate.setHours(endDate.getHours() + 2);
+        }
+
+        settingEndAutomatically = true;
         endInput.value = toDateTimeLocal(endDate);
         endInput.min = startInput.value;
+        settingEndAutomatically = false;
+    }
+
+    if (endInput) {
+        endInput.addEventListener('change', function () {
+            if (!settingEndAutomatically) {
+                endWasManuallyChanged = true;
+            }
+        });
     }
 
     if (startInput) {
-        startInput.addEventListener('change', maybeDefaultEndDate);
+        startInput.addEventListener('change', function () {
+            endWasManuallyChanged = false;
+            defaultEndDate(true);
+        });
     }
 
     if (eventTypeInput) {
-        eventTypeInput.addEventListener('change', maybeDefaultEndDate);
+        eventTypeInput.addEventListener('change', function () {
+            defaultEndDate(false);
+        });
     }
 
     if (titleInput) {
-        titleInput.addEventListener('blur', maybeDefaultEndDate);
+        titleInput.addEventListener('blur', function () {
+            defaultEndDate(false);
+        });
     }
 
     if (descriptionInput) {
-        descriptionInput.addEventListener('blur', maybeDefaultEndDate);
+        descriptionInput.addEventListener('blur', function () {
+            defaultEndDate(false);
+        });
     }
 })();
 </script>
