@@ -1009,7 +1009,7 @@ $breadcrumb = '<a href="/index.php">Home</a> / Group Manager';
                     <?php endforeach; ?>
                 </div>
             <?php else: ?>
-                <div class="alert alert-warning mb-0">No active Group calendar link is available for this Group.</div>
+                <div class="alert alert-warning mb-0">No active Group calendar link is available for this Group. Contact your DLV</div>
             <?php endif; ?>
         </div>
     <?php elseif ($tab === 'website'): ?>
