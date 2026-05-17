@@ -32,9 +32,6 @@ $validEventTypes = [
     'other',
 ];
 
-/**
- * Local helper for sticky form values.
- */
 function old_value(string $key, string $default = ''): string
 {
     if (!array_key_exists($key, $_POST)) {
@@ -50,9 +47,15 @@ function old_value(string $key, string $default = ''): string
     return (string) $value;
 }
 
-/**
- * Convert a datetime-local value into a DateTimeImmutable.
- */
+function old_array_value(string $key, string|int $index, string $default = ''): string
+{
+    if (!isset($_POST[$key]) || !is_array($_POST[$key])) {
+        return $default;
+    }
+
+    return isset($_POST[$key][$index]) ? (string) $_POST[$key][$index] : $default;
+}
+
 function parse_local_datetime(string $value): ?DateTimeImmutable
 {
     $value = trim($value);
@@ -74,9 +77,6 @@ function parse_local_datetime(string $value): ?DateTimeImmutable
     }
 }
 
-/**
- * Return a single uploaded file from a multiple file input.
- */
 function uploaded_file_from_multiple(array $files, int $index): array
 {
     return [
@@ -88,9 +88,6 @@ function uploaded_file_from_multiple(array $files, int $index): array
     ];
 }
 
-/**
- * Fetch the signed-in person, including their role for the selected Group where available.
- */
 function dc_fetch_current_person_for_event(int $personId, int $groupId): ?array
 {
     $stmt = db()->prepare("
@@ -124,6 +121,9 @@ if ($isSsoUser) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $saveAction = (string) ($_POST['save_action'] ?? 'submit');
+    $isDraft = $saveAction === 'draft';
+
     $groupId = dc_selected_group_id((int) ($_POST['group_id'] ?? $groupId));
     $sections = dc_fetch_sections($groupId);
     $people = dc_fetch_group_people($groupId);
@@ -139,9 +139,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $selectedLeader = $currentPerson;
 
         if (!$selectedLeader) {
-            $errors[] = 'We could not find your user profile. Please complete onboarding before submitting an event.';
+            $errors[] = 'We could not find your user profile. Please complete onboarding before saving this event.';
         } elseif (empty($selectedLeader['primary_email'])) {
-            $errors[] = 'Your profile needs an email address before you can submit an event.';
+            $errors[] = 'Your profile needs an email address before you can save this event.';
         }
     } else {
         $leaderPersonId = (int) ($_POST['leader_person_id'] ?? 0);
@@ -186,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Enter a valid end date and time.';
     }
 
-    if ($startsAt && $startsAt < $now->modify('-1 minute')) {
+    if (!$isDraft && $startsAt && $startsAt < $now->modify('-1 minute')) {
         $errors[] = 'The start date and time cannot be in the past.';
     }
 
@@ -211,6 +211,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     );
 
     $selectedSectionIds = [];
+    $sectionCounts = [];
 
     foreach ((array) ($_POST['section_ids'] ?? []) as $sectionId) {
         $sectionId = (int) $sectionId;
@@ -222,11 +223,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $selectedSectionIds = array_values(array_unique($selectedSectionIds));
 
+    foreach ((array) ($_POST['section_young_people_count'] ?? []) as $sectionId => $count) {
+        $sectionId = (int) $sectionId;
+        $count = trim((string) $count);
+
+        if (!in_array($sectionId, $validSectionIds, true)) {
+            continue;
+        }
+
+        if ($count === '') {
+            $sectionCounts[$sectionId] = null;
+            continue;
+        }
+
+        if (!ctype_digit($count)) {
+            $errors[] = 'Young people numbers by section must be whole numbers.';
+            break;
+        }
+
+        $sectionCounts[$sectionId] = (int) $count;
+    }
+
+    $youngPeopleTotal = 0;
+    $hasSectionCount = false;
+
+    foreach ($selectedSectionIds as $sectionId) {
+        if (isset($sectionCounts[$sectionId]) && $sectionCounts[$sectionId] !== null) {
+            $youngPeopleTotal += (int) $sectionCounts[$sectionId];
+            $hasSectionCount = true;
+        }
+    }
+
+    if (!$isDraft && $sections && !$selectedSectionIds) {
+        $errors[] = 'Choose at least one section involved in this event.';
+    }
+
+    if (!$isDraft && $selectedSectionIds && !$hasSectionCount) {
+        $errors[] = 'Enter the number of young people attending for at least one selected section.';
+    }
+
+    $riskTitles = isset($_POST['risk_titles']) && is_array($_POST['risk_titles'])
+        ? $_POST['risk_titles']
+        : [];
+
+    $riskDescriptions = isset($_POST['risk_descriptions']) && is_array($_POST['risk_descriptions'])
+        ? $_POST['risk_descriptions']
+        : [];
+
+    $riskVisibilities = isset($_POST['risk_visibilities']) && is_array($_POST['risk_visibilities'])
+        ? $_POST['risk_visibilities']
+        : [];
+
+    if (isset($_FILES['risk_files']) && is_array($_FILES['risk_files']['name'] ?? null)) {
+        $fileCount = count($_FILES['risk_files']['name']);
+
+        for ($i = 0; $i < $fileCount; $i++) {
+            $fileError = $_FILES['risk_files']['error'][$i] ?? UPLOAD_ERR_NO_FILE;
+
+            if ($fileError === UPLOAD_ERR_NO_FILE) {
+                continue;
+            }
+
+            $riskTitle = trim((string) ($riskTitles[$i] ?? ''));
+
+            if ($riskTitle === '') {
+                $errors[] = 'Enter a title for each uploaded risk assessment.';
+                break;
+            }
+        }
+    }
+
     if (!$errors) {
         $pdo = db();
         $pdo->beginTransaction();
 
         try {
+            $eventStatus = $isDraft ? 'draft' : 'submitted';
+
             $stmt = $pdo->prepare("
                 INSERT INTO calendar_events (
                     group_id,
@@ -267,11 +340,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     :leader_email,
                     :leader_phone,
                     :leader_role,
-                    :emergency_contact_name,
-                    :emergency_contact_phone,
+                    NULL,
+                    NULL,
                     :submitted_by_person_id,
                     :submitted_via,
-                    'submitted'
+                    :status
                 )
             ");
 
@@ -286,16 +359,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'location_lng' => $locationLng !== '' ? (float) $locationLng : null,
                 'starts_at' => $startsAt?->format('Y-m-d H:i:s'),
                 'ends_at' => $endsAt?->format('Y-m-d H:i:s'),
-                'young_people_count' => ($_POST['young_people_count'] ?? '') !== '' ? (int) $_POST['young_people_count'] : null,
+                'young_people_count' => $hasSectionCount ? $youngPeopleTotal : null,
                 'adult_count' => ($_POST['adult_count'] ?? '') !== '' ? (int) $_POST['adult_count'] : null,
                 'leader_name' => (string) ($selectedLeader['full_name'] ?? ''),
                 'leader_email' => (string) ($selectedLeader['primary_email'] ?? ''),
                 'leader_phone' => $selectedLeader['phone'] ?? null,
                 'leader_role' => str_replace('_', ' ', (string) ($selectedLeader['membership_role'] ?? '')),
-                'emergency_contact_name' => trim((string) ($_POST['emergency_contact_name'] ?? '')) ?: null,
-                'emergency_contact_phone' => trim((string) ($_POST['emergency_contact_phone'] ?? '')) ?: null,
                 'submitted_by_person_id' => $isSsoUser ? (int) $ctx['person_id'] : null,
                 'submitted_via' => $isSsoUser ? 'sso' : 'group_link',
+                'status' => $eventStatus,
             ]);
 
             $eventId = (int) $pdo->lastInsertId();
@@ -304,16 +376,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $pdo->prepare("
                     INSERT IGNORE INTO calendar_event_sections (
                         calendar_event_id,
-                        group_section_id
+                        group_section_id,
+                        young_people_count
                     ) VALUES (
                         :event_id,
-                        :section_id
+                        :section_id,
+                        :young_people_count
                     )
                 ");
 
                 $stmt->execute([
                     'event_id' => $eventId,
                     'section_id' => $sectionId,
+                    'young_people_count' => $sectionCounts[$sectionId] ?? null,
                 ]);
             }
 
@@ -348,7 +423,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 && is_array($_FILES['risk_files']['name'] ?? null)
             ) {
                 $fileCount = count($_FILES['risk_files']['name']);
-                $uploadedRiskCount = 0;
 
                 for ($i = 0; $i < $fileCount; $i++) {
                     $file = uploaded_file_from_multiple($_FILES['risk_files'], $i);
@@ -357,28 +431,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         continue;
                     }
 
-                    $uploadedRiskCount++;
+                    $riskTitle = trim((string) ($riskTitles[$i] ?? ''));
+                    $riskDescription = trim((string) ($riskDescriptions[$i] ?? ''));
+                    $riskVisibility = (string) ($riskVisibilities[$i] ?? 'district');
 
-                    $riskTitle = trim((string) ($_POST['risk_title'] ?? ''));
-
-                    if ($riskTitle === '') {
-                        $riskTitle = $title . ' risk assessment';
+                    if (!in_array($riskVisibility, ['district', 'group'], true)) {
+                        $riskVisibility = 'district';
                     }
 
-                    if ($fileCount > 1 && !empty($file['name'])) {
-                        $riskTitle .= ' - ' . $file['name'];
+                    if ($riskTitle === '') {
+                        throw new RuntimeException('Each uploaded risk assessment must have a title.');
                     }
 
                     $riskId = dc_store_risk_assessment_upload(
                         $file,
                         $groupId,
                         $riskTitle,
-                        trim((string) ($_POST['risk_description'] ?? '')) ?: null,
+                        $riskDescription !== '' ? $riskDescription : null,
                         (string) ($selectedLeader['full_name'] ?? ''),
                         (string) ($selectedLeader['primary_email'] ?? ''),
                         $isSsoUser ? (int) $ctx['person_id'] : null,
                         $isSsoUser ? 'sso' : 'group_link',
-                        (string) ($_POST['risk_visibility'] ?? 'district')
+                        $riskVisibility
                     );
 
                     $stmt = $pdo->prepare("
@@ -403,16 +477,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->commit();
 
             dc_log(
-                'calendar_event.created',
+                $isDraft ? 'calendar_event.draft_created' : 'calendar_event.created',
                 'calendar_event',
                 $eventId,
-                ['status' => 'submitted'],
+                ['status' => $eventStatus],
                 $groupId
             );
 
-            dc_queue_event_notifications($eventId, 'submitted');
+            if (!$isDraft) {
+                dc_queue_event_notifications($eventId, 'submitted');
+            }
 
-            redirect('/dc/manage-event.php?id=' . $eventId . '&created=1');
+            redirect('/dc/manage-event.php?id=' . $eventId . ($isDraft ? '&draft=1' : '&created=1'));
         } catch (Throwable $e) {
             $pdo->rollBack();
             $errors[] = 'The event could not be saved. ' . $e->getMessage();
@@ -442,16 +518,13 @@ $nowLocalMin = (new DateTimeImmutable('now'))->format('Y-m-d\TH:i');
 
 $pageTitle = 'Add event';
 $heroTitle = 'Add an event';
-$heroText = 'Submit an away-from-hut notification or activity for review.';
+$heroText = 'Submit an away-from-hut notification or activity for review, or save it as a draft.';
 $active = 'add';
 
 require __DIR__ . '/layout.php';
 ?>
 
-<link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
 <style>
     .dc-map-search {
@@ -467,11 +540,25 @@ require __DIR__ . '/layout.php';
         }
     }
 
-    .dc-location-map {
-        min-height: 320px;
+    .dc-location-map-wrap {
+        position: relative;
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
         border: 2px solid #000;
-        margin-top: 1rem;
         background: #f5f5f5;
+        margin-top: 1rem;
+        isolation: isolate;
+    }
+
+    .dc-location-map {
+        display: block;
+        width: 100%;
+        height: 360px;
+        min-height: 320px;
+        max-width: 100%;
+        position: relative;
+        z-index: 0;
     }
 
     .dc-location-results {
@@ -508,6 +595,114 @@ require __DIR__ . '/layout.php';
     .dc-hidden-field-summary {
         font-size: 0.95rem;
         color: #4a4a4a;
+    }
+
+    .dc-section-count-grid {
+        display: grid;
+        gap: 0.75rem;
+    }
+
+    .dc-section-count-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+        border: 1px solid #d8d8d8;
+        padding: 0.75rem;
+        background: #fff;
+    }
+
+    @media (min-width: 768px) {
+        .dc-section-count-row {
+            grid-template-columns: minmax(220px, 1fr) 180px;
+            align-items: center;
+        }
+    }
+
+    .dc-risk-stage-controls {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+        align-items: end;
+        margin-bottom: 1rem;
+    }
+
+    @media (min-width: 768px) {
+        .dc-risk-stage-controls {
+            grid-template-columns: 1fr auto;
+        }
+    }
+
+    .dc-risk-table-wrap {
+        overflow-x: auto;
+        border: 1px solid #d8d8d8;
+        background: #fff;
+    }
+
+    .dc-risk-table {
+        width: 100%;
+        min-width: 760px;
+        border-collapse: collapse;
+        margin: 0;
+    }
+
+    .dc-risk-table th,
+    .dc-risk-table td {
+        border-bottom: 1px solid #d8d8d8;
+        padding: 0.75rem;
+        vertical-align: top;
+    }
+
+    .dc-risk-table th {
+        background: #f5f5f5;
+        text-align: left;
+        font-weight: 800;
+    }
+
+    .dc-risk-table input,
+    .dc-risk-table textarea,
+    .dc-risk-table select {
+        min-width: 180px;
+    }
+
+    .dc-risk-file-name {
+        font-weight: 800;
+        display: block;
+        max-width: 220px;
+        overflow-wrap: anywhere;
+    }
+
+    .dc-risk-empty {
+        padding: 1rem;
+        background: #f5f5f5;
+        border: 1px dashed #888;
+    }
+
+    .dc-remove-risk-file {
+        border: 2px solid #d4351c;
+        background: #fff;
+        color: #d4351c;
+        font-weight: 800;
+        padding: 0.35rem 0.65rem;
+    }
+
+    .dc-remove-risk-file:hover,
+    .dc-remove-risk-file:focus {
+        background: #d4351c;
+        color: #fff;
+    }
+
+    .dc-staged-file-input {
+        position: absolute;
+        left: -9999px;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+    }
+
+    @media (max-width: 767.98px) {
+        .dc-location-map {
+            height: 300px;
+        }
     }
 </style>
 
@@ -546,16 +741,16 @@ require __DIR__ . '/layout.php';
 
         <?php if ($isSsoUser): ?>
             <?php if ($currentPerson): ?>
-                <p class="mb-1">
-                    You are submitting this event as:
-                </p>
+                <p class="mb-1">You are submitting this event as:</p>
 
                 <div class="dc-selected-location">
                     <strong><?= e((string) $currentPerson['full_name']) ?></strong>
+
                     <?php if (!empty($currentPerson['primary_email'])): ?>
                         <br>
                         <span><?= e((string) $currentPerson['primary_email']) ?></span>
                     <?php endif; ?>
+
                     <?php if (!empty($currentPerson['phone'])): ?>
                         <br>
                         <span><?= e((string) $currentPerson['phone']) ?></span>
@@ -679,54 +874,65 @@ require __DIR__ . '/layout.php';
             Camps, sleepovers and expeditions default to a two-day event after you choose the start date.
         </p>
 
-        <div class="row">
-            <div class="col-md-6 form-group">
-                <label for="young_people_count">Young people attending</label>
-                <input
-                    type="number"
-                    min="0"
-                    id="young_people_count"
-                    name="young_people_count"
-                    class="form-control"
-                    value="<?= e(old_value('young_people_count')) ?>"
-                >
-            </div>
-
-            <div class="col-md-6 form-group">
-                <label for="adult_count">Adults attending</label>
-                <input
-                    type="number"
-                    min="0"
-                    id="adult_count"
-                    name="adult_count"
-                    class="form-control"
-                    value="<?= e(old_value('adult_count')) ?>"
-                >
-            </div>
+        <div class="form-group">
+            <label for="adult_count">Adults attending</label>
+            <input
+                type="number"
+                min="0"
+                id="adult_count"
+                name="adult_count"
+                class="form-control"
+                value="<?= e(old_value('adult_count')) ?>"
+            >
         </div>
 
         <?php if ($sections): ?>
             <fieldset class="form-group">
-                <legend>Sections involved</legend>
+                <legend>Sections and young people attending</legend>
 
-                <div class="lt-check-list">
+                <p class="form-text">
+                    Select each section involved and enter the number of young people attending from that section.
+                </p>
+
+                <div class="dc-section-count-grid">
                     <?php foreach ($sections as $section): ?>
                         <?php
+                            $sectionId = (int) $section['id'];
                             $checked = in_array(
-                                (string) $section['id'],
+                                (string) $sectionId,
                                 array_map('strval', (array) ($_POST['section_ids'] ?? [])),
                                 true
                             );
                         ?>
-                        <label class="lt-check">
-                            <input
-                                type="checkbox"
-                                name="section_ids[]"
-                                value="<?= (int) $section['id'] ?>"
-                                <?= $checked ? 'checked' : '' ?>
-                            >
-                            <?= e((string) $section['section_name']) ?>
-                        </label>
+                        <div class="dc-section-count-row">
+                            <label class="lt-check mb-0">
+                                <input
+                                    type="checkbox"
+                                    name="section_ids[]"
+                                    value="<?= $sectionId ?>"
+                                    data-section-checkbox
+                                    data-section-id="<?= $sectionId ?>"
+                                    <?= $checked ? 'checked' : '' ?>
+                                >
+                                <?= e((string) $section['section_name']) ?>
+                            </label>
+
+                            <div>
+                                <label for="section_young_people_count_<?= $sectionId ?>">
+                                    Young people
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    id="section_young_people_count_<?= $sectionId ?>"
+                                    name="section_young_people_count[<?= $sectionId ?>]"
+                                    class="form-control"
+                                    data-section-count="<?= $sectionId ?>"
+                                    value="<?= e(old_array_value('section_young_people_count', $sectionId)) ?>"
+                                    <?= $checked ? '' : 'disabled' ?>
+                                >
+                            </div>
+                        </div>
                     <?php endforeach; ?>
                 </div>
             </fieldset>
@@ -758,7 +964,9 @@ require __DIR__ . '/layout.php';
 
         <div id="location_results" class="dc-location-results" hidden></div>
 
-        <div id="location_map" class="dc-location-map" aria-label="Selected event location map"></div>
+        <div class="dc-location-map-wrap">
+            <div id="location_map" class="dc-location-map" aria-label="Selected event location map"></div>
+        </div>
 
         <div id="selected_location_summary" class="dc-selected-location" hidden>
             <strong>Selected location</strong>
@@ -802,32 +1010,6 @@ require __DIR__ . '/layout.php';
     </section>
 
     <section class="lt-panel">
-        <h2 class="lt-section-title">Emergency contact</h2>
-
-        <div class="row">
-            <div class="col-md-6 form-group">
-                <label for="emergency_contact_name">Name</label>
-                <input
-                    id="emergency_contact_name"
-                    name="emergency_contact_name"
-                    class="form-control"
-                    value="<?= e(old_value('emergency_contact_name')) ?>"
-                >
-            </div>
-
-            <div class="col-md-6 form-group">
-                <label for="emergency_contact_phone">Phone</label>
-                <input
-                    id="emergency_contact_phone"
-                    name="emergency_contact_phone"
-                    class="form-control"
-                    value="<?= e(old_value('emergency_contact_phone')) ?>"
-                >
-            </div>
-        </div>
-    </section>
-
-    <section class="lt-panel">
         <h2 class="lt-section-title">Risk assessments</h2>
 
         <?php if ($riskAssessments): ?>
@@ -858,75 +1040,78 @@ require __DIR__ . '/layout.php';
             </fieldset>
         <?php endif; ?>
 
-        <div class="form-group">
-            <label for="risk_files">Upload new risk assessments</label>
+        <fieldset class="form-group">
+            <legend>Upload new risk assessments</legend>
+
+            <p class="form-text">
+                Choose one or more files. They will appear in the table below before you save the event.
+            </p>
+
+            <div class="dc-risk-stage-controls">
+                <div class="form-group mb-md-0">
+                    <label for="risk_file_picker">Choose risk assessment files</label>
+                    <input
+                        type="file"
+                        id="risk_file_picker"
+                        class="form-control"
+                        accept=".pdf,.doc,.docx"
+                        multiple
+                    >
+                </div>
+
+                <button type="button" class="btn lt-btn lt-btn-secondary" id="clear_risk_files">
+                    Clear uploaded files
+                </button>
+            </div>
+
             <input
                 type="file"
                 id="risk_files"
                 name="risk_files[]"
-                class="form-control"
+                class="dc-staged-file-input"
                 accept=".pdf,.doc,.docx"
                 multiple
+                tabindex="-1"
+                aria-hidden="true"
             >
-            <p class="form-text">
-                You can upload more than one file. Accepted formats: PDF, DOC and DOCX.
-            </p>
-        </div>
 
-        <div class="form-group">
-            <label for="risk_title">Risk assessment title</label>
-            <input
-                id="risk_title"
-                name="risk_title"
-                class="form-control"
-                value="<?= e(old_value('risk_title')) ?>"
-            >
-            <p class="form-text">
-                If you upload several files, the filename will be added to this title.
-            </p>
-        </div>
+            <div id="risk_empty_state" class="dc-risk-empty">
+                No new risk assessments selected yet.
+            </div>
 
-        <div class="form-group">
-            <label for="risk_description">Risk assessment description</label>
-            <textarea
-                id="risk_description"
-                name="risk_description"
-                class="form-control"
-                rows="3"
-            ><?= e(old_value('risk_description')) ?></textarea>
-        </div>
-
-        <fieldset class="form-group">
-            <legend>Sharing</legend>
-
-            <?php $riskVisibility = old_value('risk_visibility', 'district'); ?>
-
-            <label class="lt-check">
-                <input
-                    type="radio"
-                    name="risk_visibility"
-                    value="district"
-                    <?= $riskVisibility === 'district' ? 'checked' : '' ?>
-                >
-                Share with the District by default
-            </label>
-
-            <label class="lt-check">
-                <input
-                    type="radio"
-                    name="risk_visibility"
-                    value="group"
-                    <?= $riskVisibility === 'group' ? 'checked' : '' ?>
-                >
-                Keep to this Group only
-            </label>
+            <div id="risk_table_wrap" class="dc-risk-table-wrap" hidden>
+                <table class="dc-risk-table">
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Risk assessment title</th>
+                            <th>Sharing</th>
+                            <th>Description</th>
+                            <th>Remove</th>
+                        </tr>
+                    </thead>
+                    <tbody id="risk_file_rows"></tbody>
+                </table>
+            </div>
         </fieldset>
     </section>
 
     <div class="dc-sticky-actions">
         <button
+            class="btn lt-btn lt-btn-secondary"
+            type="submit"
+            name="save_action"
+            value="draft"
+            <?= (!$isSsoUser && !$people) || ($isSsoUser && !$currentPerson) ? 'disabled' : '' ?>
+        >
+            Save as draft
+        </button>
+
+        <button
             class="btn btn-primary lt-btn"
             type="submit"
+            name="save_action"
+            value="submit"
             <?= (!$isSsoUser && !$people) || ($isSsoUser && !$currentPerson) ? 'disabled' : '' ?>
         >
             Submit for review
@@ -938,11 +1123,223 @@ require __DIR__ . '/layout.php';
     </div>
 </form>
 
-<script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+(function () {
+    const checkboxes = document.querySelectorAll('[data-section-checkbox]');
+
+    checkboxes.forEach(function (checkbox) {
+        const sectionId = checkbox.getAttribute('data-section-id');
+        const countInput = document.querySelector('[data-section-count="' + sectionId + '"]');
+
+        function sync() {
+            if (!countInput) {
+                return;
+            }
+
+            countInput.disabled = !checkbox.checked;
+
+            if (!checkbox.checked) {
+                countInput.value = '';
+            }
+        }
+
+        checkbox.addEventListener('change', sync);
+        sync();
+    });
+})();
+</script>
+
+<script>
+(function () {
+    const picker = document.getElementById('risk_file_picker');
+    const realInput = document.getElementById('risk_files');
+    const rows = document.getElementById('risk_file_rows');
+    const tableWrap = document.getElementById('risk_table_wrap');
+    const emptyState = document.getElementById('risk_empty_state');
+    const clearButton = document.getElementById('clear_risk_files');
+
+    if (!picker || !realInput || !rows || !tableWrap || !emptyState || !clearButton) {
+        return;
+    }
+
+    let stagedFiles = [];
+
+    function formatBytes(bytes) {
+        if (!bytes && bytes !== 0) {
+            return '';
+        }
+
+        if (bytes < 1024) {
+            return bytes + ' bytes';
+        }
+
+        if (bytes < 1024 * 1024) {
+            return Math.round(bytes / 1024) + ' KB';
+        }
+
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function titleFromFilename(filename) {
+        return filename
+            .replace(/\.[^/.]+$/, '')
+            .replace(/[_-]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .replace(/\b\w/g, function (letter) {
+                return letter.toUpperCase();
+            });
+    }
+
+    function syncRealInput() {
+        const transfer = new DataTransfer();
+
+        stagedFiles.forEach(function (item) {
+            transfer.items.add(item.file);
+        });
+
+        realInput.files = transfer.files;
+    }
+
+    function renderRows() {
+        rows.innerHTML = '';
+
+        stagedFiles.forEach(function (item, index) {
+            const tr = document.createElement('tr');
+
+            const fileTd = document.createElement('td');
+            const fileName = document.createElement('span');
+            fileName.className = 'dc-risk-file-name';
+            fileName.textContent = item.file.name;
+
+            const fileSize = document.createElement('span');
+            fileSize.className = 'form-text';
+            fileSize.textContent = formatBytes(item.file.size);
+
+            fileTd.appendChild(fileName);
+            fileTd.appendChild(fileSize);
+
+            const titleTd = document.createElement('td');
+            const titleLabel = document.createElement('label');
+            titleLabel.className = 'sr-only';
+            titleLabel.textContent = 'Risk assessment title';
+
+            const titleInput = document.createElement('input');
+            titleInput.className = 'form-control';
+            titleInput.name = 'risk_titles[]';
+            titleInput.required = true;
+            titleInput.value = item.title;
+            titleInput.placeholder = 'Example: Campfire Risk Assessment';
+
+            titleInput.addEventListener('input', function () {
+                item.title = titleInput.value;
+            });
+
+            titleTd.appendChild(titleLabel);
+            titleTd.appendChild(titleInput);
+
+            const visibilityTd = document.createElement('td');
+            const visibilityLabel = document.createElement('label');
+            visibilityLabel.className = 'sr-only';
+            visibilityLabel.textContent = 'Sharing';
+
+            const visibilitySelect = document.createElement('select');
+            visibilitySelect.className = 'form-control';
+            visibilitySelect.name = 'risk_visibilities[]';
+
+            const districtOption = document.createElement('option');
+            districtOption.value = 'district';
+            districtOption.textContent = 'Share with District';
+
+            const groupOption = document.createElement('option');
+            groupOption.value = 'group';
+            groupOption.textContent = 'Keep to this Group';
+
+            visibilitySelect.appendChild(districtOption);
+            visibilitySelect.appendChild(groupOption);
+            visibilitySelect.value = item.visibility;
+
+            visibilitySelect.addEventListener('change', function () {
+                item.visibility = visibilitySelect.value;
+            });
+
+            visibilityTd.appendChild(visibilityLabel);
+            visibilityTd.appendChild(visibilitySelect);
+
+            const descriptionTd = document.createElement('td');
+            const descriptionLabel = document.createElement('label');
+            descriptionLabel.className = 'sr-only';
+            descriptionLabel.textContent = 'Description';
+
+            const descriptionInput = document.createElement('textarea');
+            descriptionInput.className = 'form-control';
+            descriptionInput.name = 'risk_descriptions[]';
+            descriptionInput.rows = 2;
+            descriptionInput.value = item.description;
+            descriptionInput.placeholder = 'Optional';
+
+            descriptionInput.addEventListener('input', function () {
+                item.description = descriptionInput.value;
+            });
+
+            descriptionTd.appendChild(descriptionLabel);
+            descriptionTd.appendChild(descriptionInput);
+
+            const removeTd = document.createElement('td');
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'dc-remove-risk-file';
+            removeButton.textContent = 'Remove';
+
+            removeButton.addEventListener('click', function () {
+                stagedFiles.splice(index, 1);
+                syncRealInput();
+                renderRows();
+            });
+
+            removeTd.appendChild(removeButton);
+
+            tr.appendChild(fileTd);
+            tr.appendChild(titleTd);
+            tr.appendChild(visibilityTd);
+            tr.appendChild(descriptionTd);
+            tr.appendChild(removeTd);
+
+            rows.appendChild(tr);
+        });
+
+        const hasFiles = stagedFiles.length > 0;
+        tableWrap.hidden = !hasFiles;
+        emptyState.hidden = hasFiles;
+    }
+
+    picker.addEventListener('change', function () {
+        Array.from(picker.files || []).forEach(function (file) {
+            stagedFiles.push({
+                file: file,
+                title: titleFromFilename(file.name),
+                visibility: 'district',
+                description: ''
+            });
+        });
+
+        picker.value = '';
+        syncRealInput();
+        renderRows();
+    });
+
+    clearButton.addEventListener('click', function () {
+        stagedFiles = [];
+        picker.value = '';
+        syncRealInput();
+        renderRows();
+    });
+
+    renderRows();
+})();
+</script>
 
 <script>
 (function () {
@@ -1051,7 +1448,9 @@ require __DIR__ . '/layout.php';
     const defaultLat = parseFloat(locationLatInput.value || '53.647');
     const defaultLng = parseFloat(locationLngInput.value || '-2.316');
 
-    const map = L.map(mapElement).setView([defaultLat, defaultLng], 11);
+    const map = L.map(mapElement, {
+        scrollWheelZoom: false
+    }).setView([defaultLat, defaultLng], 11);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
@@ -1064,7 +1463,7 @@ require __DIR__ . '/layout.php';
         locationLatInput.value = String(lat);
         locationLngInput.value = String(lng);
 
-        if (name && !locationNameInput.value) {
+        if (name) {
             locationNameInput.value = name;
         }
 
@@ -1084,6 +1483,10 @@ require __DIR__ . '/layout.php';
         selectedText.textContent = address || name || 'Location selected from the map';
         selectedCoords.textContent = 'Latitude: ' + lat + ', longitude: ' + lng;
         selectedSummary.hidden = false;
+
+        setTimeout(function () {
+            map.invalidateSize();
+        }, 100);
     }
 
     if (!Number.isNaN(defaultLat) && !Number.isNaN(defaultLng) && locationLatInput.value && locationLngInput.value) {
@@ -1166,6 +1569,10 @@ require __DIR__ . '/layout.php';
         } finally {
             searchButton.disabled = false;
             searchButton.textContent = 'Search map';
+
+            setTimeout(function () {
+                map.invalidateSize();
+            }, 100);
         }
     }
 
@@ -1176,6 +1583,10 @@ require __DIR__ . '/layout.php';
             event.preventDefault();
             searchLocation();
         }
+    });
+
+    window.addEventListener('resize', function () {
+        map.invalidateSize();
     });
 
     setTimeout(function () {
