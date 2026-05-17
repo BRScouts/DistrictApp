@@ -1,0 +1,95 @@
+:root {
+    --iv-purple: #4d0099;
+    --iv-purple-bright: #7413dc;
+    --iv-purple-dark: #330066;
+    --iv-blue: #006ddf;
+    --iv-green: #00a794;
+    --iv-red: #e22b1a;
+    --iv-yellow: #ffdd00;
+    --iv-black: #111111;
+    --iv-grey-900: #222222;
+    --iv-grey-700: #555555;
+    --iv-grey-300: #d8d8d8;
+    --iv-grey-100: #f5f5f5;
+    --iv-white: #ffffff;
+}
+
+html { font-size: 16px; }
+body {
+    margin: 0;
+    background: var(--iv-white);
+    color: var(--iv-black);
+    font-family: 'Nunito Sans', Arial, sans-serif;
+}
+
+a { color: var(--iv-blue); font-weight: 800; }
+a:focus, button:focus, input:focus, select:focus, textarea:focus {
+    outline: 3px solid var(--iv-yellow) !important;
+    outline-offset: 0;
+    box-shadow: none !important;
+}
+
+.lt-header { background: var(--iv-white); border-bottom: 1px solid var(--iv-grey-300); }
+.lt-header-inner { max-width: 1180px; margin: 0 auto; padding: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.lt-brand { display: inline-flex; align-items: center; gap: .85rem; color: var(--iv-black); text-decoration: none; }
+.lt-brand:hover { color: var(--iv-black); text-decoration: none; }
+.lt-brand img { height: 48px; width: auto; }
+.lt-brand-title { display: block; font-weight: 900; font-size: 1.15rem; line-height: 1.05; letter-spacing: -.02em; }
+.lt-brand-subtitle { display: block; font-size: .85rem; font-weight: 800; color: var(--iv-grey-700); }
+.lt-nav { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.lt-nav a { color: var(--iv-black); text-decoration: none; font-weight: 900; }
+.lt-nav a:hover { text-decoration: underline; }
+.lt-user { display: flex; align-items: center; gap: .65rem; text-decoration: none; color: var(--iv-black); }
+.lt-avatar { width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; background: var(--iv-purple); color: var(--iv-white); font-weight: 900; border-radius: 0; }
+.lt-user-meta { display: none; text-align: right; line-height: 1.15; }
+.lt-user-name { display: block; font-weight: 900; font-size: .92rem; }
+.lt-user-role { display: block; color: var(--iv-grey-700); font-size: .78rem; font-weight: 800; }
+
+.lt-hero { background: var(--iv-purple); color: var(--iv-white); }
+.lt-hero-inner { max-width: 1180px; margin: 0 auto; padding: 2rem 1rem; }
+.lt-hero h1 { font-size: 2.25rem; line-height: 1; font-weight: 900; letter-spacing: -.045em; margin: 0 0 .5rem; }
+.lt-hero p { font-size: 1.05rem; max-width: 760px; margin: 0; font-weight: 700; }
+.lt-breadcrumb { background: var(--iv-grey-100); border-bottom: 1px solid var(--iv-grey-300); }
+.lt-breadcrumb-inner { max-width: 1180px; margin: 0 auto; padding: .75rem 1rem; font-size: .9rem; font-weight: 800; color: var(--iv-grey-700); }
+.lt-main { max-width: 1180px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+.lt-page-title { font-size: 2.2rem; font-weight: 900; letter-spacing: -.045em; line-height: 1; margin: 0 0 1rem; }
+.lt-section-title { font-size: 1.45rem; font-weight: 900; margin: 0 0 .75rem; }
+.lt-lede { font-size: 1.1rem; font-weight: 700; color: var(--iv-grey-700); max-width: 760px; }
+.lt-panel { background: var(--iv-white); border: 1px solid var(--iv-grey-300); border-radius: 0; padding: 1.25rem; }
+.lt-panel-grey { background: var(--iv-grey-100); border: 1px solid var(--iv-grey-300); padding: 1.25rem; }
+.lt-card-link { display: block; color: var(--iv-black); text-decoration: none; height: 100%; }
+.lt-card-link:hover { color: var(--iv-black); text-decoration: none; }
+.lt-task-card { border: 1px solid var(--iv-grey-300); background: var(--iv-white); height: 100%; padding: 1.25rem; }
+.lt-card-link:hover .lt-task-card { border-color: var(--iv-black); }
+.lt-task-card h2, .lt-task-card h3 { font-size: 1.25rem; font-weight: 900; margin: 0 0 .5rem; }
+.lt-task-card p { color: var(--iv-grey-700); font-weight: 700; margin-bottom: 1rem; }
+.lt-action-link { font-weight: 900; color: var(--iv-blue); }
+.lt-badge { display: inline-block; padding: .25rem .5rem; font-weight: 900; font-size: .8rem; border: 1px solid var(--iv-grey-300); background: var(--iv-grey-100); }
+.lt-badge-success { background: var(--iv-green); color: var(--iv-white); border-color: var(--iv-green); }
+.lt-btn, .btn.lt-btn, .btn-primary { border-radius: 0; font-weight: 900; padding: .75rem 1rem; }
+.btn-primary, .lt-btn-primary { background: var(--iv-purple); border-color: var(--iv-purple); color: var(--iv-white); }
+.btn-primary:hover, .lt-btn-primary:hover { background: var(--iv-purple-dark); border-color: var(--iv-purple-dark); }
+.lt-btn-secondary { background: var(--iv-white); color: var(--iv-blue); border: 2px solid var(--iv-blue); }
+.form-control { border-radius: 0; border: 2px solid var(--iv-grey-700); min-height: 46px; }
+.form-group label, legend { font-weight: 900; color: var(--iv-black); }
+.form-text { font-weight: 700; color: var(--iv-grey-700) !important; }
+.lt-check-list { display: grid; gap: .5rem; }
+.lt-check { display: flex; align-items: flex-start; gap: .55rem; font-weight: 800; }
+.lt-check input { margin-top: .25rem; }
+.lt-divider { border-top: 1px solid var(--iv-grey-300); margin: 1.5rem 0; }
+.lt-footer { background: var(--iv-purple); color: var(--iv-white); margin-top: 3rem; }
+.lt-footer-inner { max-width: 1180px; margin: 0 auto; padding: 2rem 1rem; }
+.lt-footer a { color: var(--iv-white); }
+.lt-login-bg { min-height: 100vh; background: linear-gradient(90deg, rgba(25,0,55,.92), rgba(77,0,153,.82)), url('/assets/img/cub-on-raft-jpg.jpg') center/cover no-repeat fixed; }
+.lt-login-wrap { min-height: 100vh; display: flex; align-items: center; padding: 1rem 0; }
+.lt-login-card { background: var(--iv-white); border: 0; border-radius: 0; overflow: hidden; }
+.lt-login-brand { background: var(--iv-purple); color: var(--iv-white); padding: 2rem; }
+.lt-login-brand h1 { font-size: 2.4rem; line-height: 1; font-weight: 900; letter-spacing: -.045em; }
+.lt-login-panel { padding: 2rem; }
+
+@media (min-width: 768px) {
+    .lt-user-meta { display: block; }
+    .lt-hero-inner { padding: 2.5rem 1rem; }
+    .lt-hero h1 { font-size: 3rem; }
+    .lt-login-brand, .lt-login-panel { padding: 3rem; }
+}

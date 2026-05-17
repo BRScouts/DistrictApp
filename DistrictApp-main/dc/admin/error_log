@@ -1,0 +1,7 @@
+[02-May-2026 23:28:50 Europe/London] PHP Warning:  Undefined variable $isLoggedIn in /home/brscouts/test.brscouts.org.uk/auth.php on line 285
+[02-May-2026 23:28:50 Europe/London] PHP Warning:  Undefined variable $isLoggedIn in /home/brscouts/test.brscouts.org.uk/auth.php on line 300
+[02-May-2026 23:28:50 Europe/London] PHP Warning:  Undefined variable $isLoggedIn in /home/brscouts/test.brscouts.org.uk/auth.php on line 338
+[02-May-2026 23:28:50 Europe/London] PHP Fatal error:  Uncaught Error: Call to undefined function render_header() in /home/brscouts/test.brscouts.org.uk/admin/settings.php:359
+Stack trace:
+#0 {main}
+  thrown in /home/brscouts/test.brscouts.org.uk/admin/settings.php on line 359

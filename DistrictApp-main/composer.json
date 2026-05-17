@@ -1,0 +1,8 @@
+{
+    "require": {
+        "league/oauth2-client": "^2.9",
+        "guzzlehttp/guzzle": "^7.10",
+        "firebase/php-jwt": "^7.0",
+        "vlucas/phpdotenv": "^5.6"
+    }
+}
