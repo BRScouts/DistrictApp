@@ -10,8 +10,8 @@ $heroText = $heroText ?? null;
 $active = $active ?? '';
 
 $groups = $ctx['groups'] ?? [];
+
 $isSignedIn = (bool) ($ctx['is_signed_in'] ?? false);
-$isReviewer = (bool) ($ctx['is_reviewer'] ?? false);
 $isGroupLink = !$isSignedIn && (($ctx['actor_type'] ?? '') === 'group_link');
 
 $displayName = $ctx['name'] ?? 'Group access';
@@ -26,16 +26,95 @@ if (!$groupName && $groups) {
     $groupName = 'Multiple groups';
 }
 
+$accessLevel = (string) ($ctx['access_level'] ?? '');
+$membershipRole = (string) ($ctx['membership_role'] ?? '');
+$role = (string) ($ctx['role'] ?? '');
+
+$ctxAccessLevels = array_filter(array_map(
+    'strval',
+    (array) ($ctx['access_levels'] ?? [])
+));
+
+$ctxMembershipRoles = array_filter(array_map(
+    'strval',
+    (array) ($ctx['membership_roles'] ?? [])
+));
+
+if ($accessLevel !== '') {
+    $ctxAccessLevels[] = $accessLevel;
+}
+
+if ($membershipRole !== '') {
+    $ctxMembershipRoles[] = $membershipRole;
+}
+
+if ($role !== '') {
+    $ctxMembershipRoles[] = $role;
+}
+
+$ctxAccessLevels = array_values(array_unique($ctxAccessLevels));
+$ctxMembershipRoles = array_values(array_unique($ctxMembershipRoles));
+
+$membershipSummaryParts = [];
+
+foreach ($groups as $group) {
+    $name = $group['group_name'] ?? $group['name'] ?? null;
+
+    if (!$name) {
+        continue;
+    }
+
+    $membershipSummaryParts[] = (string) $name;
+}
+
+$membershipSummaryParts = array_values(array_unique($membershipSummaryParts));
+
+if ($membershipSummaryParts) {
+    $membershipSummary = implode(', ', array_slice($membershipSummaryParts, 0, 2));
+
+    if (count($membershipSummaryParts) > 2) {
+        $membershipSummary .= ' +' . (count($membershipSummaryParts) - 2) . ' more';
+    }
+} elseif ($groupName) {
+    $membershipSummary = $groupName;
+} elseif ($isSignedIn) {
+    $membershipSummary = 'No Group membership shown';
+} else {
+    $membershipSummary = 'Group access';
+}
+
+$isSystemAdmin = in_array('system_admin', $ctxAccessLevels, true);
+$isDistrictAdmin = in_array('district_admin', $ctxAccessLevels, true);
+$isDistrictReviewer = in_array('district_reviewer', $ctxAccessLevels, true);
+$isGroupAdmin = in_array('group_admin', $ctxAccessLevels, true);
+
+$isGlv = in_array('group_lead_volunteer', $ctxMembershipRoles, true)
+    || in_array('group_lead_volunteer', $ctxAccessLevels, true)
+    || $isGroupAdmin
+    || $isDistrictAdmin
+    || $isSystemAdmin;
+
+$isReviewer = (bool) ($ctx['is_reviewer'] ?? false)
+    || $isDistrictReviewer
+    || $isDistrictAdmin
+    || $isSystemAdmin;
+
 $roleLabel = 'Leader';
 
-if ($isReviewer) {
+if ($isSystemAdmin) {
+    $roleLabel = 'System Admin';
+} elseif ($isDistrictAdmin) {
+    $roleLabel = 'District Admin';
+} elseif ($isReviewer) {
     $roleLabel = 'Reviewer';
-} elseif (!empty($ctx['role'])) {
-    $roleLabel = ucwords(str_replace('_', ' ', (string) $ctx['role']));
-} elseif (!empty($ctx['access_level'])) {
-    $roleLabel = ucwords(str_replace('_', ' ', (string) $ctx['access_level']));
-} elseif (!empty($ctx['membership_role'])) {
-    $roleLabel = ucwords(str_replace('_', ' ', (string) $ctx['membership_role']));
+} elseif ($isGlv) {
+    $roleLabel = 'Group Lead Volunteer';
+} elseif ($accessLevel !== '') {
+    $roleLabel = ucwords(str_replace('_', ' ', $accessLevel));
+} elseif ($membershipRole !== '') {
+    $roleLabel = ucwords(str_replace('_', ' ', $membershipRole));
+} elseif ($role !== '') {
+    $roleLabel = ucwords(str_replace('_', ' ', $role));
 }
 
 $profilePhotoUrl = null;
@@ -45,6 +124,7 @@ if ($isSignedIn) {
 }
 
 $returnUrl = $isSignedIn ? '/index.php' : '/login.php';
+$profileUrl = '/profile.php';
 ?>
 <!doctype html>
 <html lang="en">
@@ -81,7 +161,7 @@ $returnUrl = $isSignedIn ? '/index.php' : '/login.php';
             align-items: center;
             justify-content: space-between;
             gap: 1rem;
-            min-height: 48px;
+            min-height: 56px;
             padding: 0.35rem 0;
         }
 
@@ -109,6 +189,24 @@ $returnUrl = $isSignedIn ? '/index.php' : '/login.php';
             min-width: 0;
         }
 
+        .dc-profile-link {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            min-width: 0;
+            color: #ffffff;
+            text-decoration: none;
+        }
+
+        .dc-profile-link:hover,
+        .dc-profile-link:focus {
+            color: #ffffff;
+            outline: 3px solid #ffdd00;
+            outline-offset: 3px;
+            text-decoration: none;
+        }
+
         .dc-user-text {
             display: none;
             color: #ffffff;
@@ -119,23 +217,39 @@ $returnUrl = $isSignedIn ? '/index.php' : '/login.php';
 
         .dc-user-name {
             display: block;
-            font-weight: 800;
+            font-weight: 900;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 220px;
+            max-width: 260px;
         }
 
         .dc-user-role {
             display: block;
             font-size: 0.875rem;
+            font-weight: 800;
+            opacity: 0.98;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 260px;
+        }
+
+        .dc-user-groups {
+            display: block;
+            font-size: 0.78rem;
             font-weight: 700;
-            opacity: 0.95;
+            opacity: 0.94;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 280px;
+            margin-top: 0.12rem;
         }
 
         .dc-profile-photo {
-            width: 42px;
-            height: 42px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             border: 2px solid #ffffff;
             background: #ffffff;
@@ -144,8 +258,8 @@ $returnUrl = $isSignedIn ? '/index.php' : '/login.php';
         }
 
         .dc-profile-fallback {
-            width: 42px;
-            height: 42px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             border: 2px solid #ffffff;
             background: #000000;
@@ -213,8 +327,14 @@ $returnUrl = $isSignedIn ? '/index.php' : '/login.php';
 
             .dc-profile-photo,
             .dc-profile-fallback {
-                width: 36px;
-                height: 36px;
+                width: 38px;
+                height: 38px;
+            }
+
+            .dc-user-name,
+            .dc-user-role,
+            .dc-user-groups {
+                max-width: 170px;
             }
 
             .dc-group-link-badge {
@@ -234,26 +354,29 @@ $returnUrl = $isSignedIn ? '/index.php' : '/login.php';
 
         <div class="dc-user-context" aria-label="Current access">
             <?php if ($isSignedIn): ?>
-                <div class="dc-user-text">
-                    <span class="dc-user-name"><?= e($displayName) ?></span>
-                    <span class="dc-user-role"><?= e($roleLabel) ?></span>
-                </div>
+                <a class="dc-profile-link" href="<?= e($profileUrl) ?>" aria-label="Open my profile">
+                    <div class="dc-user-text">
+                        <span class="dc-user-name"><?= e($displayName) ?></span>
+                        <span class="dc-user-role"><?= e($roleLabel) ?></span>
+                        <span class="dc-user-groups"><?= e($membershipSummary) ?></span>
+                    </div>
 
-                <?php if ($profilePhotoUrl): ?>
-                    <img
-                        class="dc-profile-photo"
-                        src="<?= e($profilePhotoUrl) ?>"
-                        alt=""
-                        onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';"
-                    >
-                    <span class="dc-profile-fallback" style="display: none;" aria-hidden="true">
-                        <?= e(strtoupper(substr((string) $displayName, 0, 1))) ?>
-                    </span>
-                <?php else: ?>
-                    <span class="dc-profile-fallback" aria-hidden="true">
-                        <?= e(strtoupper(substr((string) $displayName, 0, 1))) ?>
-                    </span>
-                <?php endif; ?>
+                    <?php if ($profilePhotoUrl): ?>
+                        <img
+                            class="dc-profile-photo"
+                            src="<?= e($profilePhotoUrl) ?>"
+                            alt=""
+                            onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';"
+                        >
+                        <span class="dc-profile-fallback" style="display: none;" aria-hidden="true">
+                            <?= e(strtoupper(substr((string) $displayName, 0, 1))) ?>
+                        </span>
+                    <?php else: ?>
+                        <span class="dc-profile-fallback" aria-hidden="true">
+                            <?= e(strtoupper(substr((string) $displayName, 0, 1))) ?>
+                        </span>
+                    <?php endif; ?>
+                </a>
             <?php else: ?>
                 <div class="dc-group-link-badge">
                     <span><?= e($groupName ?: 'Group access') ?></span>
@@ -290,12 +413,23 @@ $returnUrl = $isSignedIn ? '/index.php' : '/login.php';
 
         <nav id="dc-main-nav" class="lt-nav dc-nav" aria-label="District Calendar navigation">
             <a class="<?= $active === 'home' ? 'active' : '' ?>" href="/dc/">Calendar</a>
+
             <a class="<?= $active === 'add' ? 'active' : '' ?>" href="/dc/add-event.php">Add event</a>
+
             <a class="<?= $active === 'risk' ? 'active' : '' ?>" href="/dc/risk-assessments.php">Risk assessments</a>
+
             <a class="<?= $active === 'map' ? 'active' : '' ?>" href="/dc/map.php">Map</a>
 
+            <?php if ($isGlv): ?>
+                <a class="<?= $active === 'glv' ? 'active' : '' ?>" href="/dc/glv/">
+                    GLV
+                </a>
+            <?php endif; ?>
+
             <?php if ($isReviewer): ?>
-                <a class="<?= $active === 'review' ? 'active' : '' ?>" href="/dc/reviewer/">Review</a>
+                <a class="<?= $active === 'review' ? 'active' : '' ?>" href="/dc/reviewer/">
+                    Review
+                </a>
             <?php endif; ?>
 
             <?php if ($isSignedIn): ?>
@@ -328,7 +462,7 @@ $returnUrl = $isSignedIn ? '/index.php' : '/login.php';
 
         <span class="dc-context-label">
             <?php if ($isSignedIn): ?>
-                <?= e($displayName) ?><?= $roleLabel ? ' · ' . e($roleLabel) : '' ?>
+                <?= e($displayName) ?><?= $roleLabel ? ' · ' . e($roleLabel) : '' ?><?= $membershipSummary ? ' · ' . e($membershipSummary) : '' ?>
             <?php else: ?>
                 <?= e($groupName ?: $displayName) ?> · Group link
             <?php endif; ?>

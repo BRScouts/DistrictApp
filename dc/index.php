@@ -75,6 +75,34 @@ function dc_user_can_manage_event_group(array $ctx, int $groupId): bool
     return in_array($groupId, $groupIds, true);
 }
 
+function dc_days_between_inclusive(DateTimeImmutable $start, DateTimeImmutable $end): int
+{
+    $startDay = new DateTimeImmutable($start->format('Y-m-d 00:00:00'));
+    $endDay = new DateTimeImmutable($end->format('Y-m-d 00:00:00'));
+
+    return (int) $startDay->diff($endDay)->days + 1;
+}
+
+function dc_clamp_date(DateTimeImmutable $date, DateTimeImmutable $min, DateTimeImmutable $max): DateTimeImmutable
+{
+    if ($date < $min) {
+        return $min;
+    }
+
+    if ($date > $max) {
+        return $max;
+    }
+
+    return $date;
+}
+
+function dc_event_bar_class(string $status): string
+{
+    $status = preg_replace('/[^a-z0-9_-]/i', '', $status);
+
+    return 'dc-cal-event dc-cal-event-' . $status;
+}
+
 $stmt = db()->query("
     SELECT id, group_name
     FROM groups
@@ -149,7 +177,27 @@ $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$eventsByDate = [];
+$weeks = [];
+$weekCursor = $calendarStart;
+
+while ($weekCursor <= $calendarEnd) {
+    $weekDays = [];
+    $dayCursor = $weekCursor;
+
+    for ($i = 0; $i < 7; $i++) {
+        $weekDays[] = $dayCursor;
+        $dayCursor = $dayCursor->modify('+1 day');
+    }
+
+    $weeks[] = [
+        'start' => $weekCursor,
+        'end' => $weekCursor->modify('+6 days'),
+        'days' => $weekDays,
+        'bars' => [],
+    ];
+
+    $weekCursor = $weekCursor->modify('+7 days');
+}
 
 foreach ($events as $event) {
     try {
@@ -159,16 +207,30 @@ foreach ($events as $event) {
         continue;
     }
 
-    $cursor = $eventStart < $calendarStart ? $calendarStart : $eventStart;
-    $last = $eventEnd > $calendarEnd ? $calendarEnd : $eventEnd;
+    foreach ($weeks as $weekIndex => $week) {
+        $weekStart = new DateTimeImmutable($week['start']->format('Y-m-d 00:00:00'));
+        $weekEnd = new DateTimeImmutable($week['end']->format('Y-m-d 23:59:59'));
 
-    $cursor = new DateTimeImmutable($cursor->format('Y-m-d 00:00:00'));
-    $last = new DateTimeImmutable($last->format('Y-m-d 00:00:00'));
+        if ($eventStart > $weekEnd || $eventEnd < $weekStart) {
+            continue;
+        }
 
-    while ($cursor <= $last) {
-        $key = $cursor->format('Y-m-d');
-        $eventsByDate[$key][] = $event;
-        $cursor = $cursor->modify('+1 day');
+        $barStart = dc_clamp_date($eventStart, $weekStart, $weekEnd);
+        $barEnd = dc_clamp_date($eventEnd, $weekStart, $weekEnd);
+
+        $barStartDay = new DateTimeImmutable($barStart->format('Y-m-d 00:00:00'));
+        $barEndDay = new DateTimeImmutable($barEnd->format('Y-m-d 00:00:00'));
+
+        $columnStart = ((int) $barStartDay->format('N'));
+        $spanDays = dc_days_between_inclusive($barStartDay, $barEndDay);
+
+        $weeks[$weekIndex]['bars'][] = [
+            'event' => $event,
+            'column_start' => $columnStart,
+            'span' => $spanDays,
+            'continues_before' => $eventStart < $weekStart,
+            'continues_after' => $eventEnd > $weekEnd,
+        ];
     }
 }
 
@@ -184,8 +246,8 @@ $statusLabels = [
     'cancelled' => 'Cancelled',
 ];
 
-$canAddForSelectedGroup = $selectedGroupId > 0 && dc_user_can_manage_event_group($ctx, $selectedGroupId);
 $singleViewerGroupId = count($viewerGroupIds) === 1 ? $viewerGroupIds[0] : 0;
+$canAddForSelectedGroup = $selectedGroupId > 0 && dc_user_can_manage_event_group($ctx, $selectedGroupId);
 
 $addEventGroupId = 0;
 
@@ -206,17 +268,69 @@ require __DIR__ . '/layout.php';
 ?>
 
 <style>
+    .dc-calendar-page {
+        display: grid;
+        gap: 1rem;
+    }
+
+    @media (min-width: 992px) {
+        .dc-calendar-page {
+            grid-template-columns: 280px minmax(0, 1fr);
+            align-items: start;
+        }
+    }
+
+    .dc-calendar-sidebar {
+        background: #f5f5f5;
+        border: 2px solid #000;
+        padding: 1rem;
+    }
+
+    @media (min-width: 992px) {
+        .dc-calendar-sidebar {
+            position: sticky;
+            top: 1rem;
+        }
+    }
+
+    .dc-calendar-sidebar h2 {
+        font-size: 1.35rem;
+        font-weight: 900;
+        margin-bottom: 1rem;
+    }
+
+    .dc-calendar-filter-form {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .dc-calendar-sidebar-actions {
+        display: grid;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .dc-calendar-main {
+        min-width: 0;
+    }
+
     .dc-calendar-toolbar {
         display: grid;
         gap: 1rem;
         margin-bottom: 1rem;
     }
 
-    @media (min-width: 900px) {
+    @media (min-width: 768px) {
         .dc-calendar-toolbar {
             grid-template-columns: 1fr auto;
             align-items: center;
         }
+    }
+
+    .dc-calendar-month-title {
+        font-size: clamp(1.5rem, 3vw, 2.35rem);
+        font-weight: 900;
+        margin: 0;
     }
 
     .dc-calendar-month-nav {
@@ -226,35 +340,15 @@ require __DIR__ . '/layout.php';
         align-items: center;
     }
 
-    .dc-calendar-month-title {
-        font-size: clamp(1.5rem, 3vw, 2.25rem);
-        font-weight: 900;
-        margin: 0;
-    }
-
-    .dc-calendar-filter-form {
-        display: grid;
-        gap: 0.75rem;
-        margin-bottom: 1rem;
-    }
-
-    @media (min-width: 900px) {
-        .dc-calendar-filter-form {
-            grid-template-columns: 1.4fr 1fr 1.5fr auto;
-            align-items: end;
-        }
-    }
-
     .dc-calendar-shell {
         background: #ffffff;
         border: 2px solid #000000;
         overflow: hidden;
-        margin-bottom: 1.5rem;
     }
 
     .dc-calendar-weekdays {
         display: none;
-        grid-template-columns: repeat(7, 1fr);
+        grid-template-columns: repeat(7, minmax(0, 1fr));
         background: #7413dc;
         color: #ffffff;
         font-weight: 900;
@@ -265,16 +359,30 @@ require __DIR__ . '/layout.php';
         border-right: 1px solid rgba(255, 255, 255, 0.35);
     }
 
-    .dc-calendar-grid {
+    .dc-calendar-weekdays div:last-child {
+        border-right: 0;
+    }
+
+    .dc-calendar-week {
+        display: grid;
+        grid-template-columns: 1fr;
+        border-top: 1px solid #d8d8d8;
+    }
+
+    .dc-calendar-week:first-of-type {
+        border-top: 0;
+    }
+
+    .dc-calendar-days {
         display: grid;
         grid-template-columns: 1fr;
     }
 
     .dc-calendar-day {
-        min-height: 120px;
-        border-top: 1px solid #d8d8d8;
+        min-height: 72px;
         padding: 0.75rem;
         background: #ffffff;
+        border-bottom: 1px solid #d8d8d8;
     }
 
     .dc-calendar-day.is-outside-month {
@@ -289,9 +397,8 @@ require __DIR__ . '/layout.php';
     .dc-calendar-day-heading {
         display: flex;
         justify-content: space-between;
-        gap: 0.75rem;
         align-items: baseline;
-        margin-bottom: 0.5rem;
+        gap: 0.5rem;
     }
 
     .dc-calendar-day-heading strong {
@@ -300,57 +407,107 @@ require __DIR__ . '/layout.php';
     }
 
     .dc-calendar-day-heading span {
-        font-size: 0.9rem;
         color: #4a4a4a;
+        font-size: 0.9rem;
     }
 
-    .dc-calendar-event-list {
+    .dc-calendar-bars {
         display: grid;
+        grid-template-columns: 1fr;
         gap: 0.4rem;
-    }
-
-    .dc-calendar-event {
-        display: block;
-        border-left: 5px solid #7413dc;
-        background: #f5f5f5;
         padding: 0.5rem;
-        color: #000000;
-        text-decoration: none;
+        background: #ffffff;
     }
 
-    .dc-calendar-event:hover,
-    .dc-calendar-event:focus {
+    .dc-cal-event {
+        display: block;
+        color: #000000;
+        background: #e7ddff;
+        border-left: 6px solid #7413dc;
+        padding: 0.45rem 0.55rem;
+        min-width: 0;
+        text-decoration: none;
+        line-height: 1.2;
+    }
+
+    .dc-cal-event:hover,
+    .dc-cal-event:focus {
+        color: #000000;
         outline: 3px solid #ffdd00;
         outline-offset: 1px;
-        color: #000000;
         text-decoration: none;
     }
 
-    .dc-calendar-event.is-locked {
+    .dc-cal-event.is-locked {
+        background: #e8f1ff;
         border-left-color: #006ddf;
         cursor: default;
     }
 
-    .dc-calendar-event-title {
+    .dc-cal-event-title {
         display: block;
         font-weight: 900;
-        line-height: 1.2;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
-    .dc-calendar-event-meta {
+    .dc-cal-event-meta {
         display: block;
-        font-size: 0.85rem;
         color: #4a4a4a;
-        margin-top: 0.15rem;
+        font-size: 0.82rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
-    .dc-calendar-event-status {
+    .dc-cal-event-status {
         display: inline-block;
-        margin-top: 0.35rem;
-        font-size: 0.75rem;
+        margin-top: 0.25rem;
+        font-size: 0.72rem;
         font-weight: 900;
         text-transform: uppercase;
         letter-spacing: 0.02em;
+    }
+
+    .dc-cal-event-approved {
+        background: #e9f8f4;
+        border-left-color: #00a794;
+    }
+
+    .dc-cal-event-submitted,
+    .dc-cal-event-under_review {
+        background: #fff8d6;
+        border-left-color: #ffdd00;
+    }
+
+    .dc-cal-event-changes_requested {
+        background: #fff1f0;
+        border-left-color: #d4351c;
+    }
+
+    .dc-cal-event-draft {
+        background: #f5f5f5;
+        border-left-color: #777777;
+    }
+
+    .dc-cal-event-cancelled,
+    .dc-cal-event-rejected {
+        background: #f7e5e3;
+        border-left-color: #d4351c;
+        text-decoration: line-through;
+    }
+
+    .dc-calendar-empty {
+        padding: 1rem;
+        background: #ffffff;
+        border: 2px dashed #888;
+    }
+
+    .dc-mobile-event-stack {
+        display: grid;
+        gap: 0.4rem;
+        margin-top: 0.5rem;
     }
 
     @media (min-width: 768px) {
@@ -358,20 +515,75 @@ require __DIR__ . '/layout.php';
             display: grid;
         }
 
-        .dc-calendar-grid {
+        .dc-calendar-week {
+            display: block;
+            border-top: 1px solid #d8d8d8;
+        }
+
+        .dc-calendar-days {
             grid-template-columns: repeat(7, minmax(0, 1fr));
+            min-height: 92px;
         }
 
         .dc-calendar-day {
+            min-height: 92px;
             border-right: 1px solid #d8d8d8;
-            min-height: 165px;
+            border-bottom: 0;
+            padding: 0.5rem;
         }
 
         .dc-calendar-day:nth-child(7n) {
             border-right: 0;
         }
 
+        .dc-calendar-day-heading {
+            display: block;
+        }
+
         .dc-calendar-day-heading span {
+            display: none;
+        }
+
+        .dc-calendar-bars {
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            grid-auto-rows: minmax(2.35rem, auto);
+            align-items: stretch;
+            gap: 0.25rem;
+            padding: 0.35rem 0.5rem 0.7rem;
+            min-height: 78px;
+        }
+
+        .dc-cal-event {
+            padding: 0.35rem 0.45rem;
+            border-left: 0;
+            border-top: 5px solid #7413dc;
+            overflow: hidden;
+        }
+
+        .dc-cal-event.is-locked {
+            border-top-color: #006ddf;
+        }
+
+        .dc-cal-event-approved {
+            border-top-color: #00a794;
+        }
+
+        .dc-cal-event-submitted,
+        .dc-cal-event-under_review {
+            border-top-color: #ffdd00;
+        }
+
+        .dc-cal-event-changes_requested,
+        .dc-cal-event-cancelled,
+        .dc-cal-event-rejected {
+            border-top-color: #d4351c;
+        }
+
+        .dc-cal-event-draft {
+            border-top-color: #777777;
+        }
+
+        .dc-mobile-event-stack {
             display: none;
         }
     }
@@ -382,6 +594,10 @@ require __DIR__ . '/layout.php';
             background: transparent;
         }
 
+        .dc-calendar-week {
+            border-top: 0;
+        }
+
         .dc-calendar-day {
             border: 2px solid #d8d8d8;
             margin-bottom: 0.75rem;
@@ -390,256 +606,254 @@ require __DIR__ . '/layout.php';
         .dc-calendar-day.is-empty {
             display: none;
         }
+
+        .dc-calendar-bars {
+            display: none;
+        }
     }
 
-    .dc-event-list {
-        display: grid;
-        gap: 0.75rem;
-    }
-
-    .dc-event-list-item {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 0.75rem;
-        border: 1px solid #d8d8d8;
-        background: #ffffff;
-        padding: 0.75rem;
-    }
-
-    .dc-date-box {
-        min-width: 64px;
-        border: 2px solid #000000;
-        text-align: center;
-        background: #ffffff;
-    }
-
-    .dc-date-box span {
-        display: block;
-        font-size: 1.6rem;
-        font-weight: 900;
-        line-height: 1;
-        padding-top: 0.5rem;
-    }
-
-    .dc-date-box strong {
-        display: block;
-        background: #7413dc;
-        color: #ffffff;
-        padding: 0.25rem;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-    }
-
-    .dc-locked-note {
+    .dc-filter-summary {
+        font-size: 0.95rem;
         color: #4a4a4a;
-        font-size: 0.9rem;
-        margin-top: 0.25rem;
+        margin-top: 0.75rem;
     }
 </style>
 
-<div class="dc-calendar-toolbar">
-    <div>
-        <h2 class="dc-calendar-month-title">
-            <?= e($monthStart->format('F Y')) ?>
-        </h2>
-        <p class="mb-0">
-            Showing activities from all Groups. You can only open and manage events for Groups you have access to.
+<div class="dc-calendar-page">
+    <aside class="dc-calendar-sidebar" aria-labelledby="calendar-filters-heading">
+        <h2 id="calendar-filters-heading">Filters</h2>
+
+        <form method="get" class="dc-calendar-filter-form" action="/dc/">
+            <input type="hidden" name="month" value="<?= e($monthStart->format('Y-m')) ?>">
+
+            <div class="form-group mb-0">
+                <label for="group_id">Group</label>
+                <select id="group_id" name="group_id" class="form-control">
+                    <option value="0">All Groups</option>
+                    <?php foreach ($allGroups as $group): ?>
+                        <option value="<?= (int) $group['id'] ?>" <?= $selectedGroupId === (int) $group['id'] ? 'selected' : '' ?>>
+                            <?= e((string) $group['group_name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="form-group mb-0">
+                <label for="status">Status</label>
+                <select id="status" name="status" class="form-control">
+                    <?php foreach ($statusLabels as $value => $label): ?>
+                        <option value="<?= e($value) ?>" <?= $selectedStatus === $value ? 'selected' : '' ?>>
+                            <?= e($label) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="form-group mb-0">
+                <label for="q">Search</label>
+                <input
+                    id="q"
+                    name="q"
+                    class="form-control"
+                    value="<?= e($searchQuery) ?>"
+                    placeholder="Title, Group, leader or location"
+                >
+            </div>
+
+            <button class="btn btn-primary lt-btn" type="submit">
+                Apply filters
+            </button>
+        </form>
+
+        <div class="dc-calendar-sidebar-actions">
+            <a class="btn btn-primary lt-btn" href="<?= e($addEventUrl) ?>">
+                Add event
+            </a>
+
+            <a class="btn lt-btn lt-btn-secondary" href="/dc/">
+                Clear filters
+            </a>
+        </div>
+
+        <p class="dc-filter-summary">
+            <?= count($events) ?> event<?= count($events) === 1 ? '' : 's' ?> shown.
+            You can open events only for Groups you have access to.
         </p>
-    </div>
+    </aside>
 
-    <div class="dc-calendar-month-nav" aria-label="Calendar navigation">
-        <a class="btn lt-btn lt-btn-secondary" href="<?= e(dc_index_url(['month' => $previousMonth])) ?>">
-            Previous
-        </a>
-        <a class="btn lt-btn lt-btn-secondary" href="<?= e(dc_index_url(['month' => $currentMonth])) ?>">
-            Today
-        </a>
-        <a class="btn lt-btn lt-btn-secondary" href="<?= e(dc_index_url(['month' => $nextMonth])) ?>">
-            Next
-        </a>
-        <a class="btn btn-primary lt-btn" href="<?= e($addEventUrl) ?>">
-            Add event
-        </a>
-    </div>
-</div>
+    <section class="dc-calendar-main" aria-labelledby="calendar-heading">
+        <div class="dc-calendar-toolbar">
+            <div>
+                <h2 id="calendar-heading" class="dc-calendar-month-title">
+                    <?= e($monthStart->format('F Y')) ?>
+                </h2>
+                <p class="mb-0">
+                    Activities across the District.
+                </p>
+            </div>
 
-<form method="get" class="lt-panel-grey dc-calendar-filter-form" action="/dc/">
-    <input type="hidden" name="month" value="<?= e($monthStart->format('Y-m')) ?>">
+            <div class="dc-calendar-month-nav" aria-label="Calendar navigation">
+                <a class="btn lt-btn lt-btn-secondary" href="<?= e(dc_index_url(['month' => $previousMonth])) ?>">
+                    Previous
+                </a>
 
-    <div class="form-group mb-0">
-        <label for="group_id">Group</label>
-        <select id="group_id" name="group_id" class="form-control">
-            <option value="0">All Groups</option>
-            <?php foreach ($allGroups as $group): ?>
-                <option value="<?= (int) $group['id'] ?>" <?= $selectedGroupId === (int) $group['id'] ? 'selected' : '' ?>>
-                    <?= e((string) $group['group_name']) ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-    </div>
+                <a class="btn lt-btn lt-btn-secondary" href="<?= e(dc_index_url(['month' => $currentMonth])) ?>">
+                    Today
+                </a>
 
-    <div class="form-group mb-0">
-        <label for="status">Status</label>
-        <select id="status" name="status" class="form-control">
-            <?php foreach ($statusLabels as $value => $label): ?>
-                <option value="<?= e($value) ?>" <?= $selectedStatus === $value ? 'selected' : '' ?>>
-                    <?= e($label) ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-    </div>
+                <a class="btn lt-btn lt-btn-secondary" href="<?= e(dc_index_url(['month' => $nextMonth])) ?>">
+                    Next
+                </a>
+            </div>
+        </div>
 
-    <div class="form-group mb-0">
-        <label for="q">Search</label>
-        <input
-            id="q"
-            name="q"
-            class="form-control"
-            value="<?= e($searchQuery) ?>"
-            placeholder="Search title, Group, leader or location"
-        >
-    </div>
+        <?php if (!$events): ?>
+            <div class="dc-calendar-empty">
+                No events match the selected filters for this month.
+            </div>
+        <?php endif; ?>
 
-    <button class="btn btn-primary lt-btn" type="submit">
-        Apply filters
-    </button>
-</form>
+        <div class="dc-calendar-shell">
+            <div class="dc-calendar-weekdays" aria-hidden="true">
+                <div>Monday</div>
+                <div>Tuesday</div>
+                <div>Wednesday</div>
+                <div>Thursday</div>
+                <div>Friday</div>
+                <div>Saturday</div>
+                <div>Sunday</div>
+            </div>
 
-<section class="dc-calendar-shell" aria-labelledby="calendar-heading">
-    <h2 id="calendar-heading" class="sr-only">Calendar for <?= e($monthStart->format('F Y')) ?></h2>
+            <?php
+            $today = (new DateTimeImmutable('today'))->format('Y-m-d');
 
-    <div class="dc-calendar-weekdays" aria-hidden="true">
-        <div>Monday</div>
-        <div>Tuesday</div>
-        <div>Wednesday</div>
-        <div>Thursday</div>
-        <div>Friday</div>
-        <div>Saturday</div>
-        <div>Sunday</div>
-    </div>
-
-    <div class="dc-calendar-grid">
-        <?php
-        $day = $calendarStart;
-        $today = (new DateTimeImmutable('today'))->format('Y-m-d');
-
-        while ($day <= $calendarEnd):
-            $dateKey = $day->format('Y-m-d');
-            $dayEvents = $eventsByDate[$dateKey] ?? [];
-            $isOutsideMonth = $day->format('Y-m') !== $monthStart->format('Y-m');
-            $isToday = $dateKey === $today;
-            $isEmpty = !$dayEvents;
-        ?>
-            <div class="dc-calendar-day <?= $isOutsideMonth ? 'is-outside-month' : '' ?> <?= $isToday ? 'is-today' : '' ?> <?= $isEmpty ? 'is-empty' : '' ?>">
-                <div class="dc-calendar-day-heading">
-                    <strong><?= e($day->format('j')) ?></strong>
-                    <span><?= e($day->format('D j M')) ?></span>
-                </div>
-
-                <?php if ($dayEvents): ?>
-                    <div class="dc-calendar-event-list">
-                        <?php foreach ($dayEvents as $event): ?>
+            foreach ($weeks as $week):
+            ?>
+                <div class="dc-calendar-week">
+                    <div class="dc-calendar-days">
+                        <?php foreach ($week['days'] as $day): ?>
                             <?php
-                                $canManage = dc_user_can_manage_event_group($ctx, (int) $event['group_id']);
-                                $eventStart = new DateTimeImmutable((string) $event['starts_at']);
-                                $eventEnd = new DateTimeImmutable((string) $event['ends_at']);
-                                $eventLabel = date('H:i', strtotime((string) $event['starts_at'])) . ' · ' . $event['group_name'];
-                                $eventStatus = (string) $event['status'];
-                                $eventClass = 'dc-calendar-event dc-status-' . preg_replace('/[^a-z0-9_-]/i', '', $eventStatus);
+                                $dateKey = $day->format('Y-m-d');
+                                $isOutsideMonth = $day->format('Y-m') !== $monthStart->format('Y-m');
+                                $isToday = $dateKey === $today;
+
+                                $mobileDayEvents = [];
+
+                                foreach ($week['bars'] as $bar) {
+                                    $event = $bar['event'];
+
+                                    try {
+                                        $eventStart = new DateTimeImmutable((string) $event['starts_at']);
+                                        $eventEnd = new DateTimeImmutable((string) $event['ends_at']);
+                                    } catch (Throwable $e) {
+                                        continue;
+                                    }
+
+                                    $dayStart = new DateTimeImmutable($dateKey . ' 00:00:00');
+                                    $dayEnd = new DateTimeImmutable($dateKey . ' 23:59:59');
+
+                                    if ($eventStart <= $dayEnd && $eventEnd >= $dayStart) {
+                                        $mobileDayEvents[] = $event;
+                                    }
+                                }
                             ?>
 
-                            <?php if ($canManage): ?>
-                                <a
-                                    class="<?= e($eventClass) ?>"
-                                    href="/dc/manage-event.php?id=<?= (int) $event['id'] ?>"
-                                    title="<?= e((string) $event['title']) ?>"
-                                >
-                                    <span class="dc-calendar-event-title"><?= e((string) $event['title']) ?></span>
-                                    <span class="dc-calendar-event-meta"><?= e($eventLabel) ?></span>
-                                    <span class="dc-calendar-event-status"><?= e(str_replace('_', ' ', $eventStatus)) ?></span>
-                                </a>
-                            <?php else: ?>
-                                <div
-                                    class="<?= e($eventClass) ?> is-locked"
-                                    title="You can view this activity but cannot manage it"
-                                >
-                                    <span class="dc-calendar-event-title"><?= e((string) $event['title']) ?></span>
-                                    <span class="dc-calendar-event-meta"><?= e($eventLabel) ?></span>
-                                    <span class="dc-calendar-event-status"><?= e(str_replace('_', ' ', $eventStatus)) ?></span>
+                            <div class="dc-calendar-day <?= $isOutsideMonth ? 'is-outside-month' : '' ?> <?= $isToday ? 'is-today' : '' ?> <?= !$mobileDayEvents ? 'is-empty' : '' ?>">
+                                <div class="dc-calendar-day-heading">
+                                    <strong><?= e($day->format('j')) ?></strong>
+                                    <span><?= e($day->format('D j M')) ?></span>
                                 </div>
-                            <?php endif; ?>
+
+                                <?php if ($mobileDayEvents): ?>
+                                    <div class="dc-mobile-event-stack">
+                                        <?php foreach ($mobileDayEvents as $event): ?>
+                                            <?php
+                                                $canManage = dc_user_can_manage_event_group($ctx, (int) $event['group_id']);
+                                                $eventStatus = (string) $event['status'];
+                                                $eventClass = dc_event_bar_class($eventStatus);
+                                                $timeLabel = date('H:i', strtotime((string) $event['starts_at']));
+                                            ?>
+
+                                            <?php if ($canManage): ?>
+                                                <a
+                                                    class="<?= e($eventClass) ?>"
+                                                    href="/dc/manage-event.php?id=<?= (int) $event['id'] ?>"
+                                                >
+                                                    <span class="dc-cal-event-title"><?= e((string) $event['title']) ?></span>
+                                                    <span class="dc-cal-event-meta"><?= e($timeLabel) ?> · <?= e((string) $event['group_name']) ?></span>
+                                                    <span class="dc-cal-event-status"><?= e(str_replace('_', ' ', $eventStatus)) ?></span>
+                                                </a>
+                                            <?php else: ?>
+                                                <div class="<?= e($eventClass) ?> is-locked">
+                                                    <span class="dc-cal-event-title"><?= e((string) $event['title']) ?></span>
+                                                    <span class="dc-cal-event-meta"><?= e($timeLabel) ?> · <?= e((string) $event['group_name']) ?></span>
+                                                    <span class="dc-cal-event-status"><?= e(str_replace('_', ' ', $eventStatus)) ?></span>
+                                                </div>
+                                            <?php endif; ?>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
                         <?php endforeach; ?>
                     </div>
-                <?php endif; ?>
-            </div>
-        <?php
-            $day = $day->modify('+1 day');
-        endwhile;
-        ?>
-    </div>
-</section>
 
-<section class="lt-panel" aria-labelledby="event-list-heading">
-    <div class="dc-action-bar">
-        <div>
-            <h2 id="event-list-heading" class="lt-section-title">Events in this view</h2>
-            <p class="mb-0">
-                <?= count($events) ?> event<?= count($events) === 1 ? '' : 's' ?> found.
-            </p>
-        </div>
-    </div>
+                    <?php if ($week['bars']): ?>
+                        <div class="dc-calendar-bars" aria-label="Events for week beginning <?= e($week['start']->format('j F Y')) ?>">
+                            <?php foreach ($week['bars'] as $bar): ?>
+                                <?php
+                                    $event = $bar['event'];
+                                    $canManage = dc_user_can_manage_event_group($ctx, (int) $event['group_id']);
+                                    $eventStatus = (string) $event['status'];
+                                    $eventClass = dc_event_bar_class($eventStatus);
 
-    <?php if (!$events): ?>
-        <p class="mb-0">No events match the selected filters.</p>
-    <?php else: ?>
-        <div class="dc-event-list">
-            <?php foreach ($events as $event): ?>
-                <?php
-                    $canManage = dc_user_can_manage_event_group($ctx, (int) $event['group_id']);
-                    $manageUrl = '/dc/manage-event.php?id=' . (int) $event['id'];
-                ?>
+                                    $columnStart = (int) $bar['column_start'];
+                                    $columnEnd = $columnStart + (int) $bar['span'];
+                                    $columnEnd = min($columnEnd, 8);
 
-                <article class="dc-event-list-item">
-                    <div class="dc-date-box">
-                        <span><?= e(date('d', strtotime((string) $event['starts_at']))) ?></span>
-                        <strong><?= e(date('M', strtotime((string) $event['starts_at']))) ?></strong>
-                    </div>
+                                    $startsText = date('D j M H:i', strtotime((string) $event['starts_at']));
+                                    $endsText = date('D j M H:i', strtotime((string) $event['ends_at']));
 
-                    <div>
-                        <h3 class="mb-1">
-                            <?php if ($canManage): ?>
-                                <a href="<?= e($manageUrl) ?>"><?= e((string) $event['title']) ?></a>
-                            <?php else: ?>
-                                <?= e((string) $event['title']) ?>
-                            <?php endif; ?>
-                        </h3>
+                                    $continuationPrefix = $bar['continues_before'] ? '← ' : '';
+                                    $continuationSuffix = $bar['continues_after'] ? ' →' : '';
+                                ?>
 
-                        <p class="mb-1">
-                            <strong><?= e((string) $event['group_name']) ?></strong>
-                            ·
-                            <?= e(date('D j M Y, H:i', strtotime((string) $event['starts_at']))) ?>
-                            to
-                            <?= e(date('D j M Y, H:i', strtotime((string) $event['ends_at']))) ?>
-                        </p>
-
-                        <?php if (!empty($event['location_name'])): ?>
-                            <p class="mb-1"><?= e((string) $event['location_name']) ?></p>
-                        <?php endif; ?>
-
-                        <span class="lt-badge dc-status dc-status-<?= e((string) $event['status']) ?>">
-                            <?= e(str_replace('_', ' ', (string) $event['status'])) ?>
-                        </span>
-
-                        <?php if (!$canManage): ?>
-                            <div class="dc-locked-note">
-                                You can see this District activity, but you do not have access to manage it.
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                </article>
+                                <?php if ($canManage): ?>
+                                    <a
+                                        class="<?= e($eventClass) ?>"
+                                        href="/dc/manage-event.php?id=<?= (int) $event['id'] ?>"
+                                        style="grid-column: <?= $columnStart ?> / <?= $columnEnd ?>;"
+                                        title="<?= e((string) $event['title']) ?> · <?= e($startsText) ?> to <?= e($endsText) ?>"
+                                    >
+                                        <span class="dc-cal-event-title">
+                                            <?= e($continuationPrefix . (string) $event['title'] . $continuationSuffix) ?>
+                                        </span>
+                                        <span class="dc-cal-event-meta">
+                                            <?= e((string) $event['group_name']) ?> · <?= e(date('H:i', strtotime((string) $event['starts_at']))) ?>
+                                        </span>
+                                        <span class="dc-cal-event-status"><?= e(str_replace('_', ' ', $eventStatus)) ?></span>
+                                    </a>
+                                <?php else: ?>
+                                    <div
+                                        class="<?= e($eventClass) ?> is-locked"
+                                        style="grid-column: <?= $columnStart ?> / <?= $columnEnd ?>;"
+                                        title="<?= e((string) $event['title']) ?> · <?= e($startsText) ?> to <?= e($endsText) ?>"
+                                    >
+                                        <span class="dc-cal-event-title">
+                                            <?= e($continuationPrefix . (string) $event['title'] . $continuationSuffix) ?>
+                                        </span>
+                                        <span class="dc-cal-event-meta">
+                                            <?= e((string) $event['group_name']) ?> · <?= e(date('H:i', strtotime((string) $event['starts_at']))) ?>
+                                        </span>
+                                        <span class="dc-cal-event-status"><?= e(str_replace('_', ' ', $eventStatus)) ?></span>
+                                    </div>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
             <?php endforeach; ?>
         </div>
-    <?php endif; ?>
-</section>
+    </section>
+</div>
 
 <?php require __DIR__ . '/layout-footer.php'; ?>
