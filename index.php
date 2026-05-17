@@ -101,6 +101,14 @@ $modules = [
         'image' => '/assets/img/db-20220915-00340-jpg.jpg',
         'visible' => $isDistrictAdmin,
     ],
+     [
+        'title' => 'My District Email / OneDrive',
+        'description' => 'As a volunteer with Irwell Valley District, you are eligible for a free Microsoft 365 account with upto 1TB of storage. Access your email, OneDrive and other Microsoft apps here.',
+        'url' => '/technical-support.php',
+        'status' => 'soon',
+        'image' => 'assets/img/cub-carrying-leaves-jpg.jpg',
+        'visible' => true,
+    ],
 ];
 
 $modules = array_values(array_filter(

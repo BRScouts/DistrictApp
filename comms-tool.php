@@ -354,6 +354,99 @@ function comms_personalise_html(string $html, array $recipient): string
     );
 }
 
+function comms_fetch_active_role_options(): array
+{
+    try {
+        $stmt = db()->query("
+            SELECT
+                dp.role_title,
+                COUNT(DISTINCT p.id) AS people_count
+            FROM people p
+            JOIN directory_profiles dp
+              ON dp.person_id = p.id
+            WHERE p.status = 'active'
+              AND dp.role_title IS NOT NULL
+              AND dp.role_title <> ''
+              AND p.primary_email IS NOT NULL
+              AND p.primary_email <> ''
+            GROUP BY dp.role_title
+            ORDER BY dp.role_title ASC
+        ");
+
+        $roles = [];
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $role = trim((string) $row['role_title']);
+
+            if ($role === '') {
+                continue;
+            }
+
+            $roles[$role] = (int) $row['people_count'];
+        }
+
+        return $roles;
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+function comms_fetch_accreditation_counts(array $knownAccreditations): array
+{
+    $counts = array_fill_keys($knownAccreditations, 0);
+
+    try {
+        $stmt = db()->query("
+            SELECT dp.accreditations_json
+            FROM people p
+            JOIN directory_profiles dp
+              ON dp.person_id = p.id
+            WHERE p.status = 'active'
+              AND p.primary_email IS NOT NULL
+              AND p.primary_email <> ''
+              AND dp.accreditations_json IS NOT NULL
+              AND dp.accreditations_json <> ''
+              AND dp.accreditations_json <> '[]'
+        ");
+
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $json) {
+            $items = array_unique(comms_decode_json_list((string) $json));
+
+            foreach ($items as $item) {
+                if (!array_key_exists($item, $counts)) {
+                    $counts[$item] = 0;
+                }
+
+                $counts[$item]++;
+            }
+        }
+    } catch (Throwable $e) {
+    }
+
+    return $counts;
+}
+
+function comms_filter_accreditation_options_by_count(array $accreditationOptions, array $counts): array
+{
+    $filtered = [];
+
+    foreach ($accreditationOptions as $category => $items) {
+        $kept = [];
+
+        foreach ($items as $item) {
+            if (($counts[$item] ?? 0) > 0) {
+                $kept[] = $item;
+            }
+        }
+
+        if ($kept) {
+            $filtered[$category] = $kept;
+        }
+    }
+
+    return $filtered;
+}
+
 function comms_fetch_recipients(array $filters, array $user): array
 {
     $where = [
@@ -530,9 +623,17 @@ $stmt = $pdo->query("
 ");
 $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$roleOptions = portal_role_options();
-$accreditationOptions = portal_accreditation_options();
-$allowedAccreditations = portal_flatten_options($accreditationOptions);
+$roleCounts = comms_fetch_active_role_options();
+$roleOptions = array_keys($roleCounts);
+
+$allAccreditationOptions = portal_accreditation_options();
+$knownAccreditations = portal_flatten_options($allAccreditationOptions);
+$accreditationCounts = comms_fetch_accreditation_counts($knownAccreditations);
+$accreditationOptions = comms_filter_accreditation_options_by_count($allAccreditationOptions, $accreditationCounts);
+$allowedAccreditations = array_keys(array_filter(
+    $accreditationCounts,
+    static fn(int $count): bool => $count > 0
+));
 
 $errors = [];
 $success = null;
@@ -1053,6 +1154,13 @@ if (!$recipients && in_array($step, ['write', 'preview'], true)) {
         background: #f7f5fb;
         margin-bottom: 1rem;
     }
+
+    .comms-empty-filter {
+        background: #fff8d6;
+        border-left: 5px solid #ffdd00;
+        padding: .85rem;
+        font-weight: 700;
+    }
 </style>
 
 <main class="lt-main">
@@ -1159,56 +1267,68 @@ if (!$recipients && in_array($step, ['write', 'preview'], true)) {
                                 </div>
 
                                 <div class="form-group">
-                                    <label>Roles</label>
+                                    <label>Roles currently in use</label>
 
-                                    <div class="comms-select-actions">
-                                        <button type="button" data-check-all="role_titles[]">Select all Roles</button>
-                                        <button type="button" data-clear-all="role_titles[]">Clear Roles</button>
-                                    </div>
+                                    <?php if ($roleOptions): ?>
+                                        <div class="comms-select-actions">
+                                            <button type="button" data-check-all="role_titles[]">Select all Roles</button>
+                                            <button type="button" data-clear-all="role_titles[]">Clear Roles</button>
+                                        </div>
 
-                                    <div class="comms-check-grid">
-                                        <?php foreach ($roleOptions as $roleOption): ?>
-                                            <label class="lt-check">
-                                                <input
-                                                    type="checkbox"
-                                                    name="role_titles[]"
-                                                    value="<?= e($roleOption) ?>"
-                                                    <?= in_array($roleOption, $form['role_titles'], true) ? 'checked' : '' ?>
-                                                >
-                                                <span><?= e($roleOption) ?></span>
-                                            </label>
-                                        <?php endforeach; ?>
-                                    </div>
+                                        <div class="comms-check-grid">
+                                            <?php foreach ($roleOptions as $roleOption): ?>
+                                                <label class="lt-check">
+                                                    <input
+                                                        type="checkbox"
+                                                        name="role_titles[]"
+                                                        value="<?= e($roleOption) ?>"
+                                                        <?= in_array($roleOption, $form['role_titles'], true) ? 'checked' : '' ?>
+                                                    >
+                                                    <span><?= e($roleOption) ?> (<?= (int) ($roleCounts[$roleOption] ?? 0) ?>)</span>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="comms-empty-filter">
+                                            No active roles are currently linked to active people.
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
 
                             <details class="mb-3" <?= $form['accreditations'] ? 'open' : '' ?>>
-                                <summary class="font-weight-bold">Filter by accreditations</summary>
+                                <summary class="font-weight-bold">Filter by accreditations currently in use</summary>
 
-                                <div class="comms-select-actions mt-3">
-                                    <button type="button" data-check-all="accreditations[]">Select all Accreditations</button>
-                                    <button type="button" data-clear-all="accreditations[]">Clear Accreditations</button>
-                                </div>
+                                <?php if ($accreditationOptions): ?>
+                                    <div class="comms-select-actions mt-3">
+                                        <button type="button" data-check-all="accreditations[]">Select all Accreditations</button>
+                                        <button type="button" data-clear-all="accreditations[]">Clear Accreditations</button>
+                                    </div>
 
-                                <div class="comms-check-grid comms-accreditations mt-2">
-                                    <?php foreach ($accreditationOptions as $category => $items): ?>
-                                        <div>
-                                            <strong><?= e((string) $category) ?></strong>
+                                    <div class="comms-check-grid comms-accreditations mt-2">
+                                        <?php foreach ($accreditationOptions as $category => $items): ?>
+                                            <div>
+                                                <strong><?= e((string) $category) ?></strong>
 
-                                            <?php foreach ($items as $item): ?>
-                                                <label class="lt-check">
-                                                    <input
-                                                        type="checkbox"
-                                                        name="accreditations[]"
-                                                        value="<?= e($item) ?>"
-                                                        <?= in_array($item, $form['accreditations'], true) ? 'checked' : '' ?>
-                                                    >
-                                                    <span><?= e($item) ?></span>
-                                                </label>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </div>
+                                                <?php foreach ($items as $item): ?>
+                                                    <label class="lt-check">
+                                                        <input
+                                                            type="checkbox"
+                                                            name="accreditations[]"
+                                                            value="<?= e($item) ?>"
+                                                            <?= in_array($item, $form['accreditations'], true) ? 'checked' : '' ?>
+                                                        >
+                                                        <span><?= e($item) ?> (<?= (int) ($accreditationCounts[$item] ?? 0) ?>)</span>
+                                                    </label>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="comms-empty-filter mt-3">
+                                        No accreditations are currently linked to active people.
+                                    </div>
+                                <?php endif; ?>
                             </details>
                         </div>
 
@@ -1247,6 +1367,9 @@ if (!$recipients && in_array($step, ['write', 'preview'], true)) {
                         <h2>Recipient rules</h2>
                         <p>
                             Choose <strong>all active people</strong> for a whole-District message, or build a targeted list using Group, role, accreditation and search filters.
+                        </p>
+                        <p>
+                            Roles and accreditations only appear here when they are linked to active people.
                         </p>
                         <p class="mb-0">
                             Recipients are deduplicated by email address before queueing.
