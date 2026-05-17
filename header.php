@@ -76,36 +76,21 @@ $isAdmin = in_array(
 
     <style>
         :root {
-            --iv-purple: #7413dc;
-            --iv-purple-dark: #4d0b93;
-            --iv-yellow: #ffb81c;
-            --iv-black: #1d1d1b;
-            --iv-white: #ffffff;
-            --iv-grey: #f3f2f1;
-            --iv-border: #b1b4b6;
+            --lt-purple: #7413dc;
+            --lt-purple-dark: #4d0b93;
+            --lt-yellow: #ffb81c;
+            --lt-text: #1d1d1b;
+            --lt-border: #e6e6e6;
+            --lt-soft: #f7f5fb;
         }
 
         body {
             margin: 0;
-            color: var(--iv-black);
-            background: #ffffff;
-        }
-
-        a {
-            font-weight: 800;
-        }
-
-        a:focus,
-        button:focus,
-        summary:focus {
-            outline: 4px solid var(--iv-yellow);
-            outline-offset: 2px;
         }
 
         .lt-header {
-            background: var(--iv-purple);
-            color: var(--iv-white);
-            border-bottom: 8px solid var(--iv-yellow);
+            background: #ffffff;
+            border-bottom: 1px solid var(--lt-border);
         }
 
         .lt-header-inner {
@@ -116,78 +101,50 @@ $isAdmin = in_array(
             align-items: center;
             justify-content: space-between;
             gap: 1rem;
-            padding: .75rem 0;
+            padding: .65rem 0;
         }
 
         .lt-brand {
             display: inline-flex;
             align-items: center;
-            text-decoration: none;
-            color: var(--iv-white);
             min-width: 0;
-        }
-
-        .lt-brand:hover {
-            color: var(--iv-white);
             text-decoration: none;
         }
 
-        .lt-brand-logo-box {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            background: #ffffff;
-            padding: .45rem .6rem;
-            min-width: 130px;
+        .lt-brand:hover,
+        .lt-brand:focus {
+            text-decoration: none;
         }
 
-        .lt-brand-logo-box img {
+        .lt-brand img {
             display: block;
-            height: 56px;
+            height: 62px;
             width: auto;
-            max-width: 180px;
+            max-width: 210px;
             object-fit: contain;
-        }
-
-        .lt-brand-text {
-            display: none;
-            margin-left: 1rem;
-            line-height: 1.05;
-        }
-
-        .lt-brand-text strong {
-            display: block;
-            font-size: 1.2rem;
-            font-weight: 900;
-            letter-spacing: -.01em;
-        }
-
-        .lt-brand-text span {
-            display: block;
-            margin-top: .15rem;
-            font-size: .9rem;
-            font-weight: 800;
-            opacity: .95;
         }
 
         .lt-header-actions {
             display: flex;
             align-items: center;
             justify-content: flex-end;
-            gap: .5rem;
+            gap: .75rem;
+            min-width: 0;
         }
 
-        .lt-home-link {
+        .lt-header-home {
             display: none;
-            color: #ffffff;
-            text-decoration: underline;
-            text-decoration-thickness: 3px;
-            text-underline-offset: 4px;
+            color: var(--lt-purple-dark);
             font-weight: 900;
+            text-decoration: none;
         }
 
-        .lt-home-link:hover {
-            color: #ffffff;
+        .lt-header-home:hover,
+        .lt-header-home:focus {
+            color: var(--lt-purple-dark);
+            text-decoration: underline;
+            text-decoration-thickness: 2px;
+            text-underline-offset: 3px;
         }
 
         .lt-profile-menu {
@@ -207,60 +164,65 @@ $isAdmin = in_array(
         .lt-profile-trigger {
             display: inline-flex;
             align-items: center;
-            gap: .6rem;
-            min-height: 52px;
-            border: 3px solid #ffffff;
-            background: var(--iv-purple-dark);
-            color: #ffffff;
-            padding: .25rem .35rem .25rem .75rem;
-            font-weight: 900;
+            gap: .65rem;
+            border: 1px solid var(--lt-border);
+            background: #ffffff;
+            color: var(--lt-text);
+            border-radius: 999px;
+            padding: .35rem .45rem .35rem .9rem;
+            min-height: 54px;
+            max-width: 260px;
         }
 
-        .lt-profile-trigger:hover {
-            background: #2f075c;
+        .lt-profile-trigger:hover,
+        .lt-profile-trigger:focus {
+            border-color: var(--lt-purple);
+            box-shadow: 0 0 0 3px rgba(116, 19, 220, .12);
+            outline: none;
         }
 
         .lt-profile-trigger-text {
             display: none;
             min-width: 0;
+            line-height: 1.15;
             text-align: right;
-            line-height: 1.1;
         }
 
         .lt-profile-name {
             display: block;
-            max-width: 190px;
+            max-width: 170px;
+            color: var(--lt-text);
+            font-size: .92rem;
+            font-weight: 900;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            font-size: .95rem;
-            font-weight: 900;
         }
 
         .lt-profile-group {
             display: block;
-            max-width: 190px;
-            margin-top: .1rem;
+            max-width: 170px;
+            margin-top: .05rem;
+            color: #555;
+            font-size: .78rem;
+            font-weight: 700;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            font-size: .8rem;
-            font-weight: 800;
         }
 
         .lt-avatar {
-            width: 42px;
-            height: 42px;
-            flex: 0 0 42px;
-            border-radius: 50%;
-            background: var(--iv-yellow);
-            color: var(--iv-black);
+            width: 44px;
+            height: 44px;
+            flex: 0 0 44px;
+            border-radius: 999px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            background: var(--lt-purple);
+            color: #ffffff;
             font-weight: 900;
             overflow: hidden;
-            border: 2px solid #ffffff;
         }
 
         .lt-avatar img {
@@ -270,28 +232,30 @@ $isAdmin = in_array(
             object-fit: cover;
         }
 
-        .lt-profile-caret {
-            width: 0;
-            height: 0;
-            border-left: .35rem solid transparent;
-            border-right: .35rem solid transparent;
-            border-top: .45rem solid #ffffff;
+        .lt-profile-chevron {
+            width: .55rem;
+            height: .55rem;
+            border-right: 2px solid #555;
+            border-bottom: 2px solid #555;
+            transform: rotate(45deg) translateY(-2px);
             margin-right: .25rem;
         }
 
-        .lt-profile-menu[open] .lt-profile-caret {
-            border-top: 0;
-            border-bottom: .45rem solid #ffffff;
+        .lt-profile-menu[open] .lt-profile-chevron {
+            transform: rotate(225deg) translateY(-1px);
         }
 
         .lt-profile-dropdown {
             position: absolute;
-            top: calc(100% + .5rem);
             right: 0;
-            width: min(320px, calc(100vw - 1rem));
+            top: calc(100% + .55rem);
+            width: min(310px, calc(100vw - 1rem));
             background: #ffffff;
-            color: var(--iv-black);
-            border: 3px solid var(--iv-black);
+            color: var(--lt-text);
+            border: 1px solid var(--lt-border);
+            border-radius: .5rem;
+            box-shadow: 0 14px 34px rgba(0, 0, 0, .12);
+            overflow: hidden;
             z-index: 100;
         }
 
@@ -301,19 +265,19 @@ $isAdmin = in_array(
             gap: .75rem;
             align-items: center;
             padding: 1rem;
-            background: var(--iv-grey);
-            border-bottom: 3px solid var(--iv-black);
+            background: var(--lt-soft);
+            border-bottom: 1px solid var(--lt-border);
         }
 
         .lt-dropdown-avatar {
             width: 54px;
             height: 54px;
-            border-radius: 50%;
-            background: var(--iv-purple);
-            color: #ffffff;
+            border-radius: 999px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            background: var(--lt-purple);
+            color: #ffffff;
             font-weight: 900;
             overflow: hidden;
         }
@@ -326,9 +290,10 @@ $isAdmin = in_array(
 
         .lt-dropdown-name {
             display: block;
+            color: var(--lt-text);
+            font-size: 1rem;
             font-weight: 900;
-            font-size: 1.05rem;
-            line-height: 1.1;
+            line-height: 1.15;
             overflow-wrap: anywhere;
         }
 
@@ -336,28 +301,29 @@ $isAdmin = in_array(
         .lt-dropdown-role {
             display: block;
             margin-top: .2rem;
-            font-weight: 800;
-            font-size: .85rem;
-            color: #505a5f;
+            color: #555;
+            font-size: .84rem;
+            font-weight: 700;
         }
 
         .lt-profile-dropdown-links {
-            padding: .5rem;
+            padding: .35rem;
         }
 
         .lt-profile-dropdown-links a {
             display: block;
-            color: var(--iv-black);
-            padding: .85rem;
-            text-decoration: underline;
-            text-decoration-thickness: 2px;
-            text-underline-offset: 3px;
-            font-weight: 900;
+            color: var(--lt-text);
+            text-decoration: none;
+            font-weight: 800;
+            padding: .8rem .85rem;
+            border-radius: .35rem;
         }
 
-        .lt-profile-dropdown-links a:hover {
-            background: var(--iv-grey);
-            color: var(--iv-purple-dark);
+        .lt-profile-dropdown-links a:hover,
+        .lt-profile-dropdown-links a:focus {
+            background: var(--lt-soft);
+            color: var(--lt-purple-dark);
+            text-decoration: none;
         }
 
         .lt-profile-dropdown-links .lt-signout-link {
@@ -365,65 +331,55 @@ $isAdmin = in_array(
         }
 
         .lt-hero {
-            background: var(--iv-grey);
-            border-bottom: 1px solid var(--iv-border);
+            background: var(--lt-soft);
+            border-bottom: 1px solid var(--lt-border);
         }
 
         .lt-hero-inner {
             width: min(1180px, calc(100% - 1rem));
             margin: 0 auto;
-            padding: 1.5rem 0;
+            padding: 1.6rem 0;
         }
 
         .lt-hero h1 {
             margin: 0;
-            color: var(--iv-black);
-            font-size: clamp(2rem, 7vw, 3.4rem);
-            line-height: 1;
+            color: var(--lt-purple-dark);
+            font-size: clamp(2rem, 6vw, 3.2rem);
+            line-height: 1.05;
             font-weight: 900;
         }
 
         .lt-hero p {
-            margin: .75rem 0 0;
-            max-width: 720px;
-            color: var(--iv-black);
-            font-size: 1.1rem;
-            line-height: 1.4;
+            margin: .65rem 0 0;
+            max-width: 760px;
+            color: #333;
+            font-size: 1.05rem;
             font-weight: 700;
+            line-height: 1.45;
         }
 
         .lt-breadcrumb {
             background: #ffffff;
-            border-bottom: 1px solid var(--iv-border);
+            border-bottom: 1px solid var(--lt-border);
         }
 
         .lt-breadcrumb-inner {
             width: min(1180px, calc(100% - 1rem));
             margin: 0 auto;
             padding: .75rem 0;
-            font-weight: 800;
             font-size: .95rem;
+            font-weight: 700;
         }
 
         .lt-breadcrumb-inner a {
-            color: var(--iv-purple-dark);
-            text-decoration: underline;
-            text-decoration-thickness: 2px;
-            text-underline-offset: 3px;
+            color: var(--lt-purple-dark);
+            font-weight: 900;
         }
 
-        @media (min-width: 600px) {
-            .lt-brand-logo-box {
-                min-width: 160px;
-            }
-
-            .lt-brand-logo-box img {
-                height: 68px;
-                max-width: 220px;
-            }
-
-            .lt-brand-text {
-                display: block;
+        @media (min-width: 520px) {
+            .lt-brand img {
+                height: 72px;
+                max-width: 240px;
             }
 
             .lt-profile-trigger-text {
@@ -433,24 +389,15 @@ $isAdmin = in_array(
 
         @media (min-width: 900px) {
             .lt-header-inner {
-                min-height: 104px;
+                min-height: 96px;
             }
 
-            .lt-brand-logo-box {
-                min-width: 190px;
-                padding: .55rem .75rem;
+            .lt-brand img {
+                height: 82px;
+                max-width: 280px;
             }
 
-            .lt-brand-logo-box img {
-                height: 78px;
-                max-width: 250px;
-            }
-
-            .lt-brand-text strong {
-                font-size: 1.35rem;
-            }
-
-            .lt-home-link {
+            .lt-header-home {
                 display: inline-block;
             }
         }
@@ -460,27 +407,22 @@ $isAdmin = in_array(
                 width: min(1180px, calc(100% - .75rem));
             }
 
-            .lt-brand-logo-box {
-                min-width: 108px;
-                padding: .35rem .45rem;
-            }
-
-            .lt-brand-logo-box img {
-                height: 48px;
-                max-width: 135px;
+            .lt-brand img {
+                height: 54px;
+                max-width: 160px;
             }
 
             .lt-profile-trigger {
-                padding: .25rem;
-                min-height: 48px;
+                padding: .3rem;
+                min-height: 50px;
             }
 
-            .lt-profile-caret {
+            .lt-profile-chevron {
                 display: none;
             }
 
             .lt-profile-dropdown {
-                right: -.25rem;
+                right: -.15rem;
             }
         }
     </style>
@@ -488,23 +430,16 @@ $isAdmin = in_array(
 <body>
 <header class="lt-header">
     <div class="lt-header-inner">
-        <a class="lt-brand" href="/index.php" aria-label="Irwell Valley Scout District dashboard">
-            <span class="lt-brand-logo-box">
-                <img src="/assets/img/black-ir-logo.png" alt="Irwell Valley District Scouts" onerror="this.style.display='none';">
-            </span>
-
-            <span class="lt-brand-text">
-                <strong>Irwell Valley Scout District</strong>
-                <span>District Dashboard</span>
-            </span>
+        <a class="lt-brand" href="/index.php" aria-label="Irwell Valley Scout District home">
+            <img src="/assets/img/black-ir-logo.png" alt="Irwell Valley District Scouts" onerror="this.style.display='none';">
         </a>
 
         <?php if ($user): ?>
             <div class="lt-header-actions">
-                <a class="lt-home-link" href="/index.php">Dashboard</a>
+                <a class="lt-header-home" href="/index.php">Dashboard</a>
 
                 <details class="lt-profile-menu">
-                    <summary class="lt-profile-trigger" aria-label="Open account menu">
+                    <summary class="lt-profile-trigger" aria-label="Open profile menu">
                         <span class="lt-profile-trigger-text">
                             <span class="lt-profile-name"><?= e($displayName) ?></span>
                             <span class="lt-profile-group">
@@ -520,7 +455,7 @@ $isAdmin = in_array(
                             <?php endif; ?>
                         </span>
 
-                        <span class="lt-profile-caret" aria-hidden="true"></span>
+                        <span class="lt-profile-chevron" aria-hidden="true"></span>
                     </summary>
 
                     <div class="lt-profile-dropdown" role="menu">
