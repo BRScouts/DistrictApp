@@ -8,6 +8,35 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
+function dc_table_has_column(string $table, string $column): bool
+{
+    static $cache = [];
+
+    $key = $table . '.' . $column;
+
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
+    try {
+        $stmt = db()->prepare("
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = :table_name
+              AND COLUMN_NAME = :column_name
+        ");
+        $stmt->execute([
+            'table_name' => $table,
+            'column_name' => $column,
+        ]);
+
+        return $cache[$key] = ((int) $stmt->fetchColumn()) > 0;
+    } catch (Throwable $e) {
+        return $cache[$key] = false;
+    }
+}
+
 function dc_setting(string $key, ?string $default = null): ?string
 {
     static $cache = [];
@@ -120,10 +149,38 @@ function dc_context_has_admin_access(array $ctx): bool
 
 function dc_log(string $action, ?string $entityType = null, ?int $entityId = null, array $details = [], ?int $groupId = null): void
 {
-    $ctx = dc_context(false);
-    $actorType = $ctx['actor_type'] ?? 'system';
-    $actorPersonId = $ctx['person_id'] ?? null;
-    $groupId = $groupId ?? ($ctx['group_id'] ?? null);
+    $actorType = 'system';
+    $actorPersonId = null;
+
+    /*
+     * Important recursion guard:
+     *
+     * dc_context() resolves ?token= group links and logs group_link.used.
+     * dc_log() normally calls dc_context(false) to identify the actor.
+     * Without this guard, group-link login becomes:
+     *
+     * dc_context()
+     *   -> dc_log()
+     *      -> dc_context()
+     *         -> dc_log()
+     *
+     * and PHP eventually hits the max stack limit.
+     */
+    if (empty($GLOBALS['dc_context_resolving'])) {
+        try {
+            $ctx = dc_context(false);
+            $actorType = (string) ($ctx['actor_type'] ?? 'system');
+            $actorPersonId = isset($ctx['person_id']) ? (int) $ctx['person_id'] : null;
+            $groupId = $groupId ?? (isset($ctx['group_id']) ? (int) $ctx['group_id'] : null);
+        } catch (Throwable $e) {
+            // Audit logging must never trigger or break context resolution.
+        }
+    } else {
+        if (!empty($_SESSION['dc_group_link'])) {
+            $actorType = 'group_link';
+            $groupId = $groupId ?? (int) ($_SESSION['dc_group_link']['group_id'] ?? 0);
+        }
+    }
 
     try {
         $stmt = db()->prepare("
@@ -153,7 +210,7 @@ function dc_log(string $action, ?string $entityType = null, ?int $entityId = nul
         $stmt->execute([
             'actor_type' => $actorType,
             'actor_person_id' => $actorPersonId,
-            'group_id' => $groupId,
+            'group_id' => $groupId ?: null,
             'entity_type' => $entityType,
             'entity_id' => $entityId,
             'action' => $action,
@@ -236,24 +293,44 @@ function dc_queue_email(string $toEmail, ?string $toName, string $subject, strin
 
 function dc_group_link_from_token(string $rawToken): ?array
 {
+    $rawToken = trim($rawToken);
+
     if ($rawToken === '') {
         return null;
     }
 
     $hash = hash('sha256', $rawToken);
 
+    $expiresClause = dc_table_has_column('group_access_links', 'expires_at')
+        ? "AND (gal.expires_at IS NULL OR gal.expires_at > NOW())"
+        : "";
+
+    $selectExtra = [];
+
+    foreach (['scope', 'expires_at', 'last_used_at', 'label', 'token_plain'] as $column) {
+        if (dc_table_has_column('group_access_links', $column)) {
+            $selectExtra[] = 'gal.`' . $column . '`';
+        }
+    }
+
+    $extraSql = $selectExtra ? ', ' . implode(', ', $selectExtra) : '';
+
     $stmt = db()->prepare("
         SELECT
-            gal.*,
+            gal.id,
+            gal.group_id,
+            gal.token_hash,
+            gal.status,
             g.group_name,
             g.slug,
             g.notify_lead_on_event_created
+            {$extraSql}
         FROM group_access_links gal
         JOIN groups g
           ON g.id = gal.group_id
         WHERE gal.token_hash = :token_hash
           AND gal.status = 'active'
-          AND (gal.expires_at IS NULL OR gal.expires_at > NOW())
+          {$expiresClause}
           AND g.is_active = 1
         LIMIT 1
     ");
@@ -265,8 +342,14 @@ function dc_group_link_from_token(string $rawToken): ?array
         return null;
     }
 
-    db()->prepare('UPDATE group_access_links SET last_used_at = NOW() WHERE id = :id')
-        ->execute(['id' => (int) $row['id']]);
+    if (dc_table_has_column('group_access_links', 'last_used_at')) {
+        try {
+            db()->prepare('UPDATE group_access_links SET last_used_at = NOW() WHERE id = :id')
+                ->execute(['id' => (int) $row['id']]);
+        } catch (Throwable $e) {
+            // Older/partial schemas must not break link login.
+        }
+    }
 
     return $row;
 }
@@ -322,28 +405,73 @@ function dc_fetch_all_active_groups_for_access(string $accessLevel, string $memb
     return $groups;
 }
 
+function dc_strip_query_param_from_current_url(string $param): string
+{
+    $requestUri = $_SERVER['REQUEST_URI'] ?? '/dc/';
+    $parts = parse_url($requestUri);
+
+    $path = $parts['path'] ?? '/dc/';
+    $query = [];
+
+    if (!empty($parts['query'])) {
+        parse_str($parts['query'], $query);
+    }
+
+    unset($query[$param]);
+
+    $newQuery = http_build_query($query);
+
+    return $path . ($newQuery !== '' ? '?' . $newQuery : '');
+}
+
 function dc_context(bool $redirectIfMissing = true): array
 {
     static $context = null;
 
+    /*
+     * If a token is present, always process it first. This lets a user switch
+     * from one Group-link session to another by opening a new link.
+     */
     if (isset($_GET['token'])) {
-        $link = dc_group_link_from_token((string) $_GET['token']);
+        $rawToken = trim((string) $_GET['token']);
 
-        if ($link) {
-            $_SESSION['dc_group_link'] = [
-                'id' => (int) $link['id'],
-                'group_id' => (int) $link['group_id'],
-                'group_name' => (string) $link['group_name'],
-                'slug' => (string) $link['slug'],
-                'scope' => (string) $link['scope'],
-            ];
+        $GLOBALS['dc_context_resolving'] = true;
 
-            dc_log('group_link.used', 'group_access_link', (int) $link['id'], [], (int) $link['group_id']);
-        } else {
+        try {
+            $link = dc_group_link_from_token($rawToken);
+
+            if ($link) {
+                $_SESSION['dc_group_link'] = [
+                    'id' => (int) $link['id'],
+                    'group_id' => (int) $link['group_id'],
+                    'group_name' => (string) $link['group_name'],
+                    'slug' => (string) $link['slug'],
+                    'scope' => (string) ($link['scope'] ?? 'group'),
+                ];
+
+                dc_log(
+                    'group_link.used',
+                    'group_access_link',
+                    (int) $link['id'],
+                    [],
+                    (int) $link['group_id']
+                );
+
+                $context = null;
+
+                /*
+                 * Remove the bearer token from the URL after successful use.
+                 * This avoids repeated audit entries on refresh and avoids
+                 * accidentally sharing the token in screenshots/browser history.
+                 */
+                redirect(dc_strip_query_param_from_current_url('token'));
+            }
+
             unset($_SESSION['dc_group_link']);
+            $context = null;
+        } finally {
+            unset($GLOBALS['dc_context_resolving']);
         }
-
-        $context = null;
     }
 
     if ($context !== null) {
