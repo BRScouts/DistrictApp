@@ -40,69 +40,46 @@ $pageTitle = 'Open District Calendar';
 $heroTitle = 'Open District Calendar';
 
 $heroText = $hasGroupLink
-    ? 'You have opened a Group calendar link. Sign in with Microsoft if you have a District account, or continue with the Group link.'
+    ? 'Continue with your Group calendar link, or sign in with Microsoft if you have a District account.'
     : 'Sign in with your District Microsoft account to open the District Calendar.';
 
 require __DIR__ . '/layout.php';
 ?>
 
 <style>
-    .dc-login-grid {
+    .dc-login-panel {
         display: grid;
         gap: 1.25rem;
-    }
-
-    @media (min-width: 992px) {
-        .dc-login-grid {
-            grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.75fr);
-            align-items: start;
-        }
+        max-width: 880px;
     }
 
     .dc-login-card {
         background: #ffffff;
         border: 1px solid #d8dde3;
+        border-top: 8px solid #7413dc;
         border-radius: 0;
         box-shadow: 0 2px 0 rgba(16, 24, 32, 0.08);
-    }
-
-    .dc-login-card-primary {
-        border-top: 8px solid #7413dc;
-    }
-
-    .dc-login-card-secondary {
-        background: #f7f3fc;
-        border-top: 8px solid #00a794;
     }
 
     .dc-login-card-inner {
         padding: clamp(1.25rem, 3vw, 2rem);
     }
 
-    .dc-login-eyebrow {
-        display: inline-block;
-        margin-bottom: 0.75rem;
-        padding: 0.3rem 0.55rem;
-        background: #101820;
-        color: #ffffff;
-        font-size: 0.8rem;
-        font-weight: 900;
-        line-height: 1;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-    }
-
     .dc-login-card h2 {
         margin: 0;
         color: #101820;
-        font-size: clamp(1.65rem, 3vw, 2.4rem);
+        font-size: clamp(1.75rem, 4vw, 2.8rem);
         font-weight: 900;
-        line-height: 1.02;
-        letter-spacing: -0.035em;
+        line-height: 1;
+        letter-spacing: -0.04em;
     }
 
-    .dc-login-card-secondary h2 {
-        font-size: clamp(1.25rem, 2vw, 1.6rem);
+    .dc-login-card h3 {
+        margin: 0;
+        color: #101820;
+        font-size: clamp(1.2rem, 2vw, 1.45rem);
+        font-weight: 900;
+        line-height: 1.1;
         letter-spacing: -0.02em;
     }
 
@@ -113,108 +90,145 @@ require __DIR__ . '/layout.php';
     }
 
     .dc-login-lede {
-        max-width: 760px;
+        max-width: 720px;
         margin: 1rem 0 0;
-        font-size: clamp(1.05rem, 2vw, 1.2rem) !important;
-        font-weight: 700;
-        line-height: 1.45 !important;
-    }
-
-    .dc-login-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        margin-top: 1.35rem;
-    }
-
-    .dc-login-actions .lt-btn,
-    .dc-login-actions .btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 48px;
-        border-radius: 0;
-        font-weight: 900;
-        line-height: 1.15;
-        text-decoration: none;
-    }
-
-    .dc-login-actions .btn-primary,
-    .dc-login-actions .lt-btn.btn-primary {
-        background: #7413dc;
-        border-color: #7413dc;
-        color: #ffffff;
-        box-shadow: 0 4px 0 #000000;
-    }
-
-    .dc-login-actions .btn-primary:hover,
-    .dc-login-actions .lt-btn.btn-primary:hover {
-        background: #4d0b93;
-        border-color: #4d0b93;
-        color: #ffffff;
-    }
-
-    .dc-login-actions .lt-btn-secondary {
-        background: #ffffff;
-        border: 2px solid #101820;
-        color: #101820;
-        box-shadow: 0 4px 0 #101820;
-    }
-
-    .dc-login-actions .lt-btn-secondary:hover {
-        background: #101820;
-        color: #ffffff;
-    }
-
-    .dc-login-note {
-        margin-top: 1.5rem;
-        padding: 1rem;
-        background: #fff8d6;
-        border-left: 8px solid #ffdd00;
-        color: #101820;
+        font-size: clamp(1.05rem, 2vw, 1.25rem) !important;
         font-weight: 800;
-        line-height: 1.45;
+        line-height: 1.42 !important;
     }
 
-    .dc-group-link-summary {
+    .dc-login-group-summary {
         display: grid;
-        gap: 0.25rem;
+        gap: 0.2rem;
         margin: 1.25rem 0 0;
         padding: 1rem;
-        background: #ffffff;
-        border: 2px solid #7413dc;
+        background: #f7f3fc;
+        border-left: 8px solid #7413dc;
     }
 
-    .dc-group-link-summary strong {
-        display: block;
-        color: #4d0b93;
-        font-size: 1.25rem;
-        font-weight: 900;
-        line-height: 1.15;
-    }
-
-    .dc-login-small {
+    .dc-login-group-summary span {
         color: #4b5563;
         font-size: 0.9rem;
         font-weight: 900;
         line-height: 1.2;
     }
 
-    .dc-login-list {
-        margin: 1rem 0 0;
-        padding-left: 1.25rem;
+    .dc-login-group-summary strong {
+        display: block;
+        color: #4d0b93;
+        font-size: 1.3rem;
+        font-weight: 900;
+        line-height: 1.15;
     }
 
-    .dc-login-list li {
-        margin-bottom: 0.5rem;
+    .dc-login-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 1.5rem;
+    }
+
+    .dc-login-actions .btn,
+    .dc-login-actions .lt-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 50px;
+        padding: 0.75rem 1rem;
+        border-radius: 0;
+        font-weight: 900;
+        line-height: 1.15;
+        text-decoration: none;
+    }
+
+    .dc-login-actions .dc-login-primary {
+        background: #7413dc;
+        border: 2px solid #7413dc;
+        color: #ffffff;
+        box-shadow: 0 4px 0 #000000;
+    }
+
+    .dc-login-actions .dc-login-primary:hover {
+        background: #4d0b93;
+        border-color: #4d0b93;
+        color: #ffffff;
+    }
+
+    .dc-login-actions .dc-login-secondary {
+        background: #ffffff;
+        border: 2px solid #101820;
+        color: #101820;
+        box-shadow: 0 4px 0 #101820;
+    }
+
+    .dc-login-actions .dc-login-secondary:hover {
+        background: #101820;
+        color: #ffffff;
+    }
+
+    .dc-login-help {
+        margin-top: 1.5rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid #d8dde3;
+    }
+
+    .dc-login-help p {
+        margin: 0;
+        color: #4b5563;
+        font-size: 0.98rem;
         font-weight: 700;
+    }
+
+    .dc-login-sso-box {
+        margin-top: 1.5rem;
+        padding: 1rem;
+        background: #f5f6f8;
+        border-left: 8px solid #00a794;
+    }
+
+    .dc-login-sso-box h3 {
+        margin-bottom: 0.5rem;
+    }
+
+    .dc-login-sso-box p {
+        margin: 0;
+        color: #101820;
+        font-weight: 700;
+    }
+
+    .dc-login-info-card {
+        background: #ffffff;
+        border: 1px solid #d8dde3;
+        border-top: 8px solid #00a794;
+        border-radius: 0;
+    }
+
+    .dc-login-info-card-inner {
+        padding: clamp(1.25rem, 3vw, 1.5rem);
+    }
+
+    .dc-login-info-card h2 {
+        margin: 0;
+        color: #101820;
+        font-size: clamp(1.25rem, 2vw, 1.6rem);
+        font-weight: 900;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+    }
+
+    .dc-login-info-card p {
+        margin: 0.75rem 0 0;
+        color: #101820;
+        font-size: 1rem;
+        font-weight: 700;
+        line-height: 1.5;
     }
 
     .dc-code {
         display: block;
         margin: 1rem 0;
         padding: 0.85rem;
-        background: #101820;
+        background: #2f005c;
         color: #ffffff;
         border-radius: 0;
         overflow-x: auto;
@@ -223,20 +237,14 @@ require __DIR__ . '/layout.php';
         line-height: 1.4;
     }
 
-    .dc-login-divider {
-        height: 1px;
-        margin: 1.25rem 0;
-        background: #d8dde3;
-        border: 0;
-    }
-
-    .dc-login-support {
+    .dc-login-warning {
         margin-top: 1rem;
-        padding-top: 1rem;
-        border-top: 1px solid #d8dde3;
-        color: #4b5563;
-        font-size: 0.95rem;
-        font-weight: 700;
+        padding: 1rem;
+        background: #fff8d6;
+        border-left: 8px solid #ffdd00;
+        color: #101820;
+        font-weight: 800;
+        line-height: 1.45;
     }
 
     @media (max-width: 767.98px) {
@@ -244,93 +252,85 @@ require __DIR__ . '/layout.php';
             display: grid;
         }
 
-        .dc-login-actions .lt-btn,
-        .dc-login-actions .btn {
+        .dc-login-actions .btn,
+        .dc-login-actions .lt-btn {
             width: 100%;
         }
     }
 </style>
 
-<div class="dc-login-grid">
-    <section class="dc-login-card dc-login-card-primary">
+<div class="dc-login-panel">
+    <section class="dc-login-card">
         <div class="dc-login-card-inner">
             <?php if ($hasGroupLink): ?>
-                <span class="dc-login-eyebrow">Recommended</span>
-
-                <h2 class="lt-section-title">Sign in with Microsoft</h2>
+                <h2>Continue to your Group calendar</h2>
 
                 <p class="lt-lede dc-login-lede">
-                    If you have a District Microsoft 365 account, use it to sign in.
-                    This gives you a personal account, better security and the full District Calendar experience.
+                    Your Group link has been recognised. Continue with this link to open the calendar for your Group.
                 </p>
 
-                <div class="dc-group-link-summary">
-                    <span class="dc-login-small">Group link recognised for</span>
+                <div class="dc-login-group-summary">
+                    <span>Group link recognised for</span>
                     <strong><?= e((string) ($groupLink['group_name'] ?? 'your Group')) ?></strong>
                 </div>
 
                 <div class="dc-login-actions">
-                    <a class="btn btn-primary lt-btn" href="/auth/microsoft-start.php">
-                        Sign in with Microsoft
-                    </a>
-
-                    <a class="btn lt-btn lt-btn-secondary" href="/dc/login.php?continue=group-link">
+                    <a class="btn lt-btn dc-login-primary" href="/dc/login.php?continue=group-link">
                         Continue with Group link
                     </a>
+
+                    <a class="btn lt-btn dc-login-secondary" href="/auth/microsoft-start.php">
+                        Sign in with Microsoft
+                    </a>
                 </div>
 
-                <div class="dc-login-note">
-                    A Group link is shared access for your Group. It is useful as a fallback,
-                    but your own Microsoft sign-in is preferred where possible.
+                <div class="dc-login-sso-box">
+                    <h3>Have a District Microsoft account?</h3>
+                    <p>
+                        Microsoft sign-in is better if you have a District account because it gives you personal access,
+                        stronger security and the full District Calendar experience.
+                    </p>
                 </div>
             <?php else: ?>
-                <span class="dc-login-eyebrow">District account</span>
-
-                <h2 class="lt-section-title">Sign in with Microsoft</h2>
+                <h2>Sign in with Microsoft</h2>
 
                 <p class="lt-lede dc-login-lede">
                     District users and Group Lead Volunteers should sign in with their District Microsoft 365 account.
                 </p>
 
                 <div class="dc-login-actions">
-                    <a class="btn btn-primary lt-btn" href="/auth/microsoft-start.php">
+                    <a class="btn lt-btn dc-login-primary" href="/auth/microsoft-start.php">
                         Sign in with Microsoft
                     </a>
                 </div>
 
-                <div class="dc-login-support">
-                    Use the account provided for your District role. Group-link access is only available from a valid shared Group link.
+                <div class="dc-login-help">
+                    <p>
+                        If you were sent a Group calendar link, open that link directly. It should include a secure token.
+                    </p>
                 </div>
             <?php endif; ?>
         </div>
     </section>
 
-    <aside class="dc-login-card dc-login-card-secondary">
-        <div class="dc-login-card-inner">
+    <aside class="dc-login-info-card">
+        <div class="dc-login-info-card-inner">
             <?php if ($hasGroupLink): ?>
-                <span class="dc-login-eyebrow">Group access</span>
-
-                <h2 class="h4 font-weight-bold">Using the Group link</h2>
+                <h2>Which option should I use?</h2>
 
                 <p>
-                    You can continue with the Group link if you do not yet have a District Microsoft 365 account.
+                    Most Group volunteers can continue with the Group link.
                 </p>
 
-                <ul class="dc-login-list">
-                    <li>Access is limited to the Group calendar area.</li>
-                    <li>It is shared access, not a personal account.</li>
-                    <li>Microsoft sign-in is preferred where available.</li>
-                </ul>
-
-                <hr class="dc-login-divider">
-
-                <p class="mb-0">
-                    If you should have a District account, ask your Group Lead Volunteer to add you through Group Admin.
+                <p>
+                    Use Microsoft sign-in only if you already have a District Microsoft 365 account.
                 </p>
+
+                <div class="dc-login-warning">
+                    Group-link access is shared access for your Group. It is not a personal District account.
+                </div>
             <?php else: ?>
-                <span class="dc-login-eyebrow">Shared link</span>
-
-                <h2 class="h4 font-weight-bold">Using a Group link?</h2>
+                <h2>Using a Group link?</h2>
 
                 <p>
                     Open the link shared with your Group. It will look like:
@@ -338,7 +338,7 @@ require __DIR__ . '/layout.php';
 
                 <pre class="dc-code">/dc/login.php?token=...</pre>
 
-                <p class="mb-0">
+                <p>
                     A Group link gives access to that Group’s calendar area. It is not a personal account.
                 </p>
             <?php endif; ?>

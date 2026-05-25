@@ -1,8 +1,9 @@
 <footer class="lt-footer">
     <style>
         .lt-footer {
-            margin-top: 3rem;
-            background: #2f005c;
+            width: 100%;
+            margin: 3rem 0 0;
+            background: #4d0b93;
             color: #ffffff;
             border-top: 8px solid #00a794;
         }
@@ -35,7 +36,7 @@
         .lt-footer-main {
             width: min(1120px, calc(100% - 2rem));
             margin: 0 auto;
-            padding: 2.25rem 0 1.75rem;
+            padding: 2.5rem 0 2rem;
             display: grid;
             gap: 1.75rem;
         }
@@ -59,8 +60,8 @@
         .lt-footer-logo {
             display: block;
             width: auto;
-            height: 58px;
-            max-width: 190px;
+            height: 64px;
+            max-width: 210px;
             object-fit: contain;
         }
 
@@ -76,7 +77,7 @@
         .lt-footer-text {
             margin: 0.45rem 0 0;
             max-width: 680px;
-            color: rgba(255, 255, 255, 0.9);
+            color: rgba(255, 255, 255, 0.92);
             font-size: 1rem;
             font-weight: 700;
             line-height: 1.45;
@@ -87,11 +88,11 @@
             gap: 1.25rem;
             margin-top: 0.25rem;
             padding-top: 1.25rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.24);
+            border-top: 1px solid rgba(255, 255, 255, 0.28);
         }
 
         .lt-footer-meta-text {
-            color: rgba(255, 255, 255, 0.86);
+            color: rgba(255, 255, 255, 0.9);
             font-size: 0.95rem;
             font-weight: 800;
             line-height: 1.45;
@@ -120,9 +121,10 @@
         }
 
         .lt-footer-created {
-            background: #101820;
+            width: 100%;
+            background: #7413dc;
             color: #ffffff;
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            border-top: 1px solid rgba(255, 255, 255, 0.28);
         }
 
         .lt-footer-created-link {
@@ -133,6 +135,7 @@
 
         .lt-footer-created-link:hover {
             color: #ffffff;
+            background: #4d0b93;
             text-decoration: none;
         }
 
@@ -148,6 +151,7 @@
             width: min(1120px, calc(100% - 2rem));
             margin: 0 auto;
             padding: 0.9rem 0;
+            color: inherit;
             font-size: 0.9rem;
             font-weight: 900;
             line-height: 1.35;
@@ -164,10 +168,6 @@
         }
 
         @media (min-width: 768px) {
-            .lt-footer-main {
-                padding: 2.75rem 0 2rem;
-            }
-
             .lt-footer-logo {
                 height: 72px;
                 max-width: 230px;
