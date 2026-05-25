@@ -1,5 +1,365 @@
 <?php
 
+declare(strict_types=1);
+
+require_once __DIR__ . '/auth.php';
+
+$ctx = dc_require_access();
+
+if (!function_exists('dc_index_url')) {
+    function dc_index_url(array $changes = []): string
+    {
+        $query = $_GET;
+
+        foreach ($changes as $key => $value) {
+            if ($value === null || $value === '') {
+                unset($query[$key]);
+            } else {
+                $query[$key] = $value;
+            }
+        }
+
+        return '/dc/' . ($query ? '?' . http_build_query($query) : '');
+    }
+}
+
+if (!function_exists('dc_event_bar_class')) {
+    function dc_event_bar_class(string $status): string
+    {
+        $status = strtolower(trim($status));
+
+        $base = 'dc-cal-event';
+
+        return match ($status) {
+            'approved' => $base . ' dc-cal-event-approved',
+            'submitted' => $base . ' dc-cal-event-submitted',
+            'under_review' => $base . ' dc-cal-event-under_review',
+            'changes_requested' => $base . ' dc-cal-event-changes_requested',
+            'draft' => $base . ' dc-cal-event-draft',
+            'cancelled' => $base . ' dc-cal-event-cancelled',
+            'rejected' => $base . ' dc-cal-event-rejected',
+            default => $base,
+        };
+    }
+}
+
+if (!function_exists('dc_index_user_can_manage_event_group')) {
+    function dc_index_user_can_manage_event_group(array $ctx, int $groupId): bool
+    {
+        $accessLevels = array_filter(array_map(
+            'strval',
+            (array) ($ctx['access_levels'] ?? [])
+        ));
+
+        $membershipRoles = array_filter(array_map(
+            'strval',
+            (array) ($ctx['membership_roles'] ?? [])
+        ));
+
+        foreach (['access_level', 'role', 'membership_role'] as $key) {
+            if (!empty($ctx[$key])) {
+                $value = (string) $ctx[$key];
+
+                if ($key === 'access_level') {
+                    $accessLevels[] = $value;
+                } else {
+                    $membershipRoles[] = $value;
+                }
+            }
+        }
+
+        $accessLevels = array_values(array_unique($accessLevels));
+        $membershipRoles = array_values(array_unique($membershipRoles));
+
+        if (
+            in_array('system_admin', $accessLevels, true)
+            || in_array('district_admin', $accessLevels, true)
+            || in_array('district_reviewer', $accessLevels, true)
+            || !empty($ctx['is_reviewer'])
+        ) {
+            return true;
+        }
+
+        $groupIds = array_map('intval', (array) ($ctx['group_ids'] ?? []));
+
+        if (!in_array($groupId, $groupIds, true)) {
+            return false;
+        }
+
+        return in_array('group_admin', $accessLevels, true)
+            || in_array('group_lead_volunteer', $accessLevels, true)
+            || in_array('group_lead_volunteer', $membershipRoles, true);
+    }
+}
+
+function dc_index_parse_month(?string $value): DateTimeImmutable
+{
+    $value = trim((string) $value);
+
+    if ($value !== '' && preg_match('/^\d{4}-\d{2}$/', $value)) {
+        try {
+            return new DateTimeImmutable($value . '-01 00:00:00');
+        } catch (Throwable $e) {
+            // Fall through to current month.
+        }
+    }
+
+    return new DateTimeImmutable('first day of this month 00:00:00');
+}
+
+function dc_index_start_of_week(DateTimeImmutable $date): DateTimeImmutable
+{
+    return $date->modify('monday this week')->setTime(0, 0, 0);
+}
+
+function dc_index_end_of_week(DateTimeImmutable $date): DateTimeImmutable
+{
+    return $date->modify('sunday this week')->setTime(23, 59, 59);
+}
+
+function dc_index_event_date_value(array $event, string $key): DateTimeImmutable
+{
+    try {
+        return new DateTimeImmutable((string) $event[$key]);
+    } catch (Throwable $e) {
+        return new DateTimeImmutable('now');
+    }
+}
+
+$accessibleGroups = dc_accessible_groups();
+$allGroups = $accessibleGroups;
+
+$requestedGroupId = isset($_GET['group_id']) ? (int) $_GET['group_id'] : 0;
+$selectedGroupId = 0;
+
+if ($requestedGroupId > 0) {
+    $selectedGroupId = dc_selected_group_id($requestedGroupId);
+}
+
+$statusLabels = [
+    'all' => 'All statuses',
+    'approved' => 'Approved',
+    'submitted' => 'Submitted',
+    'under_review' => 'Under review',
+    'changes_requested' => 'Changes requested',
+    'draft' => 'Draft',
+    'cancelled' => 'Cancelled',
+    'rejected' => 'Rejected',
+];
+
+$selectedStatus = (string) ($_GET['status'] ?? 'all');
+
+if (!array_key_exists($selectedStatus, $statusLabels)) {
+    $selectedStatus = 'all';
+}
+
+$searchQuery = trim((string) ($_GET['q'] ?? ''));
+
+$monthStart = dc_index_parse_month($_GET['month'] ?? null);
+$monthEnd = $monthStart->modify('last day of this month 23:59:59');
+
+$calendarStart = dc_index_start_of_week($monthStart);
+$calendarEnd = dc_index_end_of_week($monthEnd);
+
+$currentMonth = (new DateTimeImmutable('first day of this month'))->format('Y-m');
+$previousMonth = $monthStart->modify('-1 month')->format('Y-m');
+$nextMonth = $monthStart->modify('+1 month')->format('Y-m');
+
+$allowedGroupIds = array_values(array_unique(array_map('intval', (array) ($ctx['group_ids'] ?? []))));
+
+if (!$allowedGroupIds && !empty($ctx['group_id'])) {
+    $allowedGroupIds[] = (int) $ctx['group_id'];
+}
+
+$isDistrictLevelUser = false;
+
+$ctxAccessLevels = array_filter(array_map(
+    'strval',
+    (array) ($ctx['access_levels'] ?? [])
+));
+
+if (!empty($ctx['access_level'])) {
+    $ctxAccessLevels[] = (string) $ctx['access_level'];
+}
+
+$ctxAccessLevels = array_values(array_unique($ctxAccessLevels));
+
+if (
+    in_array('system_admin', $ctxAccessLevels, true)
+    || in_array('district_admin', $ctxAccessLevels, true)
+    || in_array('district_reviewer', $ctxAccessLevels, true)
+    || !empty($ctx['is_reviewer'])
+) {
+    $isDistrictLevelUser = true;
+}
+
+$where = [];
+$params = [];
+
+$where[] = 'ce.starts_at <= ?';
+$params[] = $calendarEnd->format('Y-m-d H:i:s');
+
+$where[] = 'ce.ends_at >= ?';
+$params[] = $calendarStart->format('Y-m-d H:i:s');
+
+if (!$isDistrictLevelUser) {
+    if (!$allowedGroupIds) {
+        $allowedGroupIds = [0];
+    }
+
+    $where[] = 'ce.group_id IN (' . implode(',', array_fill(0, count($allowedGroupIds), '?')) . ')';
+
+    foreach ($allowedGroupIds as $allowedGroupId) {
+        $params[] = $allowedGroupId;
+    }
+}
+
+if ($selectedGroupId > 0) {
+    $where[] = 'ce.group_id = ?';
+    $params[] = $selectedGroupId;
+}
+
+if ($selectedStatus !== 'all') {
+    $where[] = 'ce.status = ?';
+    $params[] = $selectedStatus;
+}
+
+if ($searchQuery !== '') {
+    $where[] = '(
+        ce.title LIKE ?
+        OR ce.description LIKE ?
+        OR ce.location_name LIKE ?
+        OR ce.location_address LIKE ?
+        OR ce.leader_name LIKE ?
+        OR g.group_name LIKE ?
+    )';
+
+    $like = '%' . $searchQuery . '%';
+
+    for ($i = 0; $i < 6; $i++) {
+        $params[] = $like;
+    }
+}
+
+$whereSql = implode("\n    AND ", $where);
+
+$sql = "
+    SELECT
+        ce.*,
+        g.group_name
+    FROM calendar_events ce
+    JOIN groups g ON g.id = ce.group_id
+    WHERE {$whereSql}
+    ORDER BY ce.starts_at ASC, ce.ends_at ASC, ce.title ASC
+";
+
+$stmt = db()->prepare($sql);
+$stmt->execute($params);
+$events = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$eventIds = array_values(array_filter(array_map(
+    static fn (array $event): int => (int) ($event['id'] ?? 0),
+    $events
+)));
+
+$risksByEventId = [];
+
+if ($eventIds) {
+    $riskSql = "
+        SELECT
+            era.calendar_event_id,
+            ra.id,
+            ra.title,
+            ra.group_id,
+            g.group_name
+        FROM event_risk_assessments era
+        JOIN risk_assessments ra ON ra.id = era.risk_assessment_id
+        JOIN groups g ON g.id = ra.group_id
+        WHERE era.calendar_event_id IN (" . implode(',', array_fill(0, count($eventIds), '?')) . ")
+        ORDER BY ra.title ASC
+    ";
+
+    $riskStmt = db()->prepare($riskSql);
+    $riskStmt->execute($eventIds);
+
+    foreach ($riskStmt->fetchAll(PDO::FETCH_ASSOC) as $risk) {
+        $eventId = (int) $risk['calendar_event_id'];
+
+        $risksByEventId[$eventId][] = [
+            'id' => (int) $risk['id'],
+            'title' => (string) $risk['title'],
+            'group_id' => (int) $risk['group_id'],
+            'group_name' => (string) $risk['group_name'],
+            'download_url' => '/dc/download-risk-assessment.php?id=' . (int) $risk['id'],
+        ];
+    }
+}
+
+$popupEvents = [];
+
+foreach ($events as $event) {
+    $eventId = (int) $event['id'];
+    $canManage = dc_index_user_can_manage_event_group($ctx, (int) $event['group_id']);
+
+    $popupEvents[$eventId] = [
+        'id' => $eventId,
+        'title' => (string) ($event['title'] ?? ''),
+        'group_id' => (int) ($event['group_id'] ?? 0),
+        'group_name' => (string) ($event['group_name'] ?? ''),
+        'status' => (string) ($event['status'] ?? ''),
+        'starts_at' => !empty($event['starts_at']) ? date('j M Y H:i', strtotime((string) $event['starts_at'])) : '',
+        'ends_at' => !empty($event['ends_at']) ? date('j M Y H:i', strtotime((string) $event['ends_at'])) : '',
+        'location_name' => (string) ($event['location_name'] ?? ''),
+        'location_address' => (string) ($event['location_address'] ?? ''),
+        'leader_name' => (string) ($event['leader_name'] ?? ''),
+        'leader_email' => (string) ($event['leader_email'] ?? ''),
+        'leader_phone' => (string) ($event['leader_phone'] ?? ''),
+        'description' => (string) ($event['description'] ?? ''),
+        'risks' => $risksByEventId[$eventId] ?? [],
+        'can_manage' => $canManage,
+        'manage_url' => $canManage ? '/dc/manage-event.php?id=' . $eventId : null,
+    ];
+}
+
+$weeks = [];
+$cursor = $calendarStart;
+
+while ($cursor <= $calendarEnd) {
+    $weekStart = $cursor;
+    $days = [];
+
+    for ($i = 0; $i < 7; $i++) {
+        $days[] = $cursor;
+        $cursor = $cursor->modify('+1 day');
+    }
+
+    $weekEnd = end($days)->setTime(23, 59, 59);
+    $weekBars = [];
+
+    foreach ($events as $event) {
+        $eventStart = dc_index_event_date_value($event, 'starts_at');
+        $eventEnd = dc_index_event_date_value($event, 'ends_at');
+
+        if ($eventStart <= $weekEnd && $eventEnd >= $weekStart) {
+            $weekBars[] = [
+                'event' => $event,
+            ];
+        }
+    }
+
+    $weeks[] = [
+        'start' => $weekStart,
+        'days' => $days,
+        'bars' => $weekBars,
+    ];
+}
+
+$addEventUrl = '/dc/add-event.php';
+
+if ($selectedGroupId > 0) {
+    $addEventUrl .= '?group_id=' . $selectedGroupId;
+}
+
 $pageTitle = 'District Calendar';
 $heroTitle = 'District Calendar';
 $heroText = null;
