@@ -141,33 +141,93 @@ $profileUrl = '/profile.php';
     >
 
     <link
-        href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,wght@0,200;0,300;0,400;0,600;0,700;0,800;0,900;1,400;1,600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,wght@0,300;0,400;0,600;0,700;0,800;0,900;1,400;1,700&display=swap"
         rel="stylesheet"
     >
 
     <link rel="stylesheet" href="/assets/css/leader-tool.css">
 
     <style>
+        :root {
+            --dc-scouts-purple: #7413dc;
+            --dc-scouts-purple-dark: #4d0b93;
+            --dc-scouts-purple-deep: #2f005c;
+            --dc-scouts-teal: #00a794;
+            --dc-scouts-blue: #006ddf;
+            --dc-focus: #ffdd00;
+            --dc-ink: #101820;
+            --dc-muted: #4b5563;
+            --dc-border: #d8dde3;
+            --dc-panel: #ffffff;
+            --dc-canvas: #f5f6f8;
+            --dc-radius: 0;
+            --dc-width: 1120px;
+        }
+
+        html {
+            background: var(--dc-canvas);
+        }
+
+        body {
+            margin: 0;
+            background: var(--dc-canvas);
+            color: var(--dc-ink);
+            font-family: "Nunito Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            text-rendering: optimizeLegibility;
+        }
+
+        a {
+            color: var(--dc-scouts-purple-dark);
+            text-decoration-thickness: 2px;
+            text-underline-offset: 0.16em;
+        }
+
+        a:hover {
+            color: var(--dc-scouts-purple-deep);
+            text-decoration-thickness: 3px;
+        }
+
+        a:focus,
+        button:focus,
+        [tabindex]:focus {
+            outline: 3px solid var(--dc-focus);
+            outline-offset: 3px;
+            box-shadow: 0 0 0 5px #000000;
+        }
+
+        .dc-shell-width {
+            width: min(var(--dc-width), calc(100% - 2rem));
+            margin-inline: auto;
+        }
+
+        /*
+         * Top return/access bar
+         * Clear, official, and service-oriented.
+         */
         .dc-return-bar {
-            background: #7413dc;
+            background: var(--dc-scouts-purple);
             color: #ffffff;
             border-bottom: 4px solid #000000;
         }
 
         .dc-return-bar-inner {
-            width: min(1120px, calc(100% - 2rem));
+            width: min(var(--dc-width), calc(100% - 2rem));
             margin: 0 auto;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 1rem;
             min-height: 56px;
-            padding: 0.35rem 0;
+            padding: 0.4rem 0;
         }
 
         .dc-return-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
             color: #ffffff;
-            font-weight: 800;
+            font-weight: 900;
+            line-height: 1.15;
             text-decoration: underline;
             text-decoration-thickness: 2px;
             text-underline-offset: 0.18em;
@@ -176,8 +236,6 @@ $profileUrl = '/profile.php';
         .dc-return-link:hover,
         .dc-return-link:focus {
             color: #ffffff;
-            outline: 3px solid #ffdd00;
-            outline-offset: 3px;
             text-decoration: none;
         }
 
@@ -202,8 +260,6 @@ $profileUrl = '/profile.php';
         .dc-profile-link:hover,
         .dc-profile-link:focus {
             color: #ffffff;
-            outline: 3px solid #ffdd00;
-            outline-offset: 3px;
             text-decoration: none;
         }
 
@@ -217,98 +273,367 @@ $profileUrl = '/profile.php';
 
         .dc-user-name {
             display: block;
-            font-weight: 900;
-            white-space: nowrap;
+            max-width: 280px;
             overflow: hidden;
+            font-weight: 900;
             text-overflow: ellipsis;
-            max-width: 260px;
+            white-space: nowrap;
         }
 
         .dc-user-role {
             display: block;
+            max-width: 280px;
+            overflow: hidden;
+            margin-top: 0.08rem;
             font-size: 0.875rem;
             font-weight: 800;
             opacity: 0.98;
-            white-space: nowrap;
-            overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 260px;
+            white-space: nowrap;
         }
 
         .dc-user-groups {
             display: block;
+            max-width: 300px;
+            overflow: hidden;
+            margin-top: 0.08rem;
             font-size: 0.78rem;
             font-weight: 700;
-            opacity: 0.94;
-            white-space: nowrap;
-            overflow: hidden;
+            opacity: 0.92;
             text-overflow: ellipsis;
-            max-width: 280px;
-            margin-top: 0.12rem;
+            white-space: nowrap;
         }
 
-        .dc-profile-photo {
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            border: 2px solid #ffffff;
-            background: #ffffff;
-            object-fit: cover;
-            flex: 0 0 auto;
-        }
-
+        .dc-profile-photo,
         .dc-profile-fallback {
             width: 44px;
             height: 44px;
-            border-radius: 50%;
+            flex: 0 0 auto;
             border: 2px solid #ffffff;
-            background: #000000;
-            color: #ffffff;
+            border-radius: 50%;
+        }
+
+        .dc-profile-photo {
+            background: #ffffff;
+            object-fit: cover;
+        }
+
+        .dc-profile-fallback {
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            background: #000000;
+            color: #ffffff;
             font-weight: 900;
-            flex: 0 0 auto;
         }
 
         .dc-group-link-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.45rem;
+            display: inline-grid;
+            grid-template-columns: 1fr;
+            max-width: 280px;
             padding: 0.45rem 0.65rem;
-            background: #006ddf;
+            background: var(--dc-scouts-blue);
             color: #ffffff;
             border: 2px solid #ffffff;
-            font-weight: 800;
+            font-weight: 900;
             line-height: 1.1;
-            max-width: 260px;
         }
 
         .dc-group-link-badge span {
-            display: inline-block;
-            white-space: nowrap;
+            display: block;
             overflow: hidden;
             text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .dc-group-link-badge small {
             display: none;
-            font-weight: 700;
+            margin-top: 0.12rem;
+            font-weight: 800;
             opacity: 0.95;
         }
 
-        .dc-nav-context {
-            display: none;
+        /*
+         * Primary service header
+         * Keeps existing lt-* classes for compatibility with current CSS/JS.
+         */
+        .lt-header {
+            background: #ffffff;
+            border-bottom: 1px solid var(--dc-border);
         }
 
+        .lt-header-inner {
+            width: min(var(--dc-width), calc(100% - 2rem));
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.25rem;
+            padding: 1rem 0;
+        }
+
+        .lt-brand {
+            display: inline-flex;
+            align-items: center;
+            min-width: 0;
+            gap: 0.85rem;
+            color: var(--dc-ink);
+            text-decoration: none;
+        }
+
+        .lt-brand:hover {
+            color: var(--dc-ink);
+            text-decoration: none;
+        }
+
+        .lt-brand img {
+            width: 52px;
+            max-height: 52px;
+            flex: 0 0 auto;
+            object-fit: contain;
+        }
+
+        .lt-brand > span {
+            display: block;
+            min-width: 0;
+        }
+
+        .lt-brand-title {
+            display: block;
+            color: var(--dc-ink);
+            font-size: 1.15rem;
+            font-weight: 900;
+            line-height: 1.05;
+            letter-spacing: -0.02em;
+        }
+
+        .lt-brand-subtitle {
+            display: block;
+            margin-top: 0.12rem;
+            color: var(--dc-muted);
+            font-size: 0.9rem;
+            font-weight: 800;
+            line-height: 1.15;
+        }
+
+        .lt-menu-toggle {
+            display: none;
+            appearance: none;
+            border: 2px solid var(--dc-ink);
+            border-radius: var(--dc-radius);
+            background: #ffffff;
+            color: var(--dc-ink);
+            cursor: pointer;
+            font: inherit;
+            font-weight: 900;
+            line-height: 1;
+            padding: 0.7rem 0.9rem;
+        }
+
+        .lt-menu-toggle:hover {
+            background: var(--dc-ink);
+            color: #ffffff;
+        }
+
+        .lt-nav,
+        .dc-nav {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+        }
+
+        .lt-nav a,
+        .dc-nav a {
+            display: inline-flex;
+            align-items: center;
+            min-height: 44px;
+            padding: 0.55rem 0.75rem;
+            border-bottom: 4px solid transparent;
+            color: var(--dc-ink);
+            font-size: 0.95rem;
+            font-weight: 900;
+            line-height: 1.1;
+            text-decoration: none;
+        }
+
+        .lt-nav a:hover,
+        .dc-nav a:hover {
+            background: #f0e7fb;
+            color: var(--dc-scouts-purple-deep);
+            border-bottom-color: var(--dc-scouts-purple);
+            text-decoration: none;
+        }
+
+        .lt-nav a.active,
+        .dc-nav a.active,
+        .lt-nav a[aria-current="page"],
+        .dc-nav a[aria-current="page"] {
+            background: var(--dc-scouts-purple);
+            color: #ffffff;
+            border-bottom-color: #000000;
+        }
+
+        .lt-nav a.active:hover,
+        .dc-nav a.active:hover,
+        .lt-nav a[aria-current="page"]:hover,
+        .dc-nav a[aria-current="page"]:hover {
+            background: var(--dc-scouts-purple-dark);
+            color: #ffffff;
+        }
+
+        /*
+         * Hero
+         * Bold, clear and content-first rather than decorative.
+         */
+        .lt-hero,
+        .dc-hero {
+            background:
+                linear-gradient(90deg, var(--dc-scouts-purple-deep), var(--dc-scouts-purple));
+            color: #ffffff;
+            border-bottom: 6px solid var(--dc-scouts-teal);
+        }
+
+        .lt-hero-inner {
+            width: min(var(--dc-width), calc(100% - 2rem));
+            margin: 0 auto;
+            padding: 2.25rem 0 2rem;
+        }
+
+        .lt-hero h1,
+        .dc-hero h1 {
+            max-width: 820px;
+            margin: 0;
+            color: #ffffff;
+            font-size: clamp(2rem, 5vw, 3.75rem);
+            font-weight: 900;
+            line-height: 0.98;
+            letter-spacing: -0.045em;
+        }
+
+        .lt-hero p,
+        .dc-hero p {
+            max-width: 720px;
+            margin: 1rem 0 0;
+            color: #ffffff;
+            font-size: clamp(1.05rem, 2vw, 1.25rem);
+            font-weight: 700;
+            line-height: 1.4;
+        }
+
+        /*
+         * Breadcrumb
+         */
+        .lt-breadcrumb {
+            background: #ffffff;
+            border-bottom: 1px solid var(--dc-border);
+        }
+
+        .lt-breadcrumb-inner {
+            width: min(var(--dc-width), calc(100% - 2rem));
+            margin: 0 auto;
+            padding: 0.85rem 0;
+            color: var(--dc-muted);
+            font-size: 0.95rem;
+            font-weight: 800;
+            line-height: 1.3;
+        }
+
+        .lt-breadcrumb-inner a {
+            color: var(--dc-scouts-purple-dark);
+            font-weight: 900;
+        }
+
+        .lt-breadcrumb-inner span[aria-hidden="true"] {
+            display: inline-block;
+            margin: 0 0.45rem;
+            color: var(--dc-muted);
+            font-weight: 900;
+        }
+
+        /*
+         * Main content wrapper
+         */
+        .lt-main,
+        .dc-main {
+            width: min(var(--dc-width), calc(100% - 2rem));
+            margin: 0 auto;
+            padding: 2rem 0 3rem;
+        }
+
+        /*
+         * Useful defaults for content rendered inside the layout.
+         * These are deliberately conservative so they should not break existing pages.
+         */
+        .dc-main h2,
+        .dc-main h3 {
+            color: var(--dc-ink);
+            font-weight: 900;
+            letter-spacing: -0.02em;
+        }
+
+        .dc-main h2 {
+            margin-top: 0;
+            font-size: clamp(1.6rem, 3vw, 2.25rem);
+            line-height: 1.05;
+        }
+
+        .dc-main h3 {
+            font-size: 1.3rem;
+            line-height: 1.15;
+        }
+
+        .dc-main p,
+        .dc-main li {
+            color: var(--dc-ink);
+            font-size: 1rem;
+            line-height: 1.55;
+        }
+
+        .dc-main .btn,
+        .dc-main button,
+        .dc-main input[type="submit"] {
+            border-radius: var(--dc-radius);
+            font-weight: 900;
+        }
+
+        .dc-main table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #ffffff;
+        }
+
+        .dc-main th {
+            background: var(--dc-ink);
+            color: #ffffff;
+            font-weight: 900;
+        }
+
+        .dc-main th,
+        .dc-main td {
+            padding: 0.85rem;
+            border: 1px solid var(--dc-border);
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .dc-main form {
+            accent-color: var(--dc-scouts-purple);
+        }
+
+        .dc-main input,
+        .dc-main select,
+        .dc-main textarea {
+            border-radius: var(--dc-radius);
+        }
+
+        /*
+         * Responsive behaviour
+         */
         @media (min-width: 640px) {
             .dc-user-text {
                 display: block;
-            }
-
-            .dc-group-link-badge {
-                display: grid;
-                grid-template-columns: 1fr;
             }
 
             .dc-group-link-badge small {
@@ -316,9 +641,49 @@ $profileUrl = '/profile.php';
             }
         }
 
+        @media (max-width: 900px) {
+            .lt-header-inner {
+                align-items: flex-start;
+                flex-wrap: wrap;
+            }
+
+            .lt-menu-toggle {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .lt-nav,
+            .dc-nav {
+                width: 100%;
+                justify-content: flex-start;
+                padding-top: 0.75rem;
+                border-top: 1px solid var(--dc-border);
+            }
+
+            /*
+             * If your existing JS toggles a class, this still leaves the nav usable.
+             * If it toggles hidden/display elsewhere, these styles will not block it.
+             */
+            .lt-nav a,
+            .dc-nav a {
+                flex: 1 1 auto;
+            }
+        }
+
         @media (max-width: 767.98px) {
+            .dc-return-bar-inner,
+            .lt-header-inner,
+            .lt-hero-inner,
+            .lt-breadcrumb-inner,
+            .lt-main,
+            .dc-main {
+                width: min(100% - 1rem, var(--dc-width));
+            }
+
             .dc-return-bar-inner {
-                width: min(100% - 1rem, 1120px);
+                min-height: 54px;
+                gap: 0.75rem;
             }
 
             .dc-return-link {
@@ -341,6 +706,63 @@ $profileUrl = '/profile.php';
                 max-width: 190px;
                 font-size: 0.875rem;
             }
+
+            .lt-brand img {
+                width: 44px;
+                max-height: 44px;
+            }
+
+            .lt-brand-title {
+                font-size: 1rem;
+            }
+
+            .lt-brand-subtitle {
+                font-size: 0.82rem;
+            }
+
+            .lt-hero-inner {
+                padding: 1.75rem 0 1.6rem;
+            }
+
+            .lt-main,
+            .dc-main {
+                padding-top: 1.25rem;
+            }
+
+            .lt-nav,
+            .dc-nav {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 0.35rem;
+            }
+
+            .lt-nav a,
+            .dc-nav a {
+                width: 100%;
+                min-height: 46px;
+                border: 2px solid var(--dc-border);
+                border-left: 6px solid var(--dc-scouts-purple);
+                background: #ffffff;
+            }
+
+            .lt-nav a.active,
+            .dc-nav a.active,
+            .lt-nav a[aria-current="page"],
+            .dc-nav a[aria-current="page"] {
+                border-color: #000000;
+                border-left-color: #000000;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto !important;
+                transition-duration: 0.001ms !important;
+                animation-duration: 0.001ms !important;
+                animation-iteration-count: 1 !important;
+            }
         }
     </style>
 </head>
@@ -358,6 +780,7 @@ $profileUrl = '/profile.php';
                     <div class="dc-user-text">
                         <span class="dc-user-name"><?= e($displayName) ?></span>
                         <span class="dc-user-role"><?= e($roleLabel) ?></span>
+                        <span class="dc-user-groups"><?= e($membershipSummary) ?></span>
                     </div>
 
                     <?php if ($profilePhotoUrl): ?>
@@ -411,22 +834,54 @@ $profileUrl = '/profile.php';
         </button>
 
         <nav id="dc-main-nav" class="lt-nav dc-nav" aria-label="District Calendar navigation">
-            <a class="<?= $active === 'home' ? 'active' : '' ?>" href="/dc/">Calendar</a>
+            <a
+                class="<?= $active === 'home' ? 'active' : '' ?>"
+                href="/dc/"
+                <?= $active === 'home' ? 'aria-current="page"' : '' ?>
+            >
+                Calendar
+            </a>
 
-            <a class="<?= $active === 'add' ? 'active' : '' ?>" href="/dc/add-event.php">Add event</a>
+            <a
+                class="<?= $active === 'add' ? 'active' : '' ?>"
+                href="/dc/add-event.php"
+                <?= $active === 'add' ? 'aria-current="page"' : '' ?>
+            >
+                Add event
+            </a>
 
-            <a class="<?= $active === 'risk' ? 'active' : '' ?>" href="/dc/risk-assessments.php">Risk assessments</a>
+            <a
+                class="<?= $active === 'risk' ? 'active' : '' ?>"
+                href="/dc/risk-assessments.php"
+                <?= $active === 'risk' ? 'aria-current="page"' : '' ?>
+            >
+                Risk assessments
+            </a>
 
-            <a class="<?= $active === 'map' ? 'active' : '' ?>" href="/dc/map.php">Map</a>
+            <a
+                class="<?= $active === 'map' ? 'active' : '' ?>"
+                href="/dc/map.php"
+                <?= $active === 'map' ? 'aria-current="page"' : '' ?>
+            >
+                Map
+            </a>
 
             <?php if ($isGlv): ?>
-                <a class="<?= $active === 'glv' ? 'active' : '' ?>" href="/dc/glv.php">
+                <a
+                    class="<?= $active === 'glv' ? 'active' : '' ?>"
+                    href="/dc/glv.php"
+                    <?= $active === 'glv' ? 'aria-current="page"' : '' ?>
+                >
                     GLV
                 </a>
             <?php endif; ?>
 
             <?php if ($isReviewer): ?>
-                <a class="<?= $active === 'review' ? 'active' : '' ?>" href="/dc/reviewer/">
+                <a
+                    class="<?= $active === 'review' ? 'active' : '' ?>"
+                    href="/dc/reviewer/"
+                    <?= $active === 'review' ? 'aria-current="page"' : '' ?>
+                >
                     Review
                 </a>
             <?php endif; ?>
@@ -457,8 +912,6 @@ $profileUrl = '/profile.php';
             <span aria-hidden="true">›</span>
             <?= e($pageTitle) ?>
         <?php endif; ?>
-
-        
     </div>
 </div>
 
