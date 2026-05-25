@@ -37,7 +37,7 @@ $groupLink = $_SESSION['dc_group_link'] ?? null;
 $hasGroupLink = is_array($groupLink) && !empty($groupLink['group_id']);
 
 $pageTitle = 'Open District Calendar';
-$heroTitle = 'Open District Calendar';
+$heroTitle = 'District Calendar';
 
 $heroText = $hasGroupLink
     ? 'Continue with your Group calendar link, or sign in with Microsoft if you have a District account.'

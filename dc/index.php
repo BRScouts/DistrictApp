@@ -463,90 +463,617 @@ require __DIR__ . '/layout.php';
 ?>
 
 <style>
-    .dc-calendar-page { display:grid; gap:1rem; }
-    @media (min-width:992px) { .dc-calendar-page { grid-template-columns:280px minmax(0,1fr); align-items:start; } }
-    .dc-calendar-sidebar { background:#f5f5f5; border:2px solid #000; padding:1rem; }
-    @media (min-width:992px) { .dc-calendar-sidebar { position:sticky; top:1rem; } }
-    .dc-calendar-sidebar h2 { font-size:1.35rem; font-weight:900; margin-bottom:1rem; }
-    .dc-calendar-filter-form { display:grid; gap:1rem; }
-    .dc-calendar-sidebar-actions { display:grid; gap:.5rem; margin-top:1rem; }
-    .dc-calendar-main { min-width:0; }
-    .dc-calendar-toolbar { display:grid; gap:1rem; margin-bottom:1rem; }
-    @media (min-width:768px) { .dc-calendar-toolbar { grid-template-columns:1fr auto; align-items:center; } }
-    .dc-calendar-month-title { font-size:clamp(1.5rem,3vw,2.35rem); font-weight:900; margin:0; }
-    .dc-calendar-month-nav { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
-    .dc-calendar-shell { background:#fff; border:2px solid #000; overflow:hidden; }
-    .dc-calendar-weekdays { display:none; grid-template-columns:repeat(7,minmax(0,1fr)); background:#7413dc; color:#fff; font-weight:900; }
-    .dc-calendar-weekdays div { padding:.75rem; border-right:1px solid rgba(255,255,255,.35); }
-    .dc-calendar-weekdays div:last-child { border-right:0; }
-    .dc-calendar-week { display:grid; grid-template-columns:1fr; border-top:1px solid #d8d8d8; }
-    .dc-calendar-week:first-of-type { border-top:0; }
-    .dc-calendar-days { display:grid; grid-template-columns:1fr; }
-    .dc-calendar-day { min-height:72px; padding:.75rem; background:#fff; border-bottom:1px solid #d8d8d8; }
-    .dc-calendar-day.is-outside-month { background:#f5f5f5; color:#4a4a4a; }
-    .dc-calendar-day.is-today { box-shadow:inset 0 0 0 4px #ffdd00; }
-    .dc-calendar-day-heading { display:flex; justify-content:space-between; align-items:baseline; gap:.5rem; }
-    .dc-calendar-day-heading strong { font-size:1.1rem; font-weight:900; }
-    .dc-calendar-day-heading span { color:#4a4a4a; font-size:.9rem; }
-    .dc-calendar-bars-wrap { background:#fff; border-top:1px solid #e6e6e6; }
-    .dc-calendar-bars { display:grid; grid-template-columns:1fr; gap:.4rem; padding:.5rem; background:#fff; }
-    .dc-calendar-week.is-collapsed .dc-calendar-bar-extra { display:none; }
-    .dc-calendar-expand { display:none; width:calc(100% - 1rem); margin:0 .5rem .6rem; border:1px solid #d8d8d8; background:#f5f5f5; color:#000; font-weight:900; padding:.45rem .65rem; text-align:left; cursor:pointer; }
-    .dc-calendar-week.has-hidden-events .dc-calendar-expand { display:block; }
-    .dc-cal-event { display:block; width:100%; text-align:left; color:#000; background:#e7ddff; border:0; border-left:6px solid #7413dc; padding:.45rem .55rem; min-width:0; text-decoration:none; line-height:1.2; cursor:pointer; }
-    .dc-cal-event:hover,.dc-cal-event:focus { color:#000; outline:3px solid #ffdd00; outline-offset:1px; text-decoration:none; }
-    .dc-cal-event.is-locked { background:#e8f1ff; border-left-color:#006ddf; }
-    .dc-cal-event-title { display:block; font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .dc-cal-event-meta { display:block; color:#4a4a4a; font-size:.82rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .dc-cal-event-status { display:inline-block; margin-top:.25rem; font-size:.72rem; font-weight:900; text-transform:uppercase; letter-spacing:.02em; }
-    .dc-cal-event-approved { background:#e9f8f4; border-left-color:#00a794; }
-    .dc-cal-event-submitted,.dc-cal-event-under_review { background:#fff8d6; border-left-color:#ffdd00; }
-    .dc-cal-event-changes_requested { background:#fff1f0; border-left-color:#d4351c; }
-    .dc-cal-event-draft { background:#f5f5f5; border-left-color:#777; }
-    .dc-cal-event-cancelled,.dc-cal-event-rejected { background:#f7e5e3; border-left-color:#d4351c; text-decoration:line-through; }
-    .dc-calendar-empty { padding:1rem; background:#fff; border:2px dashed #888; }
-    .dc-mobile-event-stack { display:grid; gap:.4rem; margin-top:.5rem; }
-    .dc-filter-summary { font-size:.95rem; color:#4a4a4a; margin-top:.75rem; }
-
-    .dc-event-modal-backdrop { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.55); padding:1rem; z-index:2000; }
-    .dc-event-modal-backdrop.is-open { display:flex; }
-    .dc-event-modal { width:min(640px,100%); max-height:calc(100vh - 2rem); overflow-y:auto; background:#fff; border:2px solid #000; box-shadow:0 16px 48px rgba(0,0,0,.3); }
-    .dc-event-modal-header { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; padding:1rem; background:#f5f5f5; border-bottom:1px solid #d8d8d8; }
-    .dc-event-modal-header h2 { margin:0; font-size:1.35rem; font-weight:900; }
-    .dc-event-modal-close { border:0; background:transparent; color:#000; font-size:1.5rem; font-weight:900; line-height:1; cursor:pointer; }
-    .dc-event-modal-body { padding:1rem; }
-    .dc-event-modal-body dl { display:grid; gap:.4rem; margin:0 0 1rem; }
-    @media (min-width:640px) { .dc-event-modal-body dl { grid-template-columns:140px minmax(0,1fr); } }
-    .dc-event-modal-body dt { font-weight:900; }
-    .dc-event-modal-body dd { margin:0; }
-    .dc-event-modal-risk-list { margin:0; padding-left:1.2rem; }
-    .dc-event-modal-risk-list li { margin-bottom:.35rem; }
-    .dc-event-modal-actions { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1rem; }
-
-    @media (min-width:768px) {
-        .dc-calendar-weekdays { display:grid; }
-        .dc-calendar-week { display:block; border-top:1px solid #d8d8d8; }
-        .dc-calendar-days { grid-template-columns:repeat(7,minmax(0,1fr)); min-height:92px; }
-        .dc-calendar-day { min-height:92px; border-right:1px solid #d8d8d8; border-bottom:0; padding:.5rem; }
-        .dc-calendar-day:nth-child(7n) { border-right:0; }
-        .dc-calendar-day-heading { display:block; }
-        .dc-calendar-day-heading span { display:none; }
-        .dc-calendar-bars { grid-template-columns:repeat(7,minmax(0,1fr)); grid-auto-rows:minmax(2.15rem,auto); align-items:stretch; gap:.25rem; padding:.35rem .5rem .5rem; }
-        .dc-cal-event { padding:.3rem .45rem; border-left:0; border-top:5px solid #7413dc; overflow:hidden; }
-        .dc-cal-event.is-locked { border-top-color:#006ddf; }
-        .dc-cal-event-approved { border-top-color:#00a794; }
-        .dc-cal-event-submitted,.dc-cal-event-under_review { border-top-color:#ffdd00; }
-        .dc-cal-event-changes_requested,.dc-cal-event-cancelled,.dc-cal-event-rejected { border-top-color:#d4351c; }
-        .dc-cal-event-draft { border-top-color:#777; }
-        .dc-mobile-event-stack { display:none; }
+    .dc-calendar-page {
+        display: grid;
+        gap: 1.5rem;
     }
 
-    @media (max-width:767.98px) {
-        .dc-calendar-shell { border:0; background:transparent; }
-        .dc-calendar-week { border-top:0; }
-        .dc-calendar-day { border:2px solid #d8d8d8; margin-bottom:.75rem; }
-        .dc-calendar-day.is-empty { display:none; }
-        .dc-calendar-bars-wrap { display:none; }
+    @media (min-width: 1100px) {
+        .dc-calendar-page {
+            grid-template-columns: 320px minmax(0, 1fr);
+            align-items: start;
+            gap: 2rem;
+        }
+    }
+
+    .dc-calendar-sidebar {
+        background: #ffffff;
+        border: 1px solid #d8dde3;
+        border-top: 8px solid #7413dc;
+        padding: 1.25rem;
+        box-shadow: 0 2px 0 rgba(16, 24, 32, 0.08);
+    }
+
+    @media (min-width: 1100px) {
+        .dc-calendar-sidebar {
+            position: sticky;
+            top: 1.25rem;
+        }
+    }
+
+    .dc-calendar-sidebar h2 {
+        margin: 0 0 1rem;
+        color: #101820;
+        font-size: 1.5rem;
+        font-weight: 900;
+        line-height: 1.05;
+        letter-spacing: -0.025em;
+    }
+
+    .dc-calendar-filter-form {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .dc-calendar-filter-form label {
+        display: block;
+        margin-bottom: 0.35rem;
+        color: #101820;
+        font-weight: 900;
+    }
+
+    .dc-calendar-filter-form .form-control {
+        min-height: 46px;
+        border: 2px solid #101820;
+        border-radius: 0;
+        color: #101820;
+        font-weight: 700;
+    }
+
+    .dc-calendar-filter-form .form-control:focus {
+        outline: 3px solid #ffdd00;
+        outline-offset: 0;
+        box-shadow: 0 0 0 5px #000000;
+        border-color: #101820;
+    }
+
+    .dc-calendar-sidebar-actions {
+        display: grid;
+        gap: 0.65rem;
+        margin-top: 1.25rem;
+    }
+
+    .dc-calendar-sidebar-actions .lt-btn,
+    .dc-calendar-filter-form .lt-btn {
+        min-height: 48px;
+        border-radius: 0;
+        font-weight: 900;
+    }
+
+    .dc-filter-summary {
+        margin: 1.25rem 0 0;
+        padding-top: 1rem;
+        border-top: 1px solid #d8dde3;
+        color: #4b5563;
+        font-size: 0.98rem;
+        font-weight: 800;
+        line-height: 1.45;
+    }
+
+    .dc-calendar-main {
+        min-width: 0;
+    }
+
+    .dc-calendar-toolbar {
+        display: grid;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+        padding: 1.25rem;
+        background: #ffffff;
+        border: 1px solid #d8dde3;
+        border-left: 8px solid #00a794;
+    }
+
+    @media (min-width: 768px) {
+        .dc-calendar-toolbar {
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 1.5rem;
+        }
+    }
+
+    .dc-calendar-month-title {
+        margin: 0;
+        color: #101820;
+        font-size: clamp(1.8rem, 3vw, 2.75rem);
+        font-weight: 900;
+        line-height: 1;
+        letter-spacing: -0.045em;
+    }
+
+    .dc-calendar-toolbar p {
+        margin-top: 0.45rem;
+        color: #4b5563;
+        font-weight: 800;
+    }
+
+    .dc-calendar-month-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        align-items: center;
+    }
+
+    .dc-calendar-month-nav .lt-btn {
+        min-height: 44px;
+        border-radius: 0;
+        font-weight: 900;
+    }
+
+    .dc-calendar-shell {
+        background: #ffffff;
+        border: 1px solid #d8dde3;
+        box-shadow: 0 2px 0 rgba(16, 24, 32, 0.08);
+        overflow: hidden;
+    }
+
+    .dc-calendar-weekdays {
+        display: none;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        background: #4d0b93;
+        color: #ffffff;
+        font-weight: 900;
+    }
+
+    .dc-calendar-weekdays div {
+        padding: 0.9rem 0.85rem;
+        border-right: 1px solid rgba(255, 255, 255, 0.25);
+        font-size: 0.95rem;
+        line-height: 1.1;
+    }
+
+    .dc-calendar-weekdays div:last-child {
+        border-right: 0;
+    }
+
+    .dc-calendar-week {
+        display: grid;
+        grid-template-columns: 1fr;
+        border-top: 1px solid #d8dde3;
+    }
+
+    .dc-calendar-week:first-of-type {
+        border-top: 0;
+    }
+
+    .dc-calendar-days {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .dc-calendar-day {
+        min-height: 88px;
+        padding: 0.9rem;
+        background: #ffffff;
+        border-bottom: 1px solid #d8dde3;
+    }
+
+    .dc-calendar-day.is-outside-month {
+        background: #f5f6f8;
+        color: #4b5563;
+    }
+
+    .dc-calendar-day.is-today {
+        box-shadow: inset 0 0 0 4px #ffdd00;
+        background: #fffdf0;
+    }
+
+    .dc-calendar-day-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 0.5rem;
+    }
+
+    .dc-calendar-day-heading strong {
+        color: #101820;
+        font-size: 1.2rem;
+        font-weight: 900;
+        line-height: 1;
+    }
+
+    .dc-calendar-day-heading span {
+        color: #4b5563;
+        font-size: 0.95rem;
+        font-weight: 800;
+    }
+
+    .dc-calendar-bars-wrap {
+        background: #ffffff;
+        border-top: 1px solid #edf0f2;
+    }
+
+    .dc-calendar-bars {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        background: #ffffff;
+    }
+
+    .dc-calendar-week.is-collapsed .dc-calendar-bar-extra {
+        display: none;
+    }
+
+    .dc-calendar-expand {
+        display: none;
+        width: calc(100% - 1.5rem);
+        margin: 0 0.75rem 0.9rem;
+        border: 2px solid #101820;
+        border-radius: 0;
+        background: #ffffff;
+        color: #101820;
+        cursor: pointer;
+        font-weight: 900;
+        padding: 0.65rem 0.75rem;
+        text-align: left;
+    }
+
+    .dc-calendar-expand:hover {
+        background: #101820;
+        color: #ffffff;
+    }
+
+    .dc-calendar-week.has-hidden-events .dc-calendar-expand {
+        display: block;
+    }
+
+    .dc-cal-event {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        padding: 0.55rem 0.65rem;
+        background: #eee6ff;
+        border: 0;
+        border-left: 7px solid #7413dc;
+        color: #101820;
+        cursor: pointer;
+        line-height: 1.25;
+        text-align: left;
+        text-decoration: none;
+    }
+
+    .dc-cal-event:hover,
+    .dc-cal-event:focus {
+        color: #101820;
+        outline: 3px solid #ffdd00;
+        outline-offset: 1px;
+        box-shadow: 0 0 0 4px #000000;
+        text-decoration: none;
+    }
+
+    .dc-cal-event.is-locked {
+        background: #e8f1ff;
+        border-left-color: #006ddf;
+    }
+
+    .dc-cal-event-title {
+        display: block;
+        overflow: hidden;
+        color: #101820;
+        font-size: 0.95rem;
+        font-weight: 900;
+        line-height: 1.2;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .dc-cal-event-meta {
+        display: block;
+        overflow: hidden;
+        margin-top: 0.2rem;
+        color: #4b5563;
+        font-size: 0.84rem;
+        font-weight: 800;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .dc-cal-event-status {
+        display: inline-block;
+        margin-top: 0.35rem;
+        color: #101820;
+        font-size: 0.72rem;
+        font-weight: 900;
+        letter-spacing: 0.035em;
+        line-height: 1.1;
+        text-transform: uppercase;
+    }
+
+    .dc-cal-event-approved {
+        background: #e9f8f4;
+        border-left-color: #00a794;
+    }
+
+    .dc-cal-event-submitted,
+    .dc-cal-event-under_review {
+        background: #fff8d6;
+        border-left-color: #ffdd00;
+    }
+
+    .dc-cal-event-changes_requested {
+        background: #fff1f0;
+        border-left-color: #d4351c;
+    }
+
+    .dc-cal-event-draft {
+        background: #f5f6f8;
+        border-left-color: #6b7280;
+    }
+
+    .dc-cal-event-cancelled,
+    .dc-cal-event-rejected {
+        background: #f7e5e3;
+        border-left-color: #d4351c;
+        text-decoration: line-through;
+    }
+
+    .dc-calendar-empty {
+        margin-bottom: 1.25rem;
+        padding: 1.25rem;
+        background: #ffffff;
+        border: 2px dashed #6b7280;
+        color: #101820;
+        font-weight: 800;
+    }
+
+    .dc-mobile-event-stack {
+        display: grid;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+    }
+
+    .dc-event-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(16, 24, 32, 0.72);
+        padding: 1rem;
+        z-index: 2000;
+    }
+
+    .dc-event-modal-backdrop.is-open {
+        display: flex;
+    }
+
+    .dc-event-modal {
+        width: min(720px, 100%);
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+        background: #ffffff;
+        border: 2px solid #101820;
+        box-shadow: 0 20px 64px rgba(0, 0, 0, 0.35);
+    }
+
+    .dc-event-modal-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        padding: 1.25rem;
+        background: #4d0b93;
+        color: #ffffff;
+        border-bottom: 6px solid #00a794;
+    }
+
+    .dc-event-modal-header h2 {
+        margin: 0;
+        color: #ffffff;
+        font-size: clamp(1.4rem, 3vw, 2rem);
+        font-weight: 900;
+        line-height: 1.05;
+        letter-spacing: -0.025em;
+    }
+
+    .dc-event-modal-close {
+        min-width: 44px;
+        min-height: 44px;
+        border: 2px solid #ffffff;
+        border-radius: 0;
+        background: transparent;
+        color: #ffffff;
+        cursor: pointer;
+        font-size: 1.7rem;
+        font-weight: 900;
+        line-height: 1;
+    }
+
+    .dc-event-modal-close:hover {
+        background: #ffffff;
+        color: #4d0b93;
+    }
+
+    .dc-event-modal-body {
+        padding: 1.25rem;
+    }
+
+    .dc-event-modal-body dl {
+        display: grid;
+        gap: 0.7rem;
+        margin: 0 0 1.25rem;
+    }
+
+    @media (min-width: 640px) {
+        .dc-event-modal-body dl {
+            grid-template-columns: 150px minmax(0, 1fr);
+        }
+    }
+
+    .dc-event-modal-body dt {
+        color: #101820;
+        font-weight: 900;
+    }
+
+    .dc-event-modal-body dd {
+        margin: 0;
+        color: #101820;
+        font-weight: 700;
+        line-height: 1.45;
+    }
+
+    .dc-event-modal-risk-list {
+        margin: 0;
+        padding-left: 1.2rem;
+    }
+
+    .dc-event-modal-risk-list li {
+        margin-bottom: 0.35rem;
+    }
+
+    .dc-event-modal-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px solid #d8dde3;
+    }
+
+    @media (min-width: 768px) {
+        .dc-calendar-weekdays {
+            display: grid;
+        }
+
+        .dc-calendar-week {
+            display: block;
+            border-top: 1px solid #d8dde3;
+        }
+
+        .dc-calendar-days {
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            min-height: 118px;
+        }
+
+        .dc-calendar-day {
+            min-height: 118px;
+            padding: 0.7rem;
+            border-right: 1px solid #d8dde3;
+            border-bottom: 0;
+        }
+
+        .dc-calendar-day:nth-child(7n) {
+            border-right: 0;
+        }
+
+        .dc-calendar-day-heading {
+            display: block;
+        }
+
+        .dc-calendar-day-heading span {
+            display: none;
+        }
+
+        .dc-calendar-bars {
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            grid-auto-rows: minmax(2.9rem, auto);
+            align-items: stretch;
+            gap: 0.35rem;
+            padding: 0.5rem 0.7rem 0.8rem;
+        }
+
+        .dc-cal-event {
+            padding: 0.45rem 0.55rem;
+            border-left: 0;
+            border-top: 6px solid #7413dc;
+            overflow: hidden;
+        }
+
+        .dc-cal-event.is-locked {
+            border-top-color: #006ddf;
+        }
+
+        .dc-cal-event-approved {
+            border-top-color: #00a794;
+        }
+
+        .dc-cal-event-submitted,
+        .dc-cal-event-under_review {
+            border-top-color: #ffdd00;
+        }
+
+        .dc-cal-event-changes_requested,
+        .dc-cal-event-cancelled,
+        .dc-cal-event-rejected {
+            border-top-color: #d4351c;
+        }
+
+        .dc-cal-event-draft {
+            border-top-color: #6b7280;
+        }
+
+        .dc-mobile-event-stack {
+            display: none;
+        }
+    }
+
+    @media (min-width: 1300px) {
+        .dc-calendar-days {
+            min-height: 132px;
+        }
+
+        .dc-calendar-day {
+            min-height: 132px;
+        }
+
+        .dc-calendar-bars {
+            grid-auto-rows: minmax(3.1rem, auto);
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .dc-calendar-page {
+            gap: 1rem;
+        }
+
+        .dc-calendar-shell {
+            border: 0;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .dc-calendar-week {
+            border-top: 0;
+        }
+
+        .dc-calendar-day {
+            margin-bottom: 0.85rem;
+            border: 1px solid #d8dde3;
+            border-left: 6px solid #7413dc;
+            box-shadow: 0 2px 0 rgba(16, 24, 32, 0.08);
+        }
+
+        .dc-calendar-day.is-empty {
+            display: none;
+        }
+
+        .dc-calendar-bars-wrap {
+            display: none;
+        }
+
+        .dc-calendar-month-nav {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .dc-calendar-month-nav .lt-btn {
+            width: 100%;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .dc-calendar-page *,
+        .dc-calendar-page *::before,
+        .dc-calendar-page *::after,
+        .dc-event-modal *,
+        .dc-event-modal *::before,
+        .dc-event-modal *::after {
+            scroll-behavior: auto !important;
+            transition-duration: 0.001ms !important;
+            animation-duration: 0.001ms !important;
+            animation-iteration-count: 1 !important;
+        }
     }
 </style>
 
@@ -714,7 +1241,13 @@ require __DIR__ . '/layout.php';
                             </div>
 
                             <?php if ($hasHidden): ?>
-                                <button type="button" class="dc-calendar-expand" data-week-toggle="<?= (int) $weekIndex ?>">
+                                <button
+                                    type="button"
+                                    class="dc-calendar-expand"
+                                    data-week-toggle="<?= (int) $weekIndex ?>"
+                                    data-collapsed-text="Show all events this week (+<?= (int) $hiddenCount ?>)"
+                                    data-expanded-text="Hide extra events"
+                                >
                                     Show all events this week (+<?= (int) $hiddenCount ?>)
                                 </button>
                             <?php endif; ?>
@@ -809,8 +1342,9 @@ require __DIR__ . '/layout.php';
             if (!week) return;
 
             var collapsed = week.classList.toggle('is-collapsed');
-            button.textContent = collapsed ? button.getAttribute('data-original-text') || button.textContent : 'Hide extra events';
-            if (!button.getAttribute('data-original-text')) button.setAttribute('data-original-text', 'Show all events this week');
+            button.textContent = collapsed
+                ? button.getAttribute('data-collapsed-text') || 'Show all events this week'
+                : button.getAttribute('data-expanded-text') || 'Hide extra events';
         });
     });
 
