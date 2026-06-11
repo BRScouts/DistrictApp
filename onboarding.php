@@ -15,7 +15,35 @@ $personId = (int) $user['id'];
 $email = strtolower(trim((string) ($user['email'] ?? '')));
 $displayName = trim((string) ($user['full_name'] ?? $email));
 
-$roleOptions = portal_role_options();
+$roleOptions = array_values(array_filter(
+    portal_role_options(),
+    static function (string $role): bool {
+        $normalised = strtolower(trim($role));
+
+        if ($normalised === '') {
+            return false;
+        }
+
+        if ($normalised === 'other') {
+            return false;
+        }
+
+        if (str_contains($normalised, 'permit holder')) {
+            return false;
+        }
+
+        if (str_contains($normalised, 'nights away')) {
+            return false;
+        }
+
+        if (str_contains($normalised, 'skill instructor') || str_contains($normalised, 'skills instructor')) {
+            return false;
+        }
+
+        return true;
+    }
+));
+
 $accreditationOptions = portal_accreditation_options();
 $allowedAccreditations = portal_flatten_options($accreditationOptions);
 
@@ -213,6 +241,15 @@ function onboarding_fetch_claim_candidates(int $currentPersonId): array
         ";
     }
 
+    $microsoftUnclaimedCondition = onboarding_table_exists('user_accounts')
+        ? "AND NOT EXISTS (
+                SELECT 1
+                FROM user_accounts ua_claimed
+                WHERE ua_claimed.person_id = p.id
+                  AND ua_claimed.provider = 'microsoft'
+            )"
+        : '';
+
     $stmt = db()->prepare("
         SELECT
             p.id AS person_id,
@@ -225,7 +262,7 @@ function onboarding_fetch_claim_candidates(int $currentPersonId): array
             gm.access_level,
             dp.role_title,
             {$sectionSelect},
-            MAX(CASE WHEN ua.provider = 'microsoft' THEN 1 ELSE 0 END) AS has_microsoft_account
+            0 AS has_microsoft_account
         FROM group_memberships gm
         JOIN people p
           ON p.id = gm.person_id
@@ -234,13 +271,11 @@ function onboarding_fetch_claim_candidates(int $currentPersonId): array
          AND g.is_active = 1
         LEFT JOIN directory_profiles dp
           ON dp.person_id = p.id
-        LEFT JOIN user_accounts ua
-          ON ua.person_id = p.id
-         AND ua.provider = 'microsoft'
         {$sectionJoin}
         WHERE p.id <> :current_person_id
           AND p.status = 'active'
           AND gm.status = 'active'
+          {$microsoftUnclaimedCondition}
         GROUP BY
             p.id,
             p.full_name,
@@ -395,7 +430,7 @@ function onboarding_claim_existing_person(
     }
 
     if (!onboarding_candidate_is_in_selected_group($targetPersonId, $selectedGroupIds)) {
-        throw new RuntimeException('The selected existing record is not active in one of the Groups you selected.');
+        throw new RuntimeException('The selected existing record is not active in the Group you selected.');
     }
 
     if (onboarding_person_has_microsoft_login($targetPersonId)) {
@@ -412,10 +447,6 @@ function onboarding_claim_existing_person(
     $targetOldEmail = strtolower(trim((string) ($targetPerson['primary_email'] ?? '')));
     $currentOldEmail = strtolower(trim((string) ($currentPerson['primary_email'] ?? '')));
 
-    /*
-     * If people.primary_email is unique, move the temporary SSO-created person
-     * away from the SSO email before assigning that email to the imported record.
-     */
     $placeholderEmail = 'merged-person-' . $currentPersonId . '-' . time() . '@merged.invalid';
 
     $stmt = db()->prepare("
@@ -457,10 +488,6 @@ function onboarding_claim_existing_person(
     }
 
     if (onboarding_table_exists('group_memberships')) {
-        /*
-         * If the temporary record somehow gained memberships, keep them active
-         * by moving them to the claimed person where possible.
-         */
         $stmt = db()->prepare("
             SELECT group_id, membership_role, access_level, status, is_primary, approved_at
             FROM group_memberships
@@ -500,7 +527,7 @@ function onboarding_claim_existing_person(
                 $insert->execute([
                     'target_person_id' => $targetPersonId,
                     'group_id' => (int) $membership['group_id'],
-                    'membership_role' => (string) ($membership['membership_role'] ?? 'other'),
+                    'membership_role' => (string) ($membership['membership_role'] ?? 'section_leader'),
                     'access_level' => (string) ($membership['access_level'] ?? 'member'),
                     'status' => (string) ($membership['status'] ?? 'active'),
                     'is_primary' => (int) ($membership['is_primary'] ?? 0),
@@ -646,16 +673,8 @@ $claimCandidates = onboarding_fetch_claim_candidates($personId);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) ($_POST['action'] ?? 'complete_onboarding');
 
-    $postedGroupIds = $_POST['group_ids'] ?? [];
-
-    if (!is_array($postedGroupIds)) {
-        $postedGroupIds = [];
-    }
-
-    $groupIds = array_values(array_unique(array_filter(
-        array_map('intval', $postedGroupIds),
-        static fn(int $id): bool => $id > 0
-    )));
+    $postedGroupId = (int) ($_POST['group_id'] ?? 0);
+    $groupIds = $postedGroupId > 0 ? [$postedGroupId] : [];
 
     if ($action === 'claim_existing_person') {
         $targetPersonId = (int) ($_POST['existing_person_id'] ?? 0);
@@ -664,16 +683,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$groupIds) {
             $error = 'Choose your Group before selecting an existing record.';
         } elseif ($targetPersonId < 1) {
-            $error = 'Choose the existing leader record that belongs to you.';
+            $error = 'Choose the existing leader record that belongs to you, or choose “None of these are me”.';
         } elseif (!$confirmedClaim) {
             $error = 'Confirm that the existing record is yours before continuing.';
         } else {
-            $placeholders = implode(',', array_fill(0, count($groupIds), '?'));
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM groups WHERE is_active = 1 AND id IN ({$placeholders})");
-            $stmt->execute($groupIds);
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM groups WHERE is_active = 1 AND id = ?");
+            $stmt->execute([$postedGroupId]);
 
-            if ((int) $stmt->fetchColumn() !== count($groupIds)) {
-                $error = 'Choose valid active Groups.';
+            if ((int) $stmt->fetchColumn() !== 1) {
+                $error = 'Choose a valid active Group.';
             }
         }
 
@@ -729,14 +747,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($roleTitle === '' || !in_array($roleTitle, $roleOptions, true)) {
             $error = 'Choose your main role.';
         } elseif (!$groupIds) {
-            $error = 'Choose at least one Group.';
+            $error = 'Choose your Group.';
         } else {
-            $placeholders = implode(',', array_fill(0, count($groupIds), '?'));
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM groups WHERE is_active = 1 AND id IN ({$placeholders})");
-            $stmt->execute($groupIds);
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM groups WHERE is_active = 1 AND id = ?");
+            $stmt->execute([$postedGroupId]);
 
-            if ((int) $stmt->fetchColumn() !== count($groupIds)) {
-                $error = 'Choose valid active Groups.';
+            if ((int) $stmt->fetchColumn() !== 1) {
+                $error = 'Choose a valid active Group.';
             }
         }
 
@@ -796,10 +813,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'share_phone' => $sharePhone,
                 ]);
 
-                /*
-                 * Onboarding is the initial self-service Group selection flow.
-                 * After this, profile.php displays Group access as read-only.
-                 */
                 $membershipIdsByGroup = [];
 
                 foreach ($groupIds as $index => $groupId) {
@@ -922,15 +935,12 @@ $formFullName = trim((string) ($_POST['full_name'] ?? ($profile['full_name'] ?? 
 $formPhone = trim((string) ($_POST['phone'] ?? ($profile['phone'] ?? '')));
 $formRoleTitle = trim((string) ($_POST['role_title'] ?? ($profile['role_title'] ?? '')));
 $formAboutMe = trim((string) ($_POST['about_me'] ?? ($profile['about_me'] ?? '')));
-$formGroupIds = $_POST['group_ids'] ?? $existingGroupIds;
+$formGroupId = (int) ($_POST['group_id'] ?? ($existingGroupIds[0] ?? 0));
+$formGroupIds = $formGroupId > 0 ? [$formGroupId] : [];
 $formSectionIds = $_POST['section_ids'] ?? [];
 $formAccreditations = $_POST['accreditations'] ?? portal_decode_json_list($profile['accreditations_json'] ?? null);
 $formSharePhone = isset($_POST['share_phone']) ? 1 : (int) ($profile['share_phone'] ?? 0);
 $formVisible = isset($_POST['visible_in_directory']) ? 1 : (int) ($profile['visible_in_directory'] ?? 1);
-
-if (!is_array($formGroupIds)) {
-    $formGroupIds = [];
-}
 
 if (!is_array($formSectionIds)) {
     $formSectionIds = [];
@@ -940,7 +950,6 @@ if (!is_array($formAccreditations)) {
     $formAccreditations = [];
 }
 
-$formGroupIds = array_map('intval', $formGroupIds);
 $formSectionIds = array_map('intval', $formSectionIds);
 
 $formAccreditations = array_values(array_intersect(
@@ -970,18 +979,18 @@ $pageTitle = 'Complete your profile | ' . $appName;
     <style>
         .onboarding-header {
             background: #ffffff;
-            border-bottom: 1px solid #e6e6e6;
+            border-bottom: 2px solid #e6e6e6;
         }
 
         .onboarding-header-inner {
             width: min(1180px, calc(100% - 1rem));
             margin: 0 auto;
-            min-height: 82px;
+            min-height: 68px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 1rem;
-            padding: .65rem 0;
+            padding: .5rem 0;
         }
 
         .onboarding-brand {
@@ -1000,9 +1009,9 @@ $pageTitle = 'Complete your profile | ' . $appName;
 
         .onboarding-brand img {
             display: block;
-            height: 68px;
+            height: 52px;
             width: auto;
-            max-width: 230px;
+            max-width: 210px;
             object-fit: contain;
         }
 
@@ -1018,30 +1027,30 @@ $pageTitle = 'Complete your profile | ' . $appName;
 
         .onboarding-hero {
             background: #f7f5fb;
-            border-bottom: 1px solid #e6e6e6;
+            border-bottom: 2px solid #e6e6e6;
         }
 
         .onboarding-hero-inner {
             width: min(1180px, calc(100% - 1rem));
             margin: 0 auto;
-            padding: 1.6rem 0;
+            padding: 1.05rem 0;
         }
 
         .onboarding-hero h1 {
             margin: 0;
             color: #4d0b93;
-            font-size: clamp(2rem, 6vw, 3.2rem);
+            font-size: clamp(1.85rem, 5vw, 2.75rem);
             line-height: 1.05;
             font-weight: 900;
         }
 
         .onboarding-hero p {
-            margin: .65rem 0 0;
+            margin: .45rem 0 0;
             max-width: 780px;
             color: #333;
-            font-size: 1.05rem;
+            font-size: 1rem;
             font-weight: 700;
-            line-height: 1.45;
+            line-height: 1.4;
         }
 
         .onboarding-layout {
@@ -1051,17 +1060,27 @@ $pageTitle = 'Complete your profile | ' . $appName;
 
         @media (min-width: 992px) {
             .onboarding-layout {
-                grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+                grid-template-columns: minmax(260px, 330px) minmax(0, 1fr);
                 align-items: start;
             }
         }
 
+        .onboarding-side-card,
+        .onboarding-panel,
+        .onboarding-candidate,
+        .onboarding-no-candidates,
+        .onboarding-claim-confirm,
+        .onboarding-selected-summary,
+        .onboarding-accreditation-category,
+        .onboarding-selected-tag {
+            border-radius: 0;
+        }
+
         .onboarding-side-card {
             background: #ffffff;
-            border: 1px solid #e6e6e6;
-            border-radius: .75rem;
+            border: 2px solid #e6e6e6;
             padding: 1.25rem;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, .05);
+            box-shadow: none;
         }
 
         @media (min-width: 992px) {
@@ -1074,15 +1093,14 @@ $pageTitle = 'Complete your profile | ' . $appName;
         .onboarding-photo-link {
             position: relative;
             display: block;
-            width: 132px;
-            height: 132px;
+            width: 124px;
+            height: 124px;
             margin: 0 auto 1rem;
-            border-radius: 999px;
             overflow: hidden;
             background: #7413dc;
             color: #ffffff;
             text-decoration: none;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, .12);
+            box-shadow: none;
         }
 
         .onboarding-photo-link:hover,
@@ -1133,7 +1151,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
         .onboarding-side-card h2 {
             margin: 0;
             color: #4d0b93;
-            font-size: 1.45rem;
+            font-size: 1.35rem;
             font-weight: 900;
             text-align: center;
             line-height: 1.15;
@@ -1159,23 +1177,27 @@ $pageTitle = 'Complete your profile | ' . $appName;
 
         .onboarding-photo-note {
             background: #f7f5fb;
-            border-left: 5px solid #7413dc;
+            border-left: 6px solid #7413dc;
             padding: .9rem;
             margin-top: 1rem;
             font-weight: 700;
         }
 
-        .onboarding-main {
+        .onboarding-main,
+        .onboarding-normal-flow {
             display: grid;
             gap: 1rem;
         }
 
+        .onboarding-normal-flow.is-hidden {
+            display: none;
+        }
+
         .onboarding-panel {
             background: #ffffff;
-            border: 1px solid #e6e6e6;
-            border-radius: .75rem;
+            border: 2px solid #e6e6e6;
             padding: 1.25rem;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, .05);
+            box-shadow: none;
         }
 
         .onboarding-panel h2 {
@@ -1203,8 +1225,22 @@ $pageTitle = 'Complete your profile | ' . $appName;
         }
 
         .onboarding-claim-panel {
+            display: none;
             background: #fff8d6;
-            border-left: 6px solid #ffdd00;
+            border-left: 8px solid #ffdd00;
+        }
+
+        .onboarding-claim-panel.is-visible {
+            display: block;
+        }
+
+        .onboarding-warning {
+            background: #ffffff;
+            border: 2px solid #b1b4b6;
+            border-left: 8px solid #d4351c;
+            padding: .85rem;
+            margin: 1rem 0;
+            font-weight: 800;
         }
 
         .onboarding-candidate-list {
@@ -1216,8 +1252,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
         .onboarding-candidate {
             display: block;
             background: #ffffff;
-            border: 1px solid #d8d8d8;
-            border-radius: .5rem;
+            border: 2px solid #d8d8d8;
             padding: .9rem;
         }
 
@@ -1246,8 +1281,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
             margin-top: 1rem;
             padding: .85rem;
             background: #ffffff;
-            border: 1px solid #d8d8d8;
-            border-radius: .5rem;
+            border: 2px solid #d8d8d8;
             font-weight: 700;
         }
 
@@ -1259,8 +1293,14 @@ $pageTitle = 'Complete your profile | ' . $appName;
             margin-top: 1rem;
             padding: .85rem;
             background: #ffffff;
-            border: 1px solid #d8d8d8;
-            border-radius: .5rem;
+            border: 2px solid #d8d8d8;
+        }
+
+        .onboarding-claim-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .75rem;
+            align-items: center;
         }
 
         .onboarding-group-section {
@@ -1286,8 +1326,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
 
         .onboarding-selected-summary {
             background: #f7f5fb;
-            border: 1px solid #e6e6e6;
-            border-radius: .5rem;
+            border: 2px solid #e6e6e6;
             padding: .75rem;
             margin-bottom: 1rem;
         }
@@ -1308,9 +1347,8 @@ $pageTitle = 'Complete your profile | ' . $appName;
         .onboarding-selected-tag {
             display: inline-flex;
             align-items: center;
-            border-radius: 999px;
             background: #ffffff;
-            border: 1px solid #d8d8d8;
+            border: 2px solid #d8d8d8;
             color: #333;
             padding: .25rem .55rem;
             font-size: .82rem;
@@ -1318,8 +1356,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
         }
 
         .onboarding-accreditation-category {
-            border: 1px solid #e6e6e6;
-            border-radius: .5rem;
+            border: 2px solid #e6e6e6;
             margin-bottom: .75rem;
             background: #ffffff;
             overflow: hidden;
@@ -1376,15 +1413,16 @@ $pageTitle = 'Complete your profile | ' . $appName;
         }
 
         @media (max-width: 575.98px) {
-            .onboarding-save-row .btn {
+            .onboarding-save-row .btn,
+            .onboarding-claim-actions .btn {
                 width: 100%;
             }
         }
 
         @media (max-width: 520px) {
             .onboarding-brand img {
-                height: 54px;
-                max-width: 170px;
+                height: 46px;
+                max-width: 160px;
             }
         }
     </style>
@@ -1405,7 +1443,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
     <div class="onboarding-hero-inner">
         <h1>Complete your profile</h1>
         <p>
-            Tell us who you are and which Group or Groups you work with.
+            Tell us who you are and which Group you work with.
             This sets up your District Dashboard access.
         </p>
     </div>
@@ -1446,7 +1484,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
 
             <ol class="onboarding-steps">
                 <li>Choose your Group.</li>
-                <li>Check whether an existing leader record is already yours.</li>
+                <li>Check whether an existing leader record is yours.</li>
                 <li>Complete your directory details.</li>
                 <li>Save to open the dashboard.</li>
             </ol>
@@ -1503,7 +1541,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
                 <section class="onboarding-panel">
                     <h2>Group access</h2>
                     <p class="onboarding-panel-intro">
-                        Choose every Group you need access to. After setup, changes to Group access must be made by your Group Lead Volunteer.
+                        Choose the main Group you need access to. After setup, changes to Group access must be made by your Group Lead Volunteer.
                     </p>
 
                     <div class="onboarding-check-grid mt-3">
@@ -1511,11 +1549,12 @@ $pageTitle = 'Complete your profile | ' . $appName;
                             <?php $groupId = (int) $group['id']; ?>
                             <label class="lt-check">
                                 <input
-                                    type="checkbox"
-                                    name="group_ids[]"
+                                    type="radio"
+                                    name="group_id"
                                     value="<?= $groupId ?>"
                                     data-group-toggle="<?= $groupId ?>"
-                                    <?= in_array($groupId, $formGroupIds, true) ? 'checked' : '' ?>
+                                    <?= $groupId === $formGroupId ? 'checked' : '' ?>
+                                    required
                                 >
                                 <span><?= e($group['group_name']) ?></span>
                             </label>
@@ -1527,27 +1566,28 @@ $pageTitle = 'Complete your profile | ' . $appName;
                     <section class="onboarding-panel onboarding-claim-panel" id="existing-record-panel">
                         <h2>Are any of the below names you?</h2>
                         <p class="onboarding-panel-intro">
-                            We may already have a leader record for you. If one of the records below is yours, select it and confirm. If you, please ignore this section and skip to the next section.
+                            These are unclaimed leader records in the Group you selected. Only link a record if you are certain it is yours.
                         </p>
+
+                        <div class="onboarding-warning">
+                            Do not claim someone else’s record. If none of these records are you, use the button below to continue with a new profile.
+                        </div>
 
                         <div class="onboarding-candidate-list" id="existing-record-list">
                             <?php foreach ($claimCandidates as $candidate): ?>
                                 <?php
                                 $candidatePersonId = (int) $candidate['person_id'];
                                 $candidateGroupId = (int) $candidate['group_id'];
-                                $hasMicrosoft = (int) ($candidate['has_microsoft_account'] ?? 0) === 1;
                                 ?>
                                 <label
                                     class="onboarding-candidate"
                                     data-existing-record
                                     data-group-id="<?= $candidateGroupId ?>"
-                                    data-has-microsoft="<?= $hasMicrosoft ? '1' : '0' ?>"
                                 >
                                     <input
                                         type="radio"
                                         name="existing_person_id"
                                         value="<?= $candidatePersonId ?>"
-                                        <?= $hasMicrosoft ? 'disabled' : '' ?>
                                     >
                                     <strong><?= e((string) $candidate['full_name']) ?></strong>
                                     <span class="onboarding-candidate-meta">
@@ -1567,17 +1607,8 @@ $pageTitle = 'Complete your profile | ' . $appName;
                                             Sections: <?= e((string) $candidate['section_names']) ?>
                                         </span>
                                     <?php endif; ?>
-                                    <?php if ($hasMicrosoft): ?>
-                                        <span class="onboarding-candidate-meta">
-                                            This record is already linked to Microsoft sign-in.
-                                        </span>
-                                    <?php endif; ?>
                                 </label>
                             <?php endforeach; ?>
-                        </div>
-
-                        <div class="onboarding-no-candidates" id="existing-record-empty">
-                            No active existing leader records are shown for the selected Group.
                         </div>
 
                         <div class="onboarding-claim-confirm">
@@ -1590,209 +1621,222 @@ $pageTitle = 'Complete your profile | ' . $appName;
                                 <span>I confirm the selected existing record is me.</span>
                             </label>
 
-                            <button
-                                type="submit"
-                                name="action"
-                                value="claim_existing_person"
-                                class="btn btn-primary lt-btn"
-                                onclick="return confirm('Are you sure this existing record is yours? Your Microsoft sign-in will be linked to it.');"
-                            >
-                                This is me — link my Microsoft sign-in
-                            </button>
+                            <div class="onboarding-claim-actions">
+                                <button
+                                    type="submit"
+                                    name="action"
+                                    value="claim_existing_person"
+                                    class="btn btn-primary lt-btn"
+                                    formnovalidate
+                                    onclick="return confirm('Only continue if the selected existing record is definitely yours.');"
+                                >
+                                    This is me — link my Microsoft sign-in
+                                </button>
+
+                                <button
+                                    type="button"
+                                    class="btn lt-btn lt-btn-secondary"
+                                    id="none-of-these-button"
+                                >
+                                    None of these are me — continue
+                                </button>
+                            </div>
                         </div>
                     </section>
                 <?php endif; ?>
 
-                <section class="onboarding-panel">
-                    <h2>Role and section information</h2>
-                    <p class="onboarding-panel-intro">
-                        This helps with directory search and targeted emails. It does not limit your access inside a Group.
-                    </p>
+                <div class="onboarding-normal-flow" id="onboarding-normal-flow">
+                    <section class="onboarding-panel">
+                        <h2>Role and section information</h2>
+                        <p class="onboarding-panel-intro">
+                            This helps with directory search and targeted emails. It does not limit your access inside a Group.
+                        </p>
 
-                    <div class="form-group">
-                        <label for="role_title">Main role</label>
-                        <select class="form-control" id="role_title" name="role_title" required>
-                            <option value="">Choose your role</option>
-                            <?php foreach ($roleOptions as $roleOption): ?>
-                                <option value="<?= e($roleOption) ?>" <?= $formRoleTitle === $roleOption ? 'selected' : '' ?>>
-                                    <?= e($roleOption) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+                        <div class="form-group">
+                            <label for="role_title">Main role</label>
+                            <select class="form-control" id="role_title" name="role_title" required>
+                                <option value="">Choose your role</option>
+                                <?php foreach ($roleOptions as $roleOption): ?>
+                                    <option value="<?= e($roleOption) ?>" <?= $formRoleTitle === $roleOption ? 'selected' : '' ?>>
+                                        <?= e($roleOption) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
 
-                    <?php if ($sectionsByGroup): ?>
-                        <fieldset class="mt-4">
-                            <legend class="h5 font-weight-bold">Sections you work with</legend>
-                            <p class="form-text text-muted">
-                                Optional. Used for targeted emails such as Cub leaders or Explorer volunteers.
-                            </p>
+                        <?php if ($sectionsByGroup): ?>
+                            <fieldset class="mt-4">
+                                <legend class="h5 font-weight-bold">Sections you work with</legend>
+                                <p class="form-text text-muted">
+                                    Optional. Used for targeted emails such as Cub leaders or Explorer volunteers.
+                                </p>
 
-                            <?php foreach ($groups as $group): ?>
-                                <?php $groupId = (int) $group['id']; ?>
+                                <?php foreach ($groups as $group): ?>
+                                    <?php $groupId = (int) $group['id']; ?>
 
-                                <?php if (empty($sectionsByGroup[$groupId])) {
-                                    continue;
-                                } ?>
+                                    <?php if (empty($sectionsByGroup[$groupId])) {
+                                        continue;
+                                    } ?>
 
-                                <div
-                                    class="lt-panel-grey mb-3 onboarding-group-section"
-                                    data-section-group="<?= $groupId ?>"
+                                    <div
+                                        class="lt-panel-grey mb-3 onboarding-group-section"
+                                        data-section-group="<?= $groupId ?>"
+                                    >
+                                        <h3 class="h6 font-weight-bold"><?= e($group['group_name']) ?></h3>
+
+                                        <div class="onboarding-check-grid">
+                                            <?php foreach ($sectionsByGroup[$groupId] as $section): ?>
+                                                <?php $sectionId = (int) $section['id']; ?>
+                                                <label class="lt-check">
+                                                    <input
+                                                        type="checkbox"
+                                                        name="section_ids[]"
+                                                        value="<?= $sectionId ?>"
+                                                        <?= in_array($sectionId, $formSectionIds, true) ? 'checked' : '' ?>
+                                                    >
+                                                    <span><?= e($section['section_name']) ?></span>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </fieldset>
+                        <?php endif; ?>
+                    </section>
+
+                    <section class="onboarding-panel">
+                        <h2>Directory details</h2>
+
+                        <div class="form-group form-check">
+                            <input
+                                type="checkbox"
+                                class="form-check-input"
+                                id="visible_in_directory"
+                                name="visible_in_directory"
+                                value="1"
+                                <?= $formVisible === 1 ? 'checked' : '' ?>
+                            >
+                            <label class="form-check-label" for="visible_in_directory">
+                                Show me in the District Directory
+                            </label>
+                        </div>
+
+                        <div class="form-group form-check">
+                            <input
+                                type="checkbox"
+                                class="form-check-input"
+                                id="share_phone"
+                                name="share_phone"
+                                value="1"
+                                <?= $formSharePhone === 1 ? 'checked' : '' ?>
+                            >
+                            <label class="form-check-label" for="share_phone">
+                                Share my contact number in the District Directory
+                            </label>
+                        </div>
+
+                        <div class="form-group mb-0">
+                            <label for="about_me">About me</label>
+                            <textarea
+                                class="form-control"
+                                id="about_me"
+                                name="about_me"
+                                rows="3"
+                            ><?= e($formAboutMe) ?></textarea>
+                        </div>
+                    </section>
+
+                    <section class="onboarding-panel">
+                        <h2>Permits and accreditations</h2>
+                        <p class="onboarding-panel-intro">
+                            Search or open a category to select the permits, skills and accreditations you want shown in the Directory.
+                        </p>
+
+                        <div class="onboarding-accreditation-toolbar">
+                            <div class="form-group mb-md-0">
+                                <label for="accreditation_search">Search accreditations</label>
+                                <input
+                                    type="search"
+                                    id="accreditation_search"
+                                    class="form-control"
+                                    placeholder="Search permits, skills or accreditations"
                                 >
-                                    <h3 class="h6 font-weight-bold"><?= e($group['group_name']) ?></h3>
+                            </div>
+
+                            <div>
+                                <button type="button" class="btn lt-btn lt-btn-secondary" id="clear_accreditation_search">
+                                    Clear search
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="onboarding-selected-summary">
+                            <strong>
+                                Selected accreditations:
+                                <span id="selected_accreditation_count"><?= count($formAccreditations) ?></span>
+                            </strong>
+
+                            <div class="onboarding-selected-tags" id="selected_accreditation_tags">
+                                <?php if ($formAccreditations): ?>
+                                    <?php foreach ($formAccreditations as $item): ?>
+                                        <span class="onboarding-selected-tag"><?= e($item) ?></span>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <span class="onboarding-selected-tag">No accreditations selected</span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <?php foreach ($accreditationOptions as $category => $items): ?>
+                            <?php $selectedInCategory = count(array_intersect($items, $formAccreditations)); ?>
+
+                            <details class="onboarding-accreditation-category" <?= $selectedInCategory > 0 ? 'open' : '' ?>>
+                                <summary>
+                                    <?= e($category) ?>
+                                    <span>
+                                        (<span data-category-count="<?= e($category) ?>"><?= (int) $selectedInCategory ?></span> selected)
+                                    </span>
+                                </summary>
+
+                                <div class="onboarding-accreditation-list">
+                                    <p class="onboarding-accreditation-empty">
+                                        No matching accreditations in this category.
+                                    </p>
 
                                     <div class="onboarding-check-grid">
-                                        <?php foreach ($sectionsByGroup[$groupId] as $section): ?>
-                                            <?php $sectionId = (int) $section['id']; ?>
-                                            <label class="lt-check">
+                                        <?php foreach ($items as $item): ?>
+                                            <label
+                                                class="lt-check onboarding-accreditation-item"
+                                                data-accreditation-item="<?= e(strtolower($item . ' ' . $category)) ?>"
+                                                data-accreditation-category="<?= e($category) ?>"
+                                            >
                                                 <input
                                                     type="checkbox"
-                                                    name="section_ids[]"
-                                                    value="<?= $sectionId ?>"
-                                                    <?= in_array($sectionId, $formSectionIds, true) ? 'checked' : '' ?>
+                                                    name="accreditations[]"
+                                                    value="<?= e($item) ?>"
+                                                    <?= in_array($item, $formAccreditations, true) ? 'checked' : '' ?>
                                                 >
-                                                <span><?= e($section['section_name']) ?></span>
+                                                <span><?= e($item) ?></span>
                                             </label>
                                         <?php endforeach; ?>
                                     </div>
                                 </div>
-                            <?php endforeach; ?>
-                        </fieldset>
-                    <?php endif; ?>
-                </section>
+                            </details>
+                        <?php endforeach; ?>
+                    </section>
 
-                <section class="onboarding-panel">
-                    <h2>Directory details</h2>
-
-                    <div class="form-group form-check">
-                        <input
-                            type="checkbox"
-                            class="form-check-input"
-                            id="visible_in_directory"
-                            name="visible_in_directory"
-                            value="1"
-                            <?= $formVisible === 1 ? 'checked' : '' ?>
-                        >
-                        <label class="form-check-label" for="visible_in_directory">
-                            Show me in the District Directory
-                        </label>
-                    </div>
-
-                    <div class="form-group form-check">
-                        <input
-                            type="checkbox"
-                            class="form-check-input"
-                            id="share_phone"
-                            name="share_phone"
-                            value="1"
-                            <?= $formSharePhone === 1 ? 'checked' : '' ?>
-                        >
-                        <label class="form-check-label" for="share_phone">
-                            Share my contact number in the District Directory
-                        </label>
-                    </div>
-
-                    <div class="form-group mb-0">
-                        <label for="about_me">About me</label>
-                        <textarea
-                            class="form-control"
-                            id="about_me"
-                            name="about_me"
-                            rows="3"
-                        ><?= e($formAboutMe) ?></textarea>
-                    </div>
-                </section>
-
-                <section class="onboarding-panel">
-                    <h2>Permits and accreditations</h2>
-                    <p class="onboarding-panel-intro">
-                        Search or open a category to select the permits, skills and accreditations you want shown in the Directory.
-                    </p>
-
-                    <div class="onboarding-accreditation-toolbar">
-                        <div class="form-group mb-md-0">
-                            <label for="accreditation_search">Search accreditations</label>
-                            <input
-                                type="search"
-                                id="accreditation_search"
-                                class="form-control"
-                                placeholder="Search permits, skills or accreditations"
-                            >
-                        </div>
-
-                        <div>
-                            <button type="button" class="btn lt-btn lt-btn-secondary" id="clear_accreditation_search">
-                                Clear search
+                    <section class="onboarding-panel">
+                        <div class="onboarding-save-row">
+                            <button type="submit" name="action" value="complete_onboarding" class="btn btn-primary btn-lg lt-btn">
+                                Save and continue
                             </button>
+
+                            <span class="text-muted font-weight-bold">
+                                You can update directory details later from My profile.
+                            </span>
                         </div>
-                    </div>
-
-                    <div class="onboarding-selected-summary">
-                        <strong>
-                            Selected accreditations:
-                            <span id="selected_accreditation_count"><?= count($formAccreditations) ?></span>
-                        </strong>
-
-                        <div class="onboarding-selected-tags" id="selected_accreditation_tags">
-                            <?php if ($formAccreditations): ?>
-                                <?php foreach ($formAccreditations as $item): ?>
-                                    <span class="onboarding-selected-tag"><?= e($item) ?></span>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <span class="onboarding-selected-tag">No accreditations selected</span>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-
-                    <?php foreach ($accreditationOptions as $category => $items): ?>
-                        <?php $selectedInCategory = count(array_intersect($items, $formAccreditations)); ?>
-
-                        <details class="onboarding-accreditation-category" <?= $selectedInCategory > 0 ? 'open' : '' ?>>
-                            <summary>
-                                <?= e($category) ?>
-                                <span>
-                                    (<span data-category-count="<?= e($category) ?>"><?= (int) $selectedInCategory ?></span> selected)
-                                </span>
-                            </summary>
-
-                            <div class="onboarding-accreditation-list">
-                                <p class="onboarding-accreditation-empty">
-                                    No matching accreditations in this category.
-                                </p>
-
-                                <div class="onboarding-check-grid">
-                                    <?php foreach ($items as $item): ?>
-                                        <label
-                                            class="lt-check onboarding-accreditation-item"
-                                            data-accreditation-item="<?= e(strtolower($item . ' ' . $category)) ?>"
-                                            data-accreditation-category="<?= e($category) ?>"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                name="accreditations[]"
-                                                value="<?= e($item) ?>"
-                                                <?= in_array($item, $formAccreditations, true) ? 'checked' : '' ?>
-                                            >
-                                            <span><?= e($item) ?></span>
-                                        </label>
-                                    <?php endforeach; ?>
-                                </div>
-                            </div>
-                        </details>
-                    <?php endforeach; ?>
-                </section>
-
-                <section class="onboarding-panel">
-                    <div class="onboarding-save-row">
-                        <button type="submit" name="action" value="complete_onboarding" class="btn btn-primary btn-lg lt-btn">
-                            Save and continue
-                        </button>
-
-                        <span class="text-muted font-weight-bold">
-                            You can update directory details later from My profile.
-                        </span>
-                    </div>
-                </section>
+                    </section>
+                </div>
             </form>
         </section>
     </div>
@@ -1804,30 +1848,25 @@ $pageTitle = 'Complete your profile | ' . $appName;
     var clearButton = document.getElementById('clear_accreditation_search');
     var selectedCount = document.getElementById('selected_accreditation_count');
     var selectedTags = document.getElementById('selected_accreditation_tags');
-    var existingRecordEmpty = document.getElementById('existing-record-empty');
+    var existingRecordPanel = document.getElementById('existing-record-panel');
+    var normalFlow = document.getElementById('onboarding-normal-flow');
+    var noneButton = document.getElementById('none-of-these-button');
+    var dismissedGroups = {};
 
     function normalise(value) {
         return String(value || '').toLowerCase().trim();
     }
 
-    function selectedGroupMap() {
-        var selectedGroups = {};
-
-        document.querySelectorAll('[data-group-toggle]').forEach(function (checkbox) {
-            if (checkbox.checked) {
-                selectedGroups[checkbox.getAttribute('data-group-toggle')] = true;
-            }
-        });
-
-        return selectedGroups;
+    function selectedGroupId() {
+        var checked = document.querySelector('[data-group-toggle]:checked');
+        return checked ? checked.getAttribute('data-group-toggle') : '';
     }
 
     function updateSectionVisibility() {
-        var selectedGroups = selectedGroupMap();
+        var groupId = selectedGroupId();
 
         document.querySelectorAll('[data-section-group]').forEach(function (panel) {
-            var groupId = panel.getAttribute('data-section-group');
-            var visible = !!selectedGroups[groupId];
+            var visible = groupId !== '' && panel.getAttribute('data-section-group') === groupId;
 
             panel.classList.toggle('is-visible', visible);
 
@@ -1840,21 +1879,21 @@ $pageTitle = 'Complete your profile | ' . $appName;
     }
 
     function updateExistingRecordVisibility() {
-        var selectedGroups = selectedGroupMap();
-        var selectedCount = Object.keys(selectedGroups).length;
+        if (!existingRecordPanel) {
+            return;
+        }
+
+        var groupId = selectedGroupId();
         var visibleCount = 0;
 
         document.querySelectorAll('[data-existing-record]').forEach(function (candidate) {
-            var groupId = candidate.getAttribute('data-group-id');
-            var hasMicrosoft = candidate.getAttribute('data-has-microsoft') === '1';
-            var visible = selectedCount > 0 && !!selectedGroups[groupId];
-
+            var visible = groupId !== '' && candidate.getAttribute('data-group-id') === groupId;
             candidate.classList.toggle('is-hidden', !visible);
 
             var input = candidate.querySelector('input[type="radio"]');
 
             if (input) {
-                input.disabled = !visible || hasMicrosoft;
+                input.disabled = !visible;
 
                 if (!visible && input.checked) {
                     input.checked = false;
@@ -1866,8 +1905,12 @@ $pageTitle = 'Complete your profile | ' . $appName;
             }
         });
 
-        if (existingRecordEmpty) {
-            existingRecordEmpty.classList.toggle('is-visible', selectedCount > 0 && visibleCount === 0);
+        var shouldShowClaimPanel = groupId !== '' && visibleCount > 0 && !dismissedGroups[groupId];
+
+        existingRecordPanel.classList.toggle('is-visible', shouldShowClaimPanel);
+
+        if (normalFlow) {
+            normalFlow.classList.toggle('is-hidden', shouldShowClaimPanel);
         }
     }
 
@@ -1944,12 +1987,33 @@ $pageTitle = 'Complete your profile | ' . $appName;
         });
     }
 
-    document.querySelectorAll('[data-group-toggle]').forEach(function (checkbox) {
-        checkbox.addEventListener('change', function () {
+    document.querySelectorAll('[data-group-toggle]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
             updateSectionVisibility();
             updateExistingRecordVisibility();
         });
     });
+
+    if (noneButton) {
+        noneButton.addEventListener('click', function () {
+            var groupId = selectedGroupId();
+
+            if (groupId !== '') {
+                dismissedGroups[groupId] = true;
+            }
+
+            document.querySelectorAll('input[name="existing_person_id"]').forEach(function (input) {
+                input.checked = false;
+            });
+
+            updateExistingRecordVisibility();
+
+            var roleSelect = document.getElementById('role_title');
+            if (roleSelect) {
+                roleSelect.focus();
+            }
+        });
+    }
 
     if (searchInput) {
         searchInput.addEventListener('input', updateSearch);
