@@ -52,6 +52,13 @@ $modules = [
         'status' => 'available',
         'image' => '/assets/img/explorer-campfire-2-jpg.jpg',
         'visible' => true,
+    ],[
+        'title' => 'My District Email / OneDrive',
+        'description' => 'As a volunteer with Irwell Valley District, you are eligible for a free Microsoft 365 account with upto 1TB of storage. Access your email, OneDrive and other Microsoft apps here.',
+        'url' => 'https://outlook.cloud.microsoft/',
+        'status' => 'available',
+        'image' => 'https://cdn-dynmedia-1.microsoft.com/is/image/microsoftcorp/527948-FeaturedNewsCard-416x178?resMode=sharp2&op_usm=1.5,0.65,15,0&wid=1000&hei=429&qlt=85&fit=constrain',
+        'visible' => true,
     ],
     [
         'title' => 'My profile',
@@ -101,14 +108,7 @@ $modules = [
         'image' => '/assets/img/db-20220915-00340-jpg.jpg',
         'visible' => $isDistrictAdmin,
     ],
-     [
-        'title' => 'My District Email / OneDrive',
-        'description' => 'As a volunteer with Irwell Valley District, you are eligible for a free Microsoft 365 account with upto 1TB of storage. Access your email, OneDrive and other Microsoft apps here.',
-        'url' => 'https://outlook.cloud.microsoft/',
-        'status' => 'soon',
-        'image' => 'https://cdn-dynmedia-1.microsoft.com/is/image/microsoftcorp/527948-FeaturedNewsCard-416x178?resMode=sharp2&op_usm=1.5,0.65,15,0&wid=1000&hei=429&qlt=85&fit=constrain',
-        'visible' => true,
-    ],
+     
 ];
 
 $modules = array_values(array_filter(
