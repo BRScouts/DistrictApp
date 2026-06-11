@@ -47,6 +47,8 @@ try {
 
     redirect(user_needs_group_onboarding() ? '/onboarding.php' : '/index.php');
 } catch (Throwable $e) {
+    error_log('Microsoft sign-in failed: ' . $e->getMessage());
+
     http_response_code(500);
     echo '<h1>Microsoft sign-in failed</h1>';
     echo '<p>We could not complete your sign in. Please try again or contact the District team.</p>';
