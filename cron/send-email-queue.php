@@ -158,7 +158,7 @@ function mailq_wrap_template(string $subject, string $bodyHtml): string
     if ($appUrl !== '') {
         $dashboardLink = '
             <p style="margin: 20px 0 0 0;">
-                <a href="' . mailq_escape($appUrl) . '" style="color: #4d0b93; font-weight: 800;">Open District Dashboard</a>
+                <a href="https://ckenterprises.co.uk" style="color: #4d0b93; font-weight: 800;">Proudly Supported by CK Enterprises UK</a>
             </p>';
     }
 
@@ -196,7 +196,7 @@ function mailq_wrap_template(string $subject, string $bodyHtml): string
                     <tr>
                         <td style="padding: 18px 24px; background: #f7f5fb; border-top: 1px solid #e6e6e6; font-size: 13px; line-height: 1.45; color: #555555;">
                             <strong>' . mailq_escape($footerText) . '</strong><br>
-                            This message was sent from the District Dashboard.
+                            This message was sent from the Irwell District Scouts website. Please do not reply to this email directly.
                         </td>
                     </tr>
                 </table>
