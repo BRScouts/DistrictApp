@@ -49,7 +49,7 @@ $modules = [
         'title' => 'District Calendar',
         'description' => 'Submit away-from-hut notifications, view Group activity and share risk assessments.',
         'url' => '/dc/',
-        'status' => 'available',
+        'status' => 'soon',
         'image' => '/assets/img/explorer-campfire-2-jpg.jpg',
         'visible' => true,
     ],[
@@ -58,14 +58,6 @@ $modules = [
         'url' => 'https://outlook.cloud.microsoft/',
         'status' => 'available',
         'image' => 'https://cdn-dynmedia-1.microsoft.com/is/image/microsoftcorp/527948-FeaturedNewsCard-416x178?resMode=sharp2&op_usm=1.5,0.65,15,0&wid=1000&hei=429&qlt=85&fit=constrain',
-        'visible' => true,
-    ],
-    [
-        'title' => 'My profile',
-        'description' => 'Update your details, directory visibility, role information and accreditations.',
-        'url' => '/profile.php',
-        'status' => 'available',
-        'image' => 'assets/img/cub-high-ropes-1-jpg.jpg',
         'visible' => true,
     ],
     [
