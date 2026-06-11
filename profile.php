@@ -18,7 +18,35 @@ $error = null;
 $success = null;
 $personId = (int) $user['id'];
 
-$roleOptions = portal_role_options();
+$roleOptions = array_values(array_filter(
+    portal_role_options(),
+    static function (string $role): bool {
+        $normalised = strtolower(trim($role));
+
+        if ($normalised === '') {
+            return false;
+        }
+
+        if ($normalised === 'other') {
+            return false;
+        }
+
+        if (str_contains($normalised, 'permit holder')) {
+            return false;
+        }
+
+        if (str_contains($normalised, 'nights away')) {
+            return false;
+        }
+
+        if (str_contains($normalised, 'skill instructor') || str_contains($normalised, 'skills instructor')) {
+            return false;
+        }
+
+        return true;
+    }
+));
+
 $accreditationOptions = portal_accreditation_options();
 $allowedAccreditations = portal_flatten_options($accreditationOptions);
 
@@ -62,7 +90,14 @@ function profile_membership_role_label(?string $role): string
 
 function profile_access_level_label(?string $accessLevel): string
 {
-    return ucwords(str_replace('_', ' ', (string) ($accessLevel ?: 'member')));
+    return match ((string) $accessLevel) {
+        'system_admin' => 'System Admin',
+        'district_admin' => 'District Admin',
+        'district_reviewer' => 'District Reviewer',
+        'group_admin' => 'Group Admin',
+        'member' => 'Member',
+        default => ucwords(str_replace('_', ' ', (string) ($accessLevel ?: 'member'))),
+    };
 }
 
 function profile_photo_url(array $user, array $profile): string
@@ -178,16 +213,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $sharePhone = isset($_POST['share_phone']) ? 1 : 0;
     $visibleInDirectory = isset($_POST['visible_in_directory']) ? 1 : 0;
 
-    $postedGroupIds = $_POST['group_ids'] ?? [];
-
-    if (!is_array($postedGroupIds)) {
-        $postedGroupIds = [];
-    }
-
-    $groupIds = array_values(array_unique(array_filter(
-        array_map('intval', $postedGroupIds),
-        static fn(int $id): bool => $id > 0
-    )));
+    $postedGroupId = (int) ($_POST['group_id'] ?? 0);
+    $groupIds = $postedGroupId > 0 ? [$postedGroupId] : [];
 
     $postedAccreditations = $_POST['accreditations'] ?? [];
 
@@ -210,6 +237,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Choose your main role.';
     } elseif (!$hasActiveGroup && !$groupIds) {
         $error = 'Choose your Group.';
+    } elseif (!$hasActiveGroup && $groupIds) {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*)
+            FROM groups
+            WHERE is_active = 1
+              AND id = :group_id
+        ");
+        $stmt->execute(['group_id' => $postedGroupId]);
+
+        if ((int) $stmt->fetchColumn() !== 1) {
+            $error = 'Choose a valid active Group.';
+        }
     }
 
     if (!$error) {
@@ -359,16 +398,10 @@ $formRoleTitle = trim((string) ($_POST['role_title'] ?? ($profile['role_title'] 
 $formAboutMe = trim((string) ($_POST['about_me'] ?? ($profile['about_me'] ?? '')));
 
 if ($hasActiveGroup) {
-    $formGroupIds = $existingGroupIds;
+    $formGroupId = (int) ($existingGroupIds[0] ?? 0);
 } else {
-    $formGroupIds = $_POST['group_ids'] ?? $existingGroupIds;
+    $formGroupId = (int) ($_POST['group_id'] ?? ($existingGroupIds[0] ?? 0));
 }
-
-if (!is_array($formGroupIds)) {
-    $formGroupIds = [];
-}
-
-$formGroupIds = array_map('intval', $formGroupIds);
 
 $formAccreditations = $_POST['accreditations'] ?? portal_decode_json_list($profile['accreditations_json'] ?? null);
 
@@ -393,7 +426,7 @@ $microsoftProfileUrl = 'https://myaccount.microsoft.com/';
 
 $pageTitle = 'Profile | ' . $appName;
 $heroTitle = 'My profile';
-$heroText = 'Keep your directory details and accreditations up to date.';
+$heroText = 'Keep your contact details, directory preferences and accreditations up to date.';
 $breadcrumb = '<a href="/index.php">Home</a> / Profile';
 ?>
 <?php include __DIR__ . '/header.php'; ?>
@@ -406,31 +439,46 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
 
     @media (min-width: 992px) {
         .profile-layout {
-            grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+            grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
             align-items: start;
         }
     }
 
+    .profile-side-card,
+    .profile-panel,
+    .profile-group-card,
+    .profile-pill,
+    .profile-selected-summary,
+    .profile-selected-tag,
+    .profile-accreditation-category {
+        border-radius: 0;
+    }
+
     .profile-side-card {
         background: #ffffff;
-        border: 1px solid #e6e6e6;
-        border-radius: .75rem;
+        border: 2px solid #e6e6e6;
         padding: 1.25rem;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, .05);
+        box-shadow: none;
+    }
+
+    @media (min-width: 992px) {
+        .profile-side-card {
+            position: sticky;
+            top: 1rem;
+        }
     }
 
     .profile-photo-link {
         position: relative;
         display: block;
-        width: 132px;
-        height: 132px;
+        width: 124px;
+        height: 124px;
         margin: 0 auto 1rem;
-        border-radius: 999px;
         overflow: hidden;
         background: #7413dc;
         color: #ffffff;
         text-decoration: none;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, .12);
+        box-shadow: none;
     }
 
     .profile-photo-link:hover,
@@ -481,7 +529,7 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
     .profile-side-card h2 {
         margin: 0;
         color: #4d0b93;
-        font-size: 1.45rem;
+        font-size: 1.35rem;
         font-weight: 900;
         text-align: center;
         line-height: 1.15;
@@ -495,9 +543,28 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
         overflow-wrap: anywhere;
     }
 
+    .profile-summary-list {
+        display: grid;
+        gap: .5rem;
+        margin-top: 1rem;
+    }
+
+    .profile-summary-item {
+        background: #f7f5fb;
+        border-left: 6px solid #7413dc;
+        padding: .75rem;
+    }
+
+    .profile-summary-item strong {
+        display: block;
+        color: #4d0b93;
+        font-weight: 900;
+        margin-bottom: .15rem;
+    }
+
     .profile-photo-note {
         background: #f7f5fb;
-        border-left: 5px solid #7413dc;
+        border-left: 6px solid #7413dc;
         padding: .9rem;
         margin-top: 1rem;
         font-weight: 700;
@@ -510,10 +577,9 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
 
     .profile-panel {
         background: #ffffff;
-        border: 1px solid #e6e6e6;
-        border-radius: .75rem;
+        border: 2px solid #e6e6e6;
         padding: 1.25rem;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, .05);
+        box-shadow: none;
     }
 
     .profile-panel h2 {
@@ -529,6 +595,14 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
         font-weight: 700;
     }
 
+    .profile-panel-warning {
+        background: #fff8d6;
+        border-left: 8px solid #ffdd00;
+        padding: .9rem;
+        margin-top: 1rem;
+        font-weight: 800;
+    }
+
     .profile-group-list {
         display: grid;
         gap: .75rem;
@@ -536,9 +610,8 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
 
     .profile-group-card {
         background: #f7f5fb;
-        border: 1px solid #e6e6e6;
-        border-left: 5px solid #7413dc;
-        border-radius: .5rem;
+        border: 2px solid #e6e6e6;
+        border-left: 8px solid #7413dc;
         padding: .85rem;
     }
 
@@ -558,21 +631,12 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
 
     .profile-pill {
         display: inline-flex;
-        border-radius: 999px;
         background: #ffffff;
         color: #333;
         padding: .25rem .55rem;
         font-size: .82rem;
         font-weight: 900;
-        border: 1px solid #e0e0e0;
-    }
-
-    .profile-warning {
-        background: #fff8d6;
-        border-left: 5px solid #ffdd00;
-        padding: .9rem;
-        margin-top: 1rem;
-        font-weight: 700;
+        border: 2px solid #e0e0e0;
     }
 
     .profile-check-grid {
@@ -601,8 +665,7 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
 
     .profile-selected-summary {
         background: #f7f5fb;
-        border: 1px solid #e6e6e6;
-        border-radius: .5rem;
+        border: 2px solid #e6e6e6;
         padding: .75rem;
         margin-bottom: 1rem;
     }
@@ -623,9 +686,8 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
     .profile-selected-tag {
         display: inline-flex;
         align-items: center;
-        border-radius: 999px;
         background: #ffffff;
-        border: 1px solid #d8d8d8;
+        border: 2px solid #d8d8d8;
         color: #333;
         padding: .25rem .55rem;
         font-size: .82rem;
@@ -633,8 +695,7 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
     }
 
     .profile-accreditation-category {
-        border: 1px solid #e6e6e6;
-        border-radius: .5rem;
+        border: 2px solid #e6e6e6;
         margin-bottom: .75rem;
         background: #ffffff;
         overflow: hidden;
@@ -734,6 +795,23 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
             <h2><?= e($displayName) ?></h2>
             <p class="profile-email"><?= e($user['email'] ?? $profile['primary_email'] ?? '') ?></p>
 
+            <div class="profile-summary-list">
+                <div class="profile-summary-item">
+                    <strong>Directory status</strong>
+                    <?= $formVisible === 1 ? 'Visible in Directory' : 'Hidden from Directory' ?>
+                </div>
+
+                <div class="profile-summary-item">
+                    <strong>Phone sharing</strong>
+                    <?= $formSharePhone === 1 ? 'Phone number shared' : 'Phone number hidden' ?>
+                </div>
+
+                <div class="profile-summary-item">
+                    <strong>Accreditations</strong>
+                    <?= count($formAccreditations) ?> selected
+                </div>
+            </div>
+
             <div class="profile-photo-note">
                 Profile photos are managed through Microsoft 365.
                 Changes can take up to 24 hours to appear fully across Microsoft services and this dashboard.
@@ -743,7 +821,10 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
         <section class="profile-main">
             <form method="post">
                 <section class="profile-panel">
-                    <h2>Account details</h2>
+                    <h2>Contact details</h2>
+                    <p class="profile-panel-intro">
+                        These details are used for the District Directory and contact lists.
+                    </p>
 
                     <div class="form-group">
                         <label for="full_name">Name</label>
@@ -766,6 +847,9 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
                             value="<?= e($user['email'] ?? $profile['primary_email'] ?? '') ?>"
                             disabled
                         >
+                        <small class="form-text text-muted">
+                            This comes from your Microsoft sign-in and cannot be changed here.
+                        </small>
                     </div>
 
                     <div class="form-group mb-0">
@@ -785,7 +869,7 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
 
                     <?php if ($hasActiveGroup): ?>
                         <p class="profile-panel-intro">
-                            Your Group access is managed by your Group Lead Volunteer or a District Admin.
+                            Your Group membership is shown here for reference. Group access is managed by your Group Lead Volunteer or a District Admin.
                         </p>
 
                         <div class="profile-group-list">
@@ -807,13 +891,13 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
                             <?php endforeach; ?>
                         </div>
 
-                        <div class="profile-warning">
+                        <div class="profile-panel-warning">
                             If your Group, role or access level is wrong, contact your Group Lead Volunteer.
                             You cannot change existing Group membership from this page.
                         </div>
                     <?php else: ?>
                         <p class="profile-panel-intro">
-                            Choose your Group to complete your setup. Once set, this can only be changed by your Group Lead Volunteer.
+                            Choose your main Group to complete your setup. Once saved, Group access must be changed by your Group Lead Volunteer.
                         </p>
 
                         <div class="profile-check-grid">
@@ -821,10 +905,11 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
                                 <?php $groupId = (int) $group['id']; ?>
                                 <label class="lt-check">
                                     <input
-                                        type="checkbox"
-                                        name="group_ids[]"
+                                        type="radio"
+                                        name="group_id"
                                         value="<?= $groupId ?>"
-                                        <?= in_array($groupId, $formGroupIds, true) ? 'checked' : '' ?>
+                                        <?= $groupId === $formGroupId ? 'checked' : '' ?>
+                                        required
                                     >
                                     <span><?= e($group['group_name']) ?></span>
                                 </label>
@@ -834,7 +919,10 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
                 </section>
 
                 <section class="profile-panel">
-                    <h2>Directory</h2>
+                    <h2>Directory details</h2>
+                    <p class="profile-panel-intro">
+                        This controls how you appear in the District Directory. It does not change your app permissions.
+                    </p>
 
                     <div class="form-group">
                         <label for="role_title">Main role</label>
@@ -846,38 +934,29 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <small class="form-text text-muted">
-                            This is your directory role label. It does not grant app permissions.
-                        </small>
                     </div>
 
-                    <div class="form-group form-check">
+                    <label class="lt-check mb-2">
                         <input
                             type="checkbox"
-                            class="form-check-input"
                             id="visible_in_directory"
                             name="visible_in_directory"
                             value="1"
                             <?= $formVisible === 1 ? 'checked' : '' ?>
                         >
-                        <label class="form-check-label" for="visible_in_directory">
-                            Show me in the District Directory
-                        </label>
-                    </div>
+                        <span>Show me in the District Directory</span>
+                    </label>
 
-                    <div class="form-group form-check">
+                    <label class="lt-check mb-3">
                         <input
                             type="checkbox"
-                            class="form-check-input"
                             id="share_phone"
                             name="share_phone"
                             value="1"
                             <?= $formSharePhone === 1 ? 'checked' : '' ?>
                         >
-                        <label class="form-check-label" for="share_phone">
-                            Share my contact number
-                        </label>
-                    </div>
+                        <span>Share my contact number in the Directory</span>
+                    </label>
 
                     <div class="form-group mb-0">
                         <label for="about_me">About me</label>
@@ -893,7 +972,7 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
                 <section class="profile-panel">
                     <h2>Permits and accreditations</h2>
                     <p class="profile-panel-intro">
-                        Search or open a category to select the permits, skills and accreditations you want shown in the Directory.
+                        Select the permits, skills and accreditations you want shown in the Directory.
                     </p>
 
                     <div class="profile-accreditation-toolbar">
@@ -923,24 +1002,21 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
                         <div class="profile-selected-tags" id="selected_accreditation_tags">
                             <?php if ($formAccreditations): ?>
                                 <?php foreach ($formAccreditations as $item): ?>
-                                    <span class="profile-selected-tag" data-selected-tag="<?= e(strtolower($item)) ?>">
-                                        <?= e($item) ?>
-                                    </span>
+                                    <span class="profile-selected-tag"><?= e($item) ?></span>
                                 <?php endforeach; ?>
                             <?php else: ?>
-                                <span class="profile-selected-tag" data-empty-selected>No accreditations selected</span>
+                                <span class="profile-selected-tag">No accreditations selected</span>
                             <?php endif; ?>
                         </div>
                     </div>
 
                     <?php foreach ($accreditationOptions as $category => $items): ?>
-                        <?php
-                        $selectedInCategory = count(array_intersect($items, $formAccreditations));
-                        ?>
+                        <?php $selectedInCategory = count(array_intersect($items, $formAccreditations)); ?>
+
                         <details class="profile-accreditation-category" <?= $selectedInCategory > 0 ? 'open' : '' ?>>
                             <summary>
                                 <?= e($category) ?>
-                                <span class="profile-category-count">
+                                <span>
                                     (<span data-category-count="<?= e($category) ?>"><?= (int) $selectedInCategory ?></span> selected)
                                 </span>
                             </summary>
@@ -953,7 +1029,6 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
                                         <label
                                             class="lt-check profile-accreditation-item"
                                             data-accreditation-item="<?= e(strtolower($item . ' ' . $category)) ?>"
-                                            data-accreditation-name="<?= e($item) ?>"
                                             data-accreditation-category="<?= e($category) ?>"
                                         >
                                             <input
@@ -978,7 +1053,7 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
                         </button>
 
                         <span class="text-muted font-weight-bold">
-                            Changes to Group access must be made by your Lead Volunteer.
+                            Group access changes must be made by your Lead Volunteer.
                         </span>
                     </div>
                 </section>

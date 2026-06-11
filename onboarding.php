@@ -1708,17 +1708,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
                         <h2>Directory details</h2>
 
                         <div class="form-group form-check">
-                            <input
-                                type="checkbox"
-                                class="form-check-input"
-                                id="visible_in_directory"
-                                name="visible_in_directory"
-                                value="1"
-                                <?= $formVisible === 1 ? 'checked' : '' ?>
-                            >
-                            <label class="form-check-label" for="visible_in_directory">
-                                Show me in the District Directory
-                            </label>
+                            
                         </div>
 
                         <div class="form-group form-check">
