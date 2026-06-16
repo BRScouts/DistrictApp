@@ -17,7 +17,8 @@ $heroTitle = 'Leader Tool';
 $heroText = 'Open District tools, update your profile and manage the tasks connected to your Group.';
 $breadcrumb = '<a href="/index.php">Home</a>';
 
-$memberships = user_group_memberships((int) $user['id']);
+$personId = (int) $user['id'];
+$memberships = user_group_memberships($personId);
 
 function home_membership_role_label(string $role): string
 {
@@ -44,6 +45,274 @@ function home_access_level_label(string $accessLevel): string
         default => 'Member',
     };
 }
+
+function home_table_exists(string $table): bool
+{
+    static $cache = [];
+
+    if (array_key_exists($table, $cache)) {
+        return $cache[$table];
+    }
+
+    try {
+        $stmt = db()->prepare("
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = :table_name
+        ");
+        $stmt->execute(['table_name' => $table]);
+
+        return $cache[$table] = ((int) $stmt->fetchColumn()) > 0;
+    } catch (Throwable $e) {
+        return $cache[$table] = false;
+    }
+}
+
+function home_normalise_shared_mailbox_email(string $email): string
+{
+    return strtolower(trim($email));
+}
+
+function home_valid_shared_mailbox_email(string $email): bool
+{
+    return $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+}
+
+function home_fetch_shared_mailboxes(int $personId): array
+{
+    if (!home_table_exists('user_shared_mailboxes')) {
+        return [];
+    }
+
+    try {
+        $stmt = db()->prepare("
+            SELECT
+                id,
+                person_id,
+                mailbox_email,
+                display_name,
+                is_favourite,
+                open_count,
+                last_opened_at,
+                created_at,
+                updated_at
+            FROM user_shared_mailboxes
+            WHERE person_id = :person_id
+              AND is_favourite = 1
+            ORDER BY
+                COALESCE(last_opened_at, updated_at, created_at) DESC,
+                mailbox_email ASC
+            LIMIT 20
+        ");
+        $stmt->execute(['person_id' => $personId]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+function home_save_shared_mailbox(int $personId, string $email): array
+{
+    if (!home_table_exists('user_shared_mailboxes')) {
+        throw new RuntimeException('Shared mailbox favourites table has not been created yet.');
+    }
+
+    $email = home_normalise_shared_mailbox_email($email);
+
+    if (!home_valid_shared_mailbox_email($email)) {
+        throw new RuntimeException('Enter a valid shared mailbox email address.');
+    }
+
+    $stmt = db()->prepare("
+        INSERT INTO user_shared_mailboxes (
+            person_id,
+            mailbox_email,
+            display_name,
+            is_favourite,
+            open_count,
+            last_opened_at,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            :person_id,
+            :mailbox_email,
+            :display_name,
+            1,
+            1,
+            NOW(),
+            NOW(),
+            NOW()
+        )
+        ON DUPLICATE KEY UPDATE
+            display_name = VALUES(display_name),
+            is_favourite = 1,
+            open_count = open_count + 1,
+            last_opened_at = NOW(),
+            updated_at = NOW()
+    ");
+    $stmt->execute([
+        'person_id' => $personId,
+        'mailbox_email' => $email,
+        'display_name' => $email,
+    ]);
+
+    $stmt = db()->prepare("
+        SELECT
+            id,
+            person_id,
+            mailbox_email,
+            display_name,
+            is_favourite,
+            open_count,
+            last_opened_at,
+            created_at,
+            updated_at
+        FROM user_shared_mailboxes
+        WHERE person_id = :person_id
+          AND mailbox_email = :mailbox_email
+        LIMIT 1
+    ");
+    $stmt->execute([
+        'person_id' => $personId,
+        'mailbox_email' => $email,
+    ]);
+
+    $mailbox = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$mailbox) {
+        throw new RuntimeException('Shared mailbox could not be saved.');
+    }
+
+    return $mailbox;
+}
+
+function home_touch_shared_mailbox(int $personId, int $mailboxId): array
+{
+    if (!home_table_exists('user_shared_mailboxes')) {
+        throw new RuntimeException('Shared mailbox favourites table has not been created yet.');
+    }
+
+    $stmt = db()->prepare("
+        UPDATE user_shared_mailboxes
+        SET open_count = open_count + 1,
+            last_opened_at = NOW(),
+            updated_at = NOW()
+        WHERE id = :id
+          AND person_id = :person_id
+          AND is_favourite = 1
+        LIMIT 1
+    ");
+    $stmt->execute([
+        'id' => $mailboxId,
+        'person_id' => $personId,
+    ]);
+
+    $stmt = db()->prepare("
+        SELECT
+            id,
+            person_id,
+            mailbox_email,
+            display_name,
+            is_favourite,
+            open_count,
+            last_opened_at,
+            created_at,
+            updated_at
+        FROM user_shared_mailboxes
+        WHERE id = :id
+          AND person_id = :person_id
+          AND is_favourite = 1
+        LIMIT 1
+    ");
+    $stmt->execute([
+        'id' => $mailboxId,
+        'person_id' => $personId,
+    ]);
+
+    $mailbox = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$mailbox) {
+        throw new RuntimeException('Shared mailbox could not be found.');
+    }
+
+    return $mailbox;
+}
+
+function home_remove_shared_mailbox(int $personId, int $mailboxId): void
+{
+    if (!home_table_exists('user_shared_mailboxes')) {
+        throw new RuntimeException('Shared mailbox favourites table has not been created yet.');
+    }
+
+    $stmt = db()->prepare("
+        UPDATE user_shared_mailboxes
+        SET is_favourite = 0,
+            updated_at = NOW()
+        WHERE id = :id
+          AND person_id = :person_id
+        LIMIT 1
+    ");
+    $stmt->execute([
+        'id' => $mailboxId,
+        'person_id' => $personId,
+    ]);
+}
+
+function home_shared_mailbox_json_response(array $payload): void
+{
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['shared_mailbox_action'])) {
+    $action = (string) ($_POST['shared_mailbox_action'] ?? '');
+
+    try {
+        if ($action === 'save') {
+            $mailbox = home_save_shared_mailbox($personId, (string) ($_POST['mailbox_email'] ?? ''));
+
+            home_shared_mailbox_json_response([
+                'ok' => true,
+                'mailbox' => $mailbox,
+                'mailboxes' => home_fetch_shared_mailboxes($personId),
+            ]);
+        }
+
+        if ($action === 'touch') {
+            $mailbox = home_touch_shared_mailbox($personId, (int) ($_POST['mailbox_id'] ?? 0));
+
+            home_shared_mailbox_json_response([
+                'ok' => true,
+                'mailbox' => $mailbox,
+                'mailboxes' => home_fetch_shared_mailboxes($personId),
+            ]);
+        }
+
+        if ($action === 'remove') {
+            home_remove_shared_mailbox($personId, (int) ($_POST['mailbox_id'] ?? 0));
+
+            home_shared_mailbox_json_response([
+                'ok' => true,
+                'mailboxes' => home_fetch_shared_mailboxes($personId),
+            ]);
+        }
+
+        throw new RuntimeException('Unknown shared mailbox action.');
+    } catch (Throwable $e) {
+        home_shared_mailbox_json_response([
+            'ok' => false,
+            'message' => $e->getMessage() ?: 'Shared mailbox action failed.',
+            'mailboxes' => home_fetch_shared_mailboxes($personId),
+        ]);
+    }
+}
+
+$sharedMailboxTableReady = home_table_exists('user_shared_mailboxes');
+$sharedMailboxes = home_fetch_shared_mailboxes($personId);
 
 $accessLevels = [(string) ($user['highest_access_level'] ?? $user['role'] ?? 'member')];
 $membershipRoles = [];
@@ -133,6 +402,17 @@ $modules = [
         'visible' => true,
     ],
     [
+        'title' => 'Open shared mailbox',
+        'description' => $sharedMailboxes
+            ? 'Open a recently opened shared mailbox or add another mailbox.'
+            : 'Open a shared Outlook mailbox and save it for next time.',
+        'url' => '#',
+        'status' => 'available',
+        'image' => '/assets/img/db-20220915-00340-jpg.jpg',
+        'visible' => true,
+        'type' => 'shared_mailbox',
+    ],
+    [
         'title' => 'District Directory',
         'description' => 'Find leaders and volunteers by name, Group, role, section or accreditation.',
         'url' => '/directory.php',
@@ -178,6 +458,8 @@ $modules = array_values(array_filter(
     $modules,
     static fn(array $module): bool => (bool) ($module['visible'] ?? false)
 ));
+
+$sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]';
 ?>
 <?php include __DIR__ . '/header.php'; ?>
 
@@ -380,9 +662,170 @@ $modules = array_values(array_filter(
         padding: .75rem;
     }
 
+    .lt-card-button {
+        display: block;
+        width: 100%;
+        border: 0;
+        padding: 0;
+        background: transparent;
+        text-align: left;
+        color: inherit;
+        cursor: pointer;
+    }
+
+    .lt-card-button:hover,
+    .lt-card-button:focus {
+        color: inherit;
+    }
+
+    .lt-card-button:focus {
+        outline: 4px solid #ffdd00;
+        outline-offset: 4px;
+    }
+
+    .lt-shared-mailbox-modal[hidden] {
+        display: none;
+    }
+
+    .lt-shared-mailbox-modal {
+        position: fixed;
+        z-index: 3000;
+        inset: 0;
+    }
+
+    .lt-shared-mailbox-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, .58);
+    }
+
+    .lt-shared-mailbox-dialog {
+        position: relative;
+        width: min(720px, calc(100% - 1rem));
+        max-height: calc(100vh - 2rem);
+        overflow: auto;
+        margin: 1rem auto;
+        background: #ffffff;
+        border: 4px solid var(--iv-purple);
+        box-shadow: none;
+    }
+
+    @media (min-width: 768px) {
+        .lt-shared-mailbox-dialog {
+            margin-top: 4rem;
+        }
+    }
+
+    .lt-shared-mailbox-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem;
+        background: #f7f5fb;
+        border-bottom: 2px solid #e6e6e6;
+    }
+
+    .lt-shared-mailbox-header h2 {
+        margin: 0;
+        color: var(--iv-purple);
+        font-size: 1.45rem;
+        font-weight: 900;
+        line-height: 1.15;
+    }
+
+    .lt-shared-mailbox-close {
+        border: 2px solid #1d1d1b;
+        background: #ffffff;
+        color: #1d1d1b;
+        font-weight: 900;
+        padding: .35rem .6rem;
+        cursor: pointer;
+    }
+
+    .lt-shared-mailbox-body {
+        padding: 1rem;
+    }
+
+    .lt-shared-mailbox-list {
+        display: grid;
+        gap: .6rem;
+        margin-bottom: 1rem;
+    }
+
+    .lt-shared-mailbox-item {
+        display: grid;
+        gap: .6rem;
+        background: #ffffff;
+        border: 2px solid #e6e6e6;
+        border-left: 8px solid var(--iv-purple);
+        padding: .75rem;
+    }
+
+    @media (min-width: 700px) {
+        .lt-shared-mailbox-item {
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+        }
+    }
+
+    .lt-shared-mailbox-email {
+        display: block;
+        color: #1d1d1b;
+        font-weight: 900;
+        overflow-wrap: anywhere;
+    }
+
+    .lt-shared-mailbox-meta {
+        display: block;
+        color: #555;
+        font-size: .9rem;
+        font-weight: 700;
+        margin-top: .15rem;
+    }
+
+    .lt-shared-mailbox-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
+    }
+
+    .lt-shared-mailbox-form {
+        background: #f7f5fb;
+        border: 2px solid #e6e6e6;
+        padding: 1rem;
+    }
+
+    .lt-shared-mailbox-status {
+        display: none;
+        margin-bottom: 1rem;
+        padding: .75rem;
+        border: 2px solid #e6e6e6;
+        font-weight: 800;
+    }
+
+    .lt-shared-mailbox-status.is-visible {
+        display: block;
+    }
+
+    .lt-shared-mailbox-status.is-error {
+        border-left: 8px solid #d4351c;
+        background: #fff4f4;
+    }
+
+    .lt-shared-mailbox-status.is-success {
+        border-left: 8px solid #00703c;
+        background: #f3fff7;
+    }
+
     @media (max-width: 575.98px) {
         .lt-task-card-image {
             height: 115px;
+        }
+
+        .lt-shared-mailbox-actions .btn,
+        .lt-shared-mailbox-form .btn {
+            width: 100%;
         }
     }
 </style>
@@ -445,10 +888,15 @@ $modules = array_values(array_filter(
         <h2 id="tasks-heading" class="lt-section-title">Things you can do</h2>
         <div class="row">
             <?php foreach ($modules as $module): ?>
+                <?php $isSharedMailboxTile = (($module['type'] ?? '') === 'shared_mailbox'); ?>
+
                 <div class="col-md-6 col-xl-3 mb-4">
-                    <?php if ($module['status'] === 'available'): ?>
+                    <?php if ($isSharedMailboxTile): ?>
+                        <button type="button" class="lt-card-button" id="open-shared-mailbox-tile">
+                    <?php elseif ($module['status'] === 'available'): ?>
                         <a href="<?= e($module['url']) ?>" class="lt-card-link">
                     <?php endif; ?>
+
                         <article class="lt-task-card">
                             <div class="lt-task-card-image">
                                 <img
@@ -468,9 +916,18 @@ $modules = array_values(array_filter(
 
                             <h3><?= e($module['title']) ?></h3>
                             <p><?= e($module['description']) ?></p>
-                            <span class="lt-action-link"><?= $module['status'] === 'available' ? 'Open' : 'Not available yet' ?></span>
+                            <span class="lt-action-link">
+                                <?php if ($isSharedMailboxTile): ?>
+                                    Open
+                                <?php else: ?>
+                                    <?= $module['status'] === 'available' ? 'Open' : 'Not available yet' ?>
+                                <?php endif; ?>
+                            </span>
                         </article>
-                    <?php if ($module['status'] === 'available'): ?>
+
+                    <?php if ($isSharedMailboxTile): ?>
+                        </button>
+                    <?php elseif ($module['status'] === 'available'): ?>
                         </a>
                     <?php endif; ?>
                 </div>
@@ -498,5 +955,328 @@ $modules = array_values(array_filter(
         </div>
     </section>
 </main>
+
+<div
+    class="lt-shared-mailbox-modal"
+    id="shared-mailbox-modal"
+    hidden
+    aria-hidden="true"
+>
+    <div class="lt-shared-mailbox-backdrop" data-shared-mailbox-close></div>
+
+    <div
+        class="lt-shared-mailbox-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="shared-mailbox-title"
+    >
+        <div class="lt-shared-mailbox-header">
+            <h2 id="shared-mailbox-title">
+                <?= $sharedMailboxes ? 'Open a recently opened shared mailbox' : 'Open shared mailbox' ?>
+            </h2>
+
+            <button type="button" class="lt-shared-mailbox-close" data-shared-mailbox-close>
+                Close
+            </button>
+        </div>
+
+        <div class="lt-shared-mailbox-body">
+            <div
+                class="lt-shared-mailbox-status"
+                id="shared-mailbox-status"
+                role="status"
+                aria-live="polite"
+            ></div>
+
+            <?php if (!$sharedMailboxTableReady): ?>
+                <div class="lt-shared-mailbox-status is-visible is-error">
+                    The shared mailbox favourites table has not been created yet. Run the SQL below first.
+                </div>
+            <?php endif; ?>
+
+            <div id="shared-mailbox-list-wrap">
+                <div class="lt-shared-mailbox-list" id="shared-mailbox-list"></div>
+            </div>
+
+            <form class="lt-shared-mailbox-form" id="shared-mailbox-form">
+                <div class="form-group">
+                    <label for="shared-mailbox-email">Shared mailbox email</label>
+                    <input
+                        type="email"
+                        class="form-control"
+                        id="shared-mailbox-email"
+                        name="mailbox_email"
+                        placeholder="example@irwellvalleyscouts.org.uk"
+                        autocomplete="email"
+                        required
+                        <?= $sharedMailboxTableReady ? '' : 'disabled' ?>
+                    >
+                </div>
+
+                <button type="submit" class="btn btn-primary lt-btn" <?= $sharedMailboxTableReady ? '' : 'disabled' ?>>
+                    Save and open
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var sharedMailboxTableReady = <?= $sharedMailboxTableReady ? 'true' : 'false' ?>;
+    var sharedMailboxes = <?= $sharedMailboxesJson ?>;
+
+    var tile = document.getElementById('open-shared-mailbox-tile');
+    var modal = document.getElementById('shared-mailbox-modal');
+    var modalTitle = document.getElementById('shared-mailbox-title');
+    var statusBox = document.getElementById('shared-mailbox-status');
+    var list = document.getElementById('shared-mailbox-list');
+    var form = document.getElementById('shared-mailbox-form');
+    var emailInput = document.getElementById('shared-mailbox-email');
+
+    function outlookSharedMailboxUrl(email) {
+        return 'https://outlook.office.com/mail/' + encodeURIComponent(String(email || '').trim());
+    }
+
+    function setStatus(message, type) {
+        if (!statusBox) {
+            return;
+        }
+
+        statusBox.textContent = message || '';
+        statusBox.classList.remove('is-error', 'is-success', 'is-visible');
+
+        if (message) {
+            statusBox.classList.add('is-visible');
+            statusBox.classList.add(type === 'error' ? 'is-error' : 'is-success');
+        }
+    }
+
+    function postSharedMailboxAction(action, data) {
+        var body = new FormData();
+        body.append('shared_mailbox_action', action);
+
+        Object.keys(data || {}).forEach(function (key) {
+            body.append(key, data[key]);
+        });
+
+        return fetch('/index.php', {
+            method: 'POST',
+            body: body,
+            credentials: 'same-origin',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        }).then(function (response) {
+            return response.json();
+        });
+    }
+
+    function openSharedMailbox(email) {
+        var url = outlookSharedMailboxUrl(email);
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    function mailboxLastOpenedText(mailbox) {
+        if (!mailbox.last_opened_at) {
+            return 'Saved mailbox';
+        }
+
+        return 'Last opened ' + mailbox.last_opened_at;
+    }
+
+    function renderMailboxes() {
+        if (!list) {
+            return;
+        }
+
+        list.innerHTML = '';
+
+        if (modalTitle) {
+            modalTitle.textContent = sharedMailboxes.length > 0
+                ? 'Open a recently opened shared mailbox'
+                : 'Open shared mailbox';
+        }
+
+        if (sharedMailboxes.length === 0) {
+            var empty = document.createElement('div');
+            empty.className = 'lt-shared-mailbox-item';
+
+            var emptyText = document.createElement('div');
+            emptyText.innerHTML = '<span class="lt-shared-mailbox-email">No saved shared mailboxes yet</span><span class="lt-shared-mailbox-meta">Enter the shared mailbox email below.</span>';
+
+            empty.appendChild(emptyText);
+            list.appendChild(empty);
+            return;
+        }
+
+        sharedMailboxes.forEach(function (mailbox) {
+            var row = document.createElement('div');
+            row.className = 'lt-shared-mailbox-item';
+
+            var textWrap = document.createElement('div');
+
+            var email = document.createElement('span');
+            email.className = 'lt-shared-mailbox-email';
+            email.textContent = mailbox.mailbox_email;
+
+            var meta = document.createElement('span');
+            meta.className = 'lt-shared-mailbox-meta';
+            meta.textContent = mailboxLastOpenedText(mailbox);
+
+            textWrap.appendChild(email);
+            textWrap.appendChild(meta);
+
+            var actions = document.createElement('div');
+            actions.className = 'lt-shared-mailbox-actions';
+
+            var openButton = document.createElement('button');
+            openButton.type = 'button';
+            openButton.className = 'btn btn-primary lt-btn';
+            openButton.textContent = 'Open';
+            openButton.addEventListener('click', function () {
+                openSharedMailbox(mailbox.mailbox_email);
+
+                postSharedMailboxAction('touch', {
+                    mailbox_id: mailbox.id
+                }).then(function (payload) {
+                    if (payload && payload.ok && Array.isArray(payload.mailboxes)) {
+                        sharedMailboxes = payload.mailboxes;
+                        renderMailboxes();
+                    }
+                }).catch(function () {
+                    // Do not block mailbox opening if the recent list cannot update.
+                });
+            });
+
+            var removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'btn lt-btn lt-btn-secondary';
+            removeButton.textContent = 'Remove';
+            removeButton.addEventListener('click', function () {
+                postSharedMailboxAction('remove', {
+                    mailbox_id: mailbox.id
+                }).then(function (payload) {
+                    if (!payload || !payload.ok) {
+                        setStatus(payload && payload.message ? payload.message : 'Could not remove mailbox.', 'error');
+                        return;
+                    }
+
+                    sharedMailboxes = Array.isArray(payload.mailboxes) ? payload.mailboxes : [];
+                    setStatus('Shared mailbox removed.', 'success');
+                    renderMailboxes();
+                }).catch(function () {
+                    setStatus('Could not remove mailbox.', 'error');
+                });
+            });
+
+            actions.appendChild(openButton);
+            actions.appendChild(removeButton);
+
+            row.appendChild(textWrap);
+            row.appendChild(actions);
+            list.appendChild(row);
+        });
+    }
+
+    function openModal() {
+        if (!modal) {
+            return;
+        }
+
+        modal.hidden = false;
+        modal.setAttribute('aria-hidden', 'false');
+        setStatus('', 'success');
+        renderMailboxes();
+
+        window.setTimeout(function () {
+            if (sharedMailboxes.length === 0 && emailInput) {
+                emailInput.focus();
+            } else {
+                var firstOpenButton = modal.querySelector('.lt-shared-mailbox-actions .btn-primary');
+                if (firstOpenButton) {
+                    firstOpenButton.focus();
+                }
+            }
+        }, 50);
+    }
+
+    function closeModal() {
+        if (!modal) {
+            return;
+        }
+
+        modal.hidden = true;
+        modal.setAttribute('aria-hidden', 'true');
+
+        if (tile) {
+            tile.focus();
+        }
+    }
+
+    if (tile) {
+        tile.addEventListener('click', function () {
+            openModal();
+        });
+    }
+
+    document.querySelectorAll('[data-shared-mailbox-close]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            closeModal();
+        });
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && modal && !modal.hidden) {
+            closeModal();
+        }
+    });
+
+    if (form) {
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            if (!sharedMailboxTableReady) {
+                setStatus('Run the shared mailbox SQL table first.', 'error');
+                return;
+            }
+
+            var email = emailInput ? emailInput.value.trim().toLowerCase() : '';
+
+            if (!email) {
+                setStatus('Enter the shared mailbox email address.', 'error');
+                return;
+            }
+
+            postSharedMailboxAction('save', {
+                mailbox_email: email
+            }).then(function (payload) {
+                if (!payload || !payload.ok) {
+                    setStatus(payload && payload.message ? payload.message : 'Could not save shared mailbox.', 'error');
+                    return;
+                }
+
+                sharedMailboxes = Array.isArray(payload.mailboxes) ? payload.mailboxes : [];
+
+                if (emailInput) {
+                    emailInput.value = '';
+                }
+
+                setStatus('Shared mailbox saved.', 'success');
+                renderMailboxes();
+
+                if (payload.mailbox && payload.mailbox.mailbox_email) {
+                    openSharedMailbox(payload.mailbox.mailbox_email);
+                }
+            }).catch(function () {
+                setStatus('Could not save shared mailbox.', 'error');
+            });
+        });
+    }
+
+    renderMailboxes();
+}());
+</script>
 
 <?php include __DIR__ . '/footer.php'; ?>
