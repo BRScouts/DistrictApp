@@ -1255,6 +1255,24 @@ if (($mapLatValue === '' || $mapLngValue === '') && !empty($websiteMeta['wpsl_la
     }
 }
 
+/*
+ * Treat 0,0 as "no saved pin".
+ * Some Store Locator records default to 0.000000,0.000000, which would otherwise
+ * centre the editor map in the ocean instead of using the Bury default.
+ */
+$mapLatNumber = is_numeric($mapLatValue) ? (float) $mapLatValue : null;
+$mapLngNumber = is_numeric($mapLngValue) ? (float) $mapLngValue : null;
+
+if (
+    $mapLatNumber !== null
+    && $mapLngNumber !== null
+    && abs($mapLatNumber) < 0.000001
+    && abs($mapLngNumber) < 0.000001
+) {
+    $mapLatValue = '';
+    $mapLngValue = '';
+}
+
 $websiteUpdates = gwa_fetch_website_updates($selectedGroupId, 25);
 
 $pageTitle = 'Group Website Admin | ' . $appName;
