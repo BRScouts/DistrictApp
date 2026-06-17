@@ -238,7 +238,6 @@ $sectionSelect = $hasSections
 
 $where = [
     "p.status = 'active'",
-    "COALESCE(dp.visible_in_directory, 1) = 1",
 ];
 
 $params = [];
