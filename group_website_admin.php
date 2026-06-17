@@ -2163,8 +2163,8 @@ include __DIR__ . '/header.php';
         const storedLat = Number(mapElement.getAttribute('data-lat') || '');
         const storedLng = Number(mapElement.getAttribute('data-lng') || '');
         const hasStoredPin = Number.isFinite(storedLat) && Number.isFinite(storedLng);
-        const defaultLat = 53.3340;
-        const defaultLng = -2.7280;
+  const defaultLat = 53.5933;
+const defaultLng = -2.2966;
 
         const map = L.map(mapElement).setView(
             hasStoredPin ? [storedLat, storedLng] : [defaultLat, defaultLng],
