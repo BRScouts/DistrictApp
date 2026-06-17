@@ -449,13 +449,7 @@ function comms_filter_accreditation_options_by_count(array $accreditationOptions
 
 function comms_fetch_recipients(array $filters, array $user): array
 {
-    $where = [
-        "p.status = 'active'",
-        "p.primary_email IS NOT NULL",
-        "p.primary_email <> ''",
-    ];
-
-    $params = [];
+    $recipients = [];
 
     $audienceMode = (string) ($filters['audience_mode'] ?? 'filtered');
     $groupIds = array_values(array_filter(array_map('intval', (array) ($filters['group_ids'] ?? []))));
@@ -463,95 +457,115 @@ function comms_fetch_recipients(array $filters, array $user): array
     $accreditations = array_values(array_filter(array_map('strval', (array) ($filters['accreditations'] ?? []))));
     $keyword = trim((string) ($filters['keyword'] ?? ''));
 
-    if ($audienceMode !== 'all_people') {
-        if ($groupIds) {
-            $where[] = "gm.group_id IN (" . implode(',', array_fill(0, count($groupIds), '?')) . ")";
-            foreach ($groupIds as $id) {
-                $params[] = $id;
-            }
-        }
+    $hasTargetedFilters = $groupIds || $roleTitles || $accreditations || $keyword !== '';
 
-        if ($roleTitles) {
-            $where[] = "dp.role_title IN (" . implode(',', array_fill(0, count($roleTitles), '?')) . ")";
-            foreach ($roleTitles as $roleTitle) {
-                $params[] = $roleTitle;
-            }
-        }
+    /*
+     * Important safety rule:
+     * - all_people means query all active people with email addresses.
+     * - filtered means query people only when at least one filter is selected.
+     * - manual recipients are always added separately below.
+     *
+     * This prevents a pasted manual list from accidentally sending to every active person.
+     */
+    $shouldQueryPeople = $audienceMode === 'all_people' || $hasTargetedFilters;
 
-        foreach ($accreditations as $accreditation) {
-            $where[] = "dp.accreditations_json LIKE ?";
-            $params[] = '%' . $accreditation . '%';
-        }
-
-        if ($keyword !== '') {
-            $where[] = "(
-                p.full_name LIKE ?
-                OR p.primary_email LIKE ?
-                OR dp.role_title LIKE ?
-                OR dp.about_me LIKE ?
-                OR g.group_name LIKE ?
-                OR dp.accreditations_json LIKE ?
-            )";
-
-            $like = '%' . $keyword . '%';
-
-            for ($i = 0; $i < 6; $i++) {
-                $params[] = $like;
-            }
-        }
-    }
-
-    $whereSql = implode("\n      AND ", $where);
-
-    $sql = "
-        SELECT
-            p.id,
-            p.full_name,
-            p.primary_email,
-            dp.role_title,
-            dp.accreditations_json,
-            GROUP_CONCAT(DISTINCT g.group_name ORDER BY g.group_name SEPARATOR ', ') AS group_names
-        FROM people p
-        LEFT JOIN directory_profiles dp
-          ON dp.person_id = p.id
-        LEFT JOIN group_memberships gm
-          ON gm.person_id = p.id
-         AND gm.status = 'active'
-        LEFT JOIN groups g
-          ON g.id = gm.group_id
-         AND g.is_active = 1
-        WHERE {$whereSql}
-        GROUP BY
-            p.id,
-            p.full_name,
-            p.primary_email,
-            dp.role_title,
-            dp.accreditations_json
-        ORDER BY p.full_name ASC
-        LIMIT 5000
-    ";
-
-    $stmt = db()->prepare($sql);
-    $stmt->execute($params);
-
-    $recipients = [];
-
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-        $email = strtolower(trim((string) $row['primary_email']));
-
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            continue;
-        }
-
-        $recipients[$email] = [
-            'person_id' => (int) $row['id'],
-            'name' => (string) ($row['full_name'] ?? ''),
-            'email' => $email,
-            'source' => 'query',
-            'groups' => (string) ($row['group_names'] ?? ''),
-            'role_title' => (string) ($row['role_title'] ?? ''),
-            'accreditations' => comms_decode_json_list($row['accreditations_json'] ?? null),
+    if ($shouldQueryPeople) {
+        $where = [
+            "p.status = 'active'",
+            "p.primary_email IS NOT NULL",
+            "p.primary_email <> ''",
         ];
+
+        $params = [];
+
+        if ($audienceMode !== 'all_people') {
+            if ($groupIds) {
+                $where[] = "gm.group_id IN (" . implode(',', array_fill(0, count($groupIds), '?')) . ")";
+                foreach ($groupIds as $id) {
+                    $params[] = $id;
+                }
+            }
+
+            if ($roleTitles) {
+                $where[] = "dp.role_title IN (" . implode(',', array_fill(0, count($roleTitles), '?')) . ")";
+                foreach ($roleTitles as $roleTitle) {
+                    $params[] = $roleTitle;
+                }
+            }
+
+            foreach ($accreditations as $accreditation) {
+                $where[] = "dp.accreditations_json LIKE ?";
+                $params[] = '%' . $accreditation . '%';
+            }
+
+            if ($keyword !== '') {
+                $where[] = "(
+                    p.full_name LIKE ?
+                    OR p.primary_email LIKE ?
+                    OR dp.role_title LIKE ?
+                    OR dp.about_me LIKE ?
+                    OR g.group_name LIKE ?
+                    OR dp.accreditations_json LIKE ?
+                )";
+
+                $like = '%' . $keyword . '%';
+
+                for ($i = 0; $i < 6; $i++) {
+                    $params[] = $like;
+                }
+            }
+        }
+
+        $whereSql = implode("\n      AND ", $where);
+
+        $sql = "
+            SELECT
+                p.id,
+                p.full_name,
+                p.primary_email,
+                dp.role_title,
+                dp.accreditations_json,
+                GROUP_CONCAT(DISTINCT g.group_name ORDER BY g.group_name SEPARATOR ', ') AS group_names
+            FROM people p
+            LEFT JOIN directory_profiles dp
+              ON dp.person_id = p.id
+            LEFT JOIN group_memberships gm
+              ON gm.person_id = p.id
+             AND gm.status = 'active'
+            LEFT JOIN groups g
+              ON g.id = gm.group_id
+             AND g.is_active = 1
+            WHERE {$whereSql}
+            GROUP BY
+                p.id,
+                p.full_name,
+                p.primary_email,
+                dp.role_title,
+                dp.accreditations_json
+            ORDER BY p.full_name ASC
+            LIMIT 5000
+        ";
+
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $email = strtolower(trim((string) $row['primary_email']));
+
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+
+            $recipients[$email] = [
+                'person_id' => (int) $row['id'],
+                'name' => (string) ($row['full_name'] ?? ''),
+                'email' => $email,
+                'source' => 'query',
+                'groups' => (string) ($row['group_names'] ?? ''),
+                'role_title' => (string) ($row['role_title'] ?? ''),
+                'accreditations' => comms_decode_json_list($row['accreditations_json'] ?? null),
+            ];
+        }
     }
 
     $manual = comms_split_manual_recipients((string) ($filters['manual_recipients'] ?? ''));
