@@ -358,6 +358,14 @@ function gwa_normalise_lat_lng(?string $lat, ?string $lng): array
     $latFloat = (float) $lat;
     $lngFloat = (float) $lng;
 
+    /*
+     * Treat 0,0 as no map pin. This prevents Store Locator defaults from being
+     * saved back as a real Group location.
+     */
+    if (abs($latFloat) < 0.000001 && abs($lngFloat) < 0.000001) {
+        return [null, null];
+    }
+
     if ($latFloat < -90 || $latFloat > 90 || $lngFloat < -180 || $lngFloat > 180) {
         throw new RuntimeException('The map pin location is outside the valid latitude/longitude range.');
     }
@@ -2178,16 +2186,37 @@ include __DIR__ . '/header.php';
     }
 
     if (mapElement && typeof L !== 'undefined') {
-        const storedLat = Number(mapElement.getAttribute('data-lat') || '');
-        const storedLng = Number(mapElement.getAttribute('data-lng') || '');
-        const hasStoredPin = Number.isFinite(storedLat) && Number.isFinite(storedLng);
-  const defaultLat = 53.5933;
-const defaultLng = -2.2966;
+    function readStoredCoordinate(attributeName) {
+        const raw = String(mapElement.getAttribute(attributeName) || '').trim();
 
-        const map = L.map(mapElement).setView(
-            hasStoredPin ? [storedLat, storedLng] : [defaultLat, defaultLng],
-            hasStoredPin ? 16 : 11
-        );
+        if (raw === '') {
+            return null;
+        }
+
+        const number = Number(raw);
+
+        return Number.isFinite(number) ? number : null;
+    }
+
+    function isZeroZero(lat, lng) {
+        return Math.abs(Number(lat)) < 0.000001 && Math.abs(Number(lng)) < 0.000001;
+    }
+
+    const storedLat = readStoredCoordinate('data-lat');
+    const storedLng = readStoredCoordinate('data-lng');
+
+    const hasStoredPin =
+        storedLat !== null
+        && storedLng !== null
+        && !isZeroZero(storedLat, storedLng);
+
+    const defaultLat = 53.5933;
+    const defaultLng = -2.2966;
+
+    const map = L.map(mapElement).setView(
+        hasStoredPin ? [storedLat, storedLng] : [defaultLat, defaultLng],
+        hasStoredPin ? 16 : 13
+    );
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
