@@ -770,10 +770,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?= e($currentUserEmail !== '' ? $currentUserEmail : 'Not found') ?>
             </div>
 
-            <div class="support-summary-item">
-                <strong>Support mailbox</strong>
-                <?= e($supportEmail) ?>
-            </div>
         </aside>
     </div>
 </main>
