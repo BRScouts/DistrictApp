@@ -440,7 +440,7 @@ $modules = [
         'title' => 'Technical Support',
         'description' => 'Report a problem, request help with access or ask for a dashboard change.',
         'url' => '/technical-support.php',
-        'status' => 'soon',
+        'status' => 'available',
         'image' => '/assets/img/cub-carrying-leaves-jpg.jpg',
         'visible' => true,
     ],
