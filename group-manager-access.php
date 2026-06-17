@@ -45,19 +45,51 @@ if (!$selectedGroup) {
 
 $errors = [];
 $success = null;
+$newLinkUrl = null;
+$actorPersonId = (int) $user['id'];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $errors[] = 'Group calendar links cannot be changed from Group Manager. To rotate or disable a link, please raise a request in Technical Support.';
+try {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $action = (string) ($_POST['action'] ?? '');
+
+        if (!gm_group_is_manageable($selectedGroupId, $manageableGroups)) {
+            throw new RuntimeException('You do not have permission to manage that Group.');
+        }
+
+        if ($action === 'generate_group_link') {
+            $label = trim((string) ($_POST['label'] ?? 'Main Group calendar link'));
+            $disableExisting = isset($_POST['disable_existing']);
+
+            $newLinkUrl = gm_generate_group_link(
+                $selectedGroupId,
+                $actorPersonId,
+                $label,
+                $disableExisting
+            );
+
+            $success = $disableExisting
+                ? 'Group calendar link rotated. Existing active links were disabled.'
+                : 'New Group calendar link generated.';
+        } elseif ($action === 'disable_group_link') {
+            $linkId = (int) ($_POST['link_id'] ?? 0);
+
+            gm_disable_group_link($selectedGroupId, $linkId, $actorPersonId);
+            $success = 'Group calendar link disabled.';
+        }
+    }
+} catch (Throwable $e) {
+    $errors[] = $e->getMessage() ?: 'The request could not be completed.';
 }
 
 $activeLinks = gm_fetch_group_links($selectedGroupId, true);
+$allLinks = gm_fetch_group_links($selectedGroupId, false);
 $leaders = gm_fetch_people($selectedGroupId, 'active');
 $leadersWithSso = count(array_filter($leaders, static fn(array $leader): bool => (int) ($leader['has_microsoft_account'] ?? 0) > 0));
 $leadersWithoutSso = count($leaders) - $leadersWithSso;
 
 $pageTitle = 'Calendar access | ' . $appName;
 $heroTitle = 'Calendar access';
-$heroText = 'View active calendar access links for ' . (string) $selectedGroup['group_name'] . '.';
+$heroText = 'Manage Microsoft sign-in guidance and fallback calendar links for ' . (string) $selectedGroup['group_name'] . '.';
 $breadcrumb = '<a href="/index.php">Home</a> / <a href="/group-manager.php?group_id=' . $selectedGroupId . '">Group Manager</a> / Calendar access';
 
 include __DIR__ . '/header.php';
@@ -129,54 +161,13 @@ include __DIR__ . '/header.php';
         color: #0f5132;
     }
 
+    .gm-badge-inactive {
+        background: #f8d7da;
+        color: #842029;
+    }
+
     .gm-muted {
         color: #555;
-    }
-
-    .gm-notice {
-        background: #fff8d6;
-        border: 2px solid #e6e6e6;
-        border-left: 8px solid #ffdd00;
-        padding: 1rem;
-        margin-bottom: 1rem;
-    }
-
-    .gm-notice h2 {
-        margin-top: 0;
-        color: var(--iv-purple);
-        font-size: 1.25rem;
-        font-weight: 900;
-    }
-
-    .gm-notice p:last-child {
-        margin-bottom: 0;
-    }
-
-    .gm-link-readonly-note {
-        background: #f7f5fb;
-        border: 2px solid #e6e6e6;
-        border-left: 8px solid var(--iv-purple);
-        padding: 1rem;
-    }
-
-    .gm-link-readonly-note h2 {
-        margin-top: 0;
-        color: var(--iv-purple);
-        font-size: 1.25rem;
-        font-weight: 900;
-    }
-
-    .gm-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: .75rem;
-        align-items: center;
-    }
-
-    @media (max-width: 575.98px) {
-        .gm-actions .btn {
-            width: 100%;
-        }
     }
 </style>
 
@@ -202,6 +193,16 @@ include __DIR__ . '/header.php';
         <div class="alert alert-success"><?= e($success) ?></div>
     <?php endif; ?>
 
+    <?php if ($newLinkUrl): ?>
+        <div class="alert alert-info">
+            <strong>New Group calendar link:</strong>
+            <div class="gm-link-box mt-2">
+                <input class="form-control" type="text" value="<?= e($newLinkUrl) ?>" readonly>
+                <button class="btn btn-secondary lt-btn gm-copy" type="button" data-copy="<?= e($newLinkUrl) ?>">Copy</button>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <div class="gm-stats">
         <div class="gm-stat">
             <strong><?= count($leaders) ?></strong>
@@ -225,7 +226,7 @@ include __DIR__ . '/header.php';
         <section class="lt-panel">
             <h2 class="lt-section-title">Preferred access: Microsoft sign-in</h2>
             <p class="lt-lede">
-                Leaders should use Microsoft sign-in wherever possible. It gives clearer accountability and avoids relying on shared links.
+                Leaders should use the Microsoft sign-in button wherever possible. It gives clearer accountability and avoids relying on shared links.
             </p>
 
             <p>
@@ -238,32 +239,39 @@ include __DIR__ . '/header.php';
         <aside class="lt-panel-grey">
             <h2 class="lt-section-title">Fallback access: Group link</h2>
             <p>
-                Active Group calendar links are shown below for reference and copying.
+                The Group calendar link is a fallback for onboarding and leaders who cannot use a District Microsoft 365 account yet.
             </p>
             <p class="mb-0">
-                Group Managers cannot create, rotate or disable calendar links from this page.
+                Rotate the link if it has been shared too widely or a leader leaves and still has the old link.
             </p>
         </aside>
     </div>
 
-    <section class="gm-notice mt-4">
-        <h2>Need the Group link rotated?</h2>
-        <p>
-            If a Group calendar link has been shared too widely, has reached the wrong person, or needs replacing,
-            please create a request in Technical Support.
-        </p>
+    <section class="lt-panel mt-4">
+        <h2 class="lt-section-title">Create or rotate Group calendar link</h2>
 
-        <div class="gm-actions mt-3">
-            <a class="btn btn-primary lt-btn" href="/technical-support.php">
-                Create Technical Support request
-            </a>
-        </div>
+        <form method="post" class="lt-panel-grey">
+            <input type="hidden" name="action" value="generate_group_link">
+            <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+
+            <div class="form-group">
+                <label for="label">Link label</label>
+                <input class="form-control" type="text" id="label" name="label" value="Main Group calendar link">
+            </div>
+
+            <label class="lt-check mb-3">
+                <input type="checkbox" name="disable_existing" value="1" checked>
+                <span>Disable existing active links for this Group</span>
+            </label>
+
+            <button class="btn btn-primary lt-btn" type="submit">Generate link</button>
+        </form>
     </section>
 
     <section class="lt-panel mt-4">
-        <h2 class="lt-section-title">Active Group calendar links</h2>
+        <h2 class="lt-section-title">Existing links</h2>
 
-        <?php if ($activeLinks): ?>
+        <?php if ($allLinks): ?>
             <div class="gm-table-wrap">
                 <table class="table">
                     <thead>
@@ -272,33 +280,44 @@ include __DIR__ . '/header.php';
                             <th>Status</th>
                             <th>Link</th>
                             <th>Created</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                    <?php foreach ($activeLinks as $link): ?>
+                    <?php foreach ($allLinks as $link): ?>
                         <?php $url = gm_group_link_url($link); ?>
                         <tr>
                             <td><?= e($link['label'] ?? 'Group calendar link') ?></td>
                             <td>
-                                <span class="gm-badge gm-badge-active">Active</span>
+                                <?php if (($link['status'] ?? '') === 'active'): ?>
+                                    <span class="gm-badge gm-badge-active">Active</span>
+                                <?php else: ?>
+                                    <span class="gm-badge gm-badge-inactive"><?= e($link['status'] ?? 'Inactive') ?></span>
+                                <?php endif; ?>
                             </td>
                             <td>
-                                <?php if ($url): ?>
+                                <?php if ($url && ($link['status'] ?? '') === 'active'): ?>
                                     <div class="gm-link-box">
                                         <input class="form-control" type="text" value="<?= e($url) ?>" readonly>
                                         <button class="btn btn-secondary btn-sm gm-copy" type="button" data-copy="<?= e($url) ?>">Copy</button>
                                     </div>
+                                <?php elseif ($url): ?>
+                                    <span class="gm-muted">Disabled link hidden from normal use.</span>
                                 <?php else: ?>
-                                    <div class="gm-link-readonly-note">
-                                        <h2>Link cannot be displayed</h2>
-                                        <p class="mb-0">
-                                            An active link exists, but the visible token is not available.
-                                            Please create a Technical Support request if this Group needs a usable or rotated link.
-                                        </p>
-                                    </div>
+                                    <span class="text-warning font-weight-bold">No visible token. Rotate this link.</span>
                                 <?php endif; ?>
                             </td>
                             <td><?= e($link['created_at'] ?? '—') ?></td>
+                            <td>
+                                <?php if (($link['status'] ?? '') === 'active'): ?>
+                                    <form method="post" onsubmit="return confirm('Disable this Group calendar link?');">
+                                        <input type="hidden" name="action" value="disable_group_link">
+                                        <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                                        <input type="hidden" name="link_id" value="<?= (int) $link['id'] ?>">
+                                        <button class="btn btn-outline-danger btn-sm" type="submit">Disable</button>
+                                    </form>
+                                <?php endif; ?>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
@@ -306,8 +325,7 @@ include __DIR__ . '/header.php';
             </div>
         <?php else: ?>
             <div class="alert alert-warning mb-0">
-                No active Group calendar links are currently available for this Group.
-                If this Group needs a link, please create a request in Technical Support.
+                No Group calendar links exist yet. Generate one above if this Group needs fallback access.
             </div>
         <?php endif; ?>
     </section>

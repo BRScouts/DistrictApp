@@ -265,6 +265,252 @@ function gwa_log_action(int $actorPersonId, string $action, string $entityType, 
     }
 }
 
+
+function gwa_actor_summary(int $actorPersonId): array
+{
+    if ($actorPersonId < 1 || !gwa_table_exists('people')) {
+        return [
+            'name' => 'Unknown user',
+            'email' => '',
+        ];
+    }
+
+    try {
+        $stmt = db()->prepare("\n            SELECT full_name, primary_email\n            FROM people\n            WHERE id = :person_id\n            LIMIT 1\n        ");
+        $stmt->execute(['person_id' => $actorPersonId]);
+        $person = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        return [
+            'name' => trim((string) ($person['full_name'] ?? '')) ?: 'Unknown user',
+            'email' => trim((string) ($person['primary_email'] ?? '')),
+        ];
+    } catch (Throwable $e) {
+        return [
+            'name' => 'Unknown user',
+            'email' => '',
+        ];
+    }
+}
+
+function gwa_website_log_labels(): array
+{
+    return [
+        'post_title' => 'Public Group name',
+        'post_name' => 'Page slug',
+        'post_content' => 'About this Group',
+        'featured_image_id' => 'Photo',
+        'wpsl_address' => 'Address line 1',
+        'wpsl_address2' => 'Address line 2',
+        'wpsl_city' => 'Town / city',
+        'wpsl_state' => 'County',
+        'wpsl_zip' => 'Postcode',
+        'wpsl_country' => 'Country',
+        'wpsl_country_iso' => 'Country code',
+        'wpsl_lat' => 'Map latitude',
+        'wpsl_lng' => 'Map longitude',
+        'wpsl_email' => 'Public email',
+        'wpsl_phone' => 'Public phone',
+        'wpsl_url' => 'Store Locator URL',
+        'wpsl_group_website' => 'Group website',
+        'wpsl_group_contact' => 'Primary contact',
+        'wpsl_group_type' => 'Group type',
+        'wpsl_section_details' => 'Section meeting times',
+        'wpsl_section_scarf' => 'Group scarf / necker',
+    ];
+}
+
+function gwa_log_value(mixed $value): string
+{
+    if ($value === null) {
+        return '';
+    }
+
+    if (is_bool($value)) {
+        return $value ? '1' : '0';
+    }
+
+    if (is_array($value) || is_object($value)) {
+        return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+    }
+
+    $value = trim((string) $value);
+
+    if ($value === '[]' || $value === '{}') {
+        return '';
+    }
+
+    return $value;
+}
+
+function gwa_normalise_lat_lng(?string $lat, ?string $lng): array
+{
+    $lat = trim((string) $lat);
+    $lng = trim((string) $lng);
+
+    if ($lat === '' || $lng === '') {
+        return [null, null];
+    }
+
+    if (!is_numeric($lat) || !is_numeric($lng)) {
+        throw new RuntimeException('The map pin location is not valid. Click the map again and save.');
+    }
+
+    $latFloat = (float) $lat;
+    $lngFloat = (float) $lng;
+
+    if ($latFloat < -90 || $latFloat > 90 || $lngFloat < -180 || $lngFloat > 180) {
+        throw new RuntimeException('The map pin location is outside the valid latitude/longitude range.');
+    }
+
+    return [
+        number_format($latFloat, 7, '.', ''),
+        number_format($lngFloat, 7, '.', ''),
+    ];
+}
+
+function gwa_website_snapshot(int $postId): array
+{
+    if ($postId < 1) {
+        return [];
+    }
+
+    gwa_wp_bootstrap();
+
+    $post = get_post($postId);
+
+    if (!$post instanceof WP_Post) {
+        return [];
+    }
+
+    $meta = gwa_wp_fetch_meta($postId);
+    $labels = gwa_website_log_labels();
+
+    $snapshot = [
+        'post_title' => (string) $post->post_title,
+        'post_name' => (string) $post->post_name,
+        'post_content' => (string) $post->post_content,
+        'featured_image_id' => function_exists('get_post_thumbnail_id') ? (string) ((int) get_post_thumbnail_id($postId)) : '',
+    ];
+
+    foreach ($labels as $key => $label) {
+        if (array_key_exists($key, $snapshot)) {
+            continue;
+        }
+
+        $snapshot[$key] = $meta[$key] ?? '';
+    }
+
+    return $snapshot;
+}
+
+function gwa_log_website_update(int $groupId, int $postId, int $actorPersonId, string $action, array $before, array $after): array
+{
+    if (!gwa_table_exists('group_website_update_log')) {
+        return [];
+    }
+
+    $labels = gwa_website_log_labels();
+    $changes = [];
+
+    foreach ($labels as $key => $label) {
+        $beforeValue = gwa_log_value($before[$key] ?? '');
+        $afterValue = gwa_log_value($after[$key] ?? '');
+
+        if ($beforeValue === $afterValue) {
+            continue;
+        }
+
+        $changes[$key] = [
+            'label' => $label,
+            'before' => $beforeValue,
+            'after' => $afterValue,
+        ];
+    }
+
+    if (!$changes) {
+        return [];
+    }
+
+    $actor = gwa_actor_summary($actorPersonId);
+    $summary = count($changes) . ' field' . (count($changes) === 1 ? '' : 's') . ' changed';
+
+    try {
+        $stmt = db()->prepare("\n            INSERT INTO group_website_update_log (\n                group_id,\n                website_post_id,\n                actor_person_id,\n                actor_name,\n                actor_email,\n                action,\n                summary,\n                changed_fields_json,\n                before_json,\n                after_json,\n                created_at\n            )\n            VALUES (\n                :group_id,\n                :website_post_id,\n                :actor_person_id,\n                :actor_name,\n                :actor_email,\n                :action,\n                :summary,\n                :changed_fields_json,\n                :before_json,\n                :after_json,\n                NOW()\n            )\n        ");
+
+        $stmt->execute([
+            'group_id' => $groupId,
+            'website_post_id' => $postId,
+            'actor_person_id' => $actorPersonId,
+            'actor_name' => $actor['name'],
+            'actor_email' => $actor['email'],
+            'action' => $action,
+            'summary' => $summary,
+            'changed_fields_json' => json_encode($changes, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'before_json' => json_encode($before, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'after_json' => json_encode($after, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
+    } catch (Throwable $e) {
+        // Website update logging must not block saving.
+    }
+
+    return $changes;
+}
+
+function gwa_log_website_event(int $groupId, int $postId, int $actorPersonId, string $action, string $summary, array $details = []): void
+{
+    if (!gwa_table_exists('group_website_update_log')) {
+        return;
+    }
+
+    $actor = gwa_actor_summary($actorPersonId);
+
+    try {
+        $stmt = db()->prepare("\n            INSERT INTO group_website_update_log (\n                group_id,\n                website_post_id,\n                actor_person_id,\n                actor_name,\n                actor_email,\n                action,\n                summary,\n                changed_fields_json,\n                before_json,\n                after_json,\n                created_at\n            )\n            VALUES (\n                :group_id,\n                :website_post_id,\n                :actor_person_id,\n                :actor_name,\n                :actor_email,\n                :action,\n                :summary,\n                :changed_fields_json,\n                NULL,\n                NULL,\n                NOW()\n            )\n        ");
+
+        $stmt->execute([
+            'group_id' => $groupId,
+            'website_post_id' => $postId > 0 ? $postId : null,
+            'actor_person_id' => $actorPersonId,
+            'actor_name' => $actor['name'],
+            'actor_email' => $actor['email'],
+            'action' => $action,
+            'summary' => $summary,
+            'changed_fields_json' => json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
+    } catch (Throwable $e) {
+        // Website update logging must not block saving.
+    }
+}
+
+function gwa_fetch_website_updates(int $groupId, int $limit = 25): array
+{
+    if ($groupId < 1 || !gwa_table_exists('group_website_update_log')) {
+        return [];
+    }
+
+    $limit = max(1, min(100, $limit));
+
+    try {
+        $stmt = db()->prepare("\n            SELECT\n                id,\n                group_id,\n                website_post_id,\n                actor_person_id,\n                actor_name,\n                actor_email,\n                action,\n                summary,\n                changed_fields_json,\n                created_at\n            FROM group_website_update_log\n            WHERE group_id = :group_id\n            ORDER BY created_at DESC, id DESC\n            LIMIT {$limit}\n        ");
+        $stmt->execute(['group_id' => $groupId]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+function gwa_decode_update_changes(?string $json): array
+{
+    if (!$json) {
+        return [];
+    }
+
+    $decoded = json_decode($json, true);
+
+    return is_array($decoded) ? $decoded : [];
+}
+
 function gwa_config_first(array $keys, string $default = ''): string
 {
     foreach ($keys as $key) {
@@ -586,6 +832,10 @@ function gwa_link_existing_wordpress_post(int $groupId, int $postId, int $actorP
 
     gwa_update_group_linked_post_id($groupId, $postId);
 
+    gwa_log_website_event($groupId, $postId, $actorPersonId, 'group_website_post_linked', 'Website post linked to Group', [
+        'website_post_id' => $postId,
+    ]);
+
     gwa_log_action($actorPersonId, 'group_website_post_linked', 'group', $groupId, [
         'website_post_id' => $postId,
     ]);
@@ -630,6 +880,16 @@ function gwa_create_wordpress_store_for_group(array $group, int $actorPersonId):
     update_post_meta($postId, 'wpsl_email', $publicEmail);
     update_post_meta($postId, 'wpsl_url', $websiteUrl);
 
+    if (!empty($group['latitude']) && !empty($group['longitude'])) {
+        [$lat, $lng] = gwa_normalise_lat_lng((string) $group['latitude'], (string) $group['longitude']);
+
+        if ($lat !== null && $lng !== null) {
+            update_post_meta($postId, 'wpsl_lat', $lat);
+            update_post_meta($postId, 'wpsl_lng', $lng);
+            update_post_meta($postId, 'wpsl_latlng', $lat . ',' . $lng);
+        }
+    }
+
     update_post_meta($postId, 'wpsl_group_website', $websiteUrl);
     update_post_meta($postId, 'wpsl_group_contact', $publicEmail);
     update_post_meta($postId, 'wpsl_group_type', '0');
@@ -639,6 +899,10 @@ function gwa_create_wordpress_store_for_group(array $group, int $actorPersonId):
     gwa_update_group_linked_post_id((int) $group['id'], $postId);
 
     do_action('irval_leader_tool_group_store_created', $postId, $group);
+
+    gwa_log_website_event((int) $group['id'], $postId, $actorPersonId, 'group_website_post_created', 'Website post created and linked to Group', [
+        'website_post_id' => $postId,
+    ]);
 
     gwa_log_action($actorPersonId, 'group_website_post_created', 'group', (int) $group['id'], [
         'website_post_id' => $postId,
@@ -756,6 +1020,8 @@ function gwa_update_wordpress_store_from_form(int $groupId, array $input, int $a
         throw new RuntimeException('Enter the public Group name.');
     }
 
+    $beforeSnapshot = gwa_website_snapshot($postId);
+
     $updated = wp_update_post([
         'ID' => $postId,
         'post_title' => sanitize_text_field($title),
@@ -770,6 +1036,10 @@ function gwa_update_wordpress_store_from_form(int $groupId, array $input, int $a
 
     $sectionDetails = gwa_normalise_section_json((string) ($input['wpsl_section_details'] ?? ''));
     $scarfDetails = gwa_normalise_scarf_json((string) ($input['wpsl_section_scarf'] ?? ''));
+    [$lat, $lng] = gwa_normalise_lat_lng(
+        isset($input['wpsl_lat']) ? (string) $input['wpsl_lat'] : null,
+        isset($input['wpsl_lng']) ? (string) $input['wpsl_lng'] : null
+    );
 
     $meta = [
         'wpsl_address' => sanitize_text_field((string) ($input['wpsl_address'] ?? '')),
@@ -779,6 +1049,9 @@ function gwa_update_wordpress_store_from_form(int $groupId, array $input, int $a
         'wpsl_zip' => sanitize_text_field((string) ($input['wpsl_zip'] ?? '')),
         'wpsl_country' => sanitize_text_field((string) ($input['wpsl_country'] ?? 'United Kingdom')),
         'wpsl_country_iso' => sanitize_text_field((string) ($input['wpsl_country_iso'] ?? 'GB')),
+        'wpsl_lat' => $lat,
+        'wpsl_lng' => $lng,
+        'wpsl_latlng' => ($lat !== null && $lng !== null) ? $lat . ',' . $lng : null,
         'wpsl_email' => sanitize_email((string) ($input['wpsl_email'] ?? '')),
         'wpsl_phone' => sanitize_text_field((string) ($input['wpsl_phone'] ?? '')),
         'wpsl_url' => esc_url_raw((string) ($input['wpsl_url'] ?? '')),
@@ -791,7 +1064,7 @@ function gwa_update_wordpress_store_from_form(int $groupId, array $input, int $a
     ];
 
     foreach ($meta as $key => $value) {
-        if ($value === '') {
+        if ($value === '' || $value === null) {
             delete_post_meta($postId, $key);
         } else {
             update_post_meta($postId, $key, $value);
@@ -810,22 +1083,32 @@ function gwa_update_wordpress_store_from_form(int $groupId, array $input, int $a
 
     do_action('irval_leader_tool_group_store_updated', $postId, $meta, $groupId);
 
-    gwa_try_geocode_store($postId, $meta);
+    /*
+     * If a manual map pin is set, it becomes the source of truth for the Store Locator location.
+     * If no pin is set, we still let WP Store Locator try its own geocoding from the address.
+     */
+    if ($lat === null || $lng === null) {
+        gwa_try_geocode_store($postId, $meta);
+    }
 
     gwa_update_flexible('groups', 'id', $groupId, [
         'website_post_id' => $postId,
         'website_url' => $meta['wpsl_group_website'] ?: $meta['wpsl_url'] ?: null,
         'public_email' => $meta['wpsl_email'] ?: null,
         'contact_email' => $meta['wpsl_email'] ?: null,
-        'meeting_place' => trim($meta['wpsl_address'] . ' ' . $meta['wpsl_address2']) ?: null,
+        'meeting_place' => trim((string) $meta['wpsl_address'] . ' ' . (string) $meta['wpsl_address2']) ?: null,
         'postcode' => $meta['wpsl_zip'] ?: null,
         'updated_at' => date('Y-m-d H:i:s'),
     ]);
 
     clean_post_cache($postId);
 
+    $afterSnapshot = gwa_website_snapshot($postId);
+    $changes = gwa_log_website_update($groupId, $postId, $actorPersonId, 'group_website_details_updated', $beforeSnapshot, $afterSnapshot);
+
     gwa_log_action($actorPersonId, 'group_website_details_updated', 'group', $groupId, [
         'website_post_id' => $postId,
+        'changed_fields' => array_keys($changes),
     ]);
 }
 
@@ -960,6 +1243,20 @@ if ($websitePostId > 0 && $websitePost) {
     }
 }
 
+$mapLatValue = $metaValue($websiteMeta, 'wpsl_lat');
+$mapLngValue = $metaValue($websiteMeta, 'wpsl_lng');
+
+if (($mapLatValue === '' || $mapLngValue === '') && !empty($websiteMeta['wpsl_latlng'])) {
+    $latLngParts = array_map('trim', explode(',', (string) $websiteMeta['wpsl_latlng']));
+
+    if (count($latLngParts) >= 2) {
+        $mapLatValue = $mapLatValue !== '' ? $mapLatValue : $latLngParts[0];
+        $mapLngValue = $mapLngValue !== '' ? $mapLngValue : $latLngParts[1];
+    }
+}
+
+$websiteUpdates = gwa_fetch_website_updates($selectedGroupId, 25);
+
 $pageTitle = 'Group Website Admin | ' . $appName;
 $heroTitle = 'Group Website Admin';
 $heroText = 'Manage the Scout Group details shown on the public District website.';
@@ -967,6 +1264,11 @@ $breadcrumb = '<a href="/index.php">Home</a> / Group Website Admin';
 
 include __DIR__ . '/header.php';
 ?>
+
+<link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+>
 
 <style>
     .gwa-grid {
@@ -1095,6 +1397,70 @@ include __DIR__ . '/header.php';
         border-radius: .75rem;
         border: 2px solid #eee;
         display: block;
+    }
+
+    .gwa-map {
+        width: 100%;
+        min-height: 420px;
+        border: 2px solid #1d1d1b;
+        background: #f3f2f1;
+    }
+
+    .gwa-map-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .75rem;
+        align-items: center;
+        margin-top: .75rem;
+    }
+
+    .gwa-history-list {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .gwa-history-item {
+        background: #fff;
+        border: 2px solid #e6e6e6;
+        border-left: 8px solid var(--iv-purple);
+        padding: 1rem;
+    }
+
+    .gwa-history-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem 1rem;
+        justify-content: space-between;
+        align-items: baseline;
+    }
+
+    .gwa-history-head strong {
+        color: var(--iv-purple);
+        font-weight: 900;
+    }
+
+    .gwa-history-meta {
+        color: #555;
+        font-weight: 700;
+    }
+
+    .gwa-history-changes {
+        margin: .75rem 0 0;
+        padding-left: 1.25rem;
+    }
+
+    .gwa-history-changes li {
+        margin-bottom: .4rem;
+    }
+
+    .gwa-change-value {
+        display: inline-block;
+        max-width: 100%;
+        vertical-align: top;
+        overflow-wrap: anywhere;
+        background: #f7f5fb;
+        padding: .1rem .35rem;
+        font-weight: 800;
     }
 </style>
 
@@ -1374,6 +1740,54 @@ include __DIR__ . '/header.php';
                         >
                     </div>
                 </div>
+
+                <div class="form-group">
+                    <label>Map pin</label>
+                    <div
+                        id="gwa-map"
+                        class="gwa-map"
+                        data-lat="<?= e($mapLatValue) ?>"
+                        data-lng="<?= e($mapLngValue) ?>"
+                    ></div>
+                    <small class="form-text text-muted">
+                        Click the map or drag the pin to set the exact location shown by the Store Locator map.
+                    </small>
+                </div>
+
+                <div class="gwa-form-row gwa-form-row-2">
+                    <div class="form-group">
+                        <label for="wpsl_lat">Latitude</label>
+                        <input
+                            class="form-control"
+                            type="text"
+                            id="wpsl_lat"
+                            name="wpsl_lat"
+                            value="<?= e($mapLatValue) ?>"
+                            inputmode="decimal"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="wpsl_lng">Longitude</label>
+                        <input
+                            class="form-control"
+                            type="text"
+                            id="wpsl_lng"
+                            name="wpsl_lng"
+                            value="<?= e($mapLngValue) ?>"
+                            inputmode="decimal"
+                        >
+                    </div>
+                </div>
+
+                <div class="gwa-map-actions">
+                    <button class="btn btn-secondary lt-btn" type="button" id="gwa-centre-map-from-fields">
+                        Centre map on saved pin
+                    </button>
+                    <button class="btn btn-outline-danger" type="button" id="gwa-clear-map-pin">
+                        Clear map pin
+                    </button>
+                </div>
             </section>
 
             <section class="lt-card">
@@ -1627,7 +2041,57 @@ include __DIR__ . '/header.php';
             </div>
         </section>
     <?php endif; ?>
+
+    <section class="lt-card">
+        <h2 class="lt-section-title">Website update history</h2>
+
+        <?php if (!gwa_table_exists('group_website_update_log')): ?>
+            <div class="alert alert-warning mb-0">
+                Website update logging is not enabled yet. Run the SQL migration for <code>group_website_update_log</code>.
+            </div>
+        <?php elseif (!$websiteUpdates): ?>
+            <p class="gwa-muted mb-0">No website changes have been logged for this Group yet.</p>
+        <?php else: ?>
+            <div class="gwa-history-list">
+                <?php foreach ($websiteUpdates as $update): ?>
+                    <?php $changes = gwa_decode_update_changes($update['changed_fields_json'] ?? null); ?>
+                    <article class="gwa-history-item">
+                        <div class="gwa-history-head">
+                            <strong><?= e($update['summary'] ?? 'Website update') ?></strong>
+                            <span class="gwa-history-meta"><?= e($update['created_at'] ?? '') ?></span>
+                        </div>
+
+                        <div class="gwa-history-meta">
+                            <?= e($update['actor_name'] ?? 'Unknown user') ?>
+                            <?php if (!empty($update['actor_email'])): ?>
+                                · <?= e($update['actor_email']) ?>
+                            <?php endif; ?>
+                        </div>
+
+                        <?php if ($changes): ?>
+                            <ul class="gwa-history-changes">
+                                <?php foreach ($changes as $change): ?>
+                                    <?php if (!is_array($change) || empty($change['label'])) { continue; } ?>
+                                    <li>
+                                        <strong><?= e((string) $change['label']) ?></strong>
+                                        <?php if (array_key_exists('before', $change) || array_key_exists('after', $change)): ?>
+                                            changed from
+                                            <span class="gwa-change-value"><?= e((string) ($change['before'] ?? '')) ?: 'blank' ?></span>
+                                            to
+                                            <span class="gwa-change-value"><?= e((string) ($change['after'] ?? '')) ?: 'blank' ?></span>
+                                        <?php endif; ?>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </section>
 </main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
 (function () {
@@ -1655,6 +2119,156 @@ include __DIR__ . '/header.php';
                 phoneInput.value = phone;
             }
         });
+    }
+
+    /**
+     * ---------------------------------------------------------------------
+     * Map pin editor
+     * ---------------------------------------------------------------------
+     */
+
+    const mapElement = document.getElementById('gwa-map');
+    const latInput = document.getElementById('wpsl_lat');
+    const lngInput = document.getElementById('wpsl_lng');
+    const centreMapButton = document.getElementById('gwa-centre-map-from-fields');
+    const clearMapButton = document.getElementById('gwa-clear-map-pin');
+
+    function readCoordinate(input) {
+        if (!input) {
+            return null;
+        }
+
+        const value = String(input.value || '').trim();
+
+        if (value === '') {
+            return null;
+        }
+
+        const number = Number(value);
+
+        return Number.isFinite(number) ? number : null;
+    }
+
+    function setCoordinateInputs(lat, lng) {
+        if (latInput) {
+            latInput.value = Number(lat).toFixed(7);
+        }
+
+        if (lngInput) {
+            lngInput.value = Number(lng).toFixed(7);
+        }
+    }
+
+    if (mapElement && typeof L !== 'undefined') {
+        const storedLat = Number(mapElement.getAttribute('data-lat') || '');
+        const storedLng = Number(mapElement.getAttribute('data-lng') || '');
+        const hasStoredPin = Number.isFinite(storedLat) && Number.isFinite(storedLng);
+        const defaultLat = 53.3340;
+        const defaultLng = -2.7280;
+
+        const map = L.map(mapElement).setView(
+            hasStoredPin ? [storedLat, storedLng] : [defaultLat, defaultLng],
+            hasStoredPin ? 16 : 11
+        );
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        let marker = null;
+
+        function setMapPin(lat, lng, shouldCentre) {
+            if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
+                return;
+            }
+
+            lat = Number(lat);
+            lng = Number(lng);
+
+            if (!marker) {
+                marker = L.marker([lat, lng], {
+                    draggable: true
+                }).addTo(map);
+
+                marker.on('dragend', function () {
+                    const position = marker.getLatLng();
+                    setCoordinateInputs(position.lat, position.lng);
+                });
+            } else {
+                marker.setLatLng([lat, lng]);
+            }
+
+            setCoordinateInputs(lat, lng);
+
+            if (shouldCentre) {
+                map.setView([lat, lng], Math.max(map.getZoom(), 16));
+            }
+        }
+
+        if (hasStoredPin) {
+            setMapPin(storedLat, storedLng, false);
+        }
+
+        map.on('click', function (event) {
+            setMapPin(event.latlng.lat, event.latlng.lng, true);
+        });
+
+        if (centreMapButton) {
+            centreMapButton.addEventListener('click', function () {
+                const lat = readCoordinate(latInput);
+                const lng = readCoordinate(lngInput);
+
+                if (lat === null || lng === null) {
+                    return;
+                }
+
+                setMapPin(lat, lng, true);
+            });
+        }
+
+        if (clearMapButton) {
+            clearMapButton.addEventListener('click', function () {
+                if (marker) {
+                    marker.remove();
+                    marker = null;
+                }
+
+                if (latInput) {
+                    latInput.value = '';
+                }
+
+                if (lngInput) {
+                    lngInput.value = '';
+                }
+            });
+        }
+
+        if (latInput) {
+            latInput.addEventListener('change', function () {
+                const lat = readCoordinate(latInput);
+                const lng = readCoordinate(lngInput);
+
+                if (lat !== null && lng !== null) {
+                    setMapPin(lat, lng, true);
+                }
+            });
+        }
+
+        if (lngInput) {
+            lngInput.addEventListener('change', function () {
+                const lat = readCoordinate(latInput);
+                const lng = readCoordinate(lngInput);
+
+                if (lat !== null && lng !== null) {
+                    setMapPin(lat, lng, true);
+                }
+            });
+        }
+
+        window.setTimeout(function () {
+            map.invalidateSize();
+        }, 250);
     }
 
     /**
