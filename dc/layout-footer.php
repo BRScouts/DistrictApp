@@ -1,7 +1,7 @@
 <footer class="lt-footer">
     <style>
         .lt-footer {
-            width: 100%;
+          
             margin: 3rem 0 0;
             background: #4d0b93;
             color: #ffffff;
