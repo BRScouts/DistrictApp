@@ -821,62 +821,52 @@ function gm_log_action(int $actorPersonId, string $action, string $entityType, i
 }
 
 function gm_create_district_email_request(
-    int $actorPersonId,
+    int $requestedByPersonId,
     int $personId,
     int $groupId,
-    string $requestedEmail,
-    string $personalEmail,
-    string $notes
+    string $requestedUpn,
+    string $contactEmail,
+    string $notes = ''
 ): bool {
-    $details = [
-        'person_id' => $personId,
-        'group_id' => $groupId,
-        'requested_email' => $requestedEmail,
-        'personal_email' => $personalEmail,
-        'notes' => $notes,
-        'request_context' => 'group_manager',
-    ];
+    $requestedUpn = strtolower(trim($requestedUpn));
+    $contactEmail = strtolower(trim($contactEmail));
+    $notes = trim($notes);
 
-    $tables = [
-        'm365_account_requests',
-        'microsoft365_account_requests',
-        'microsoft_account_requests',
-        'account_requests',
-        'requests',
-    ];
-
-    foreach ($tables as $table) {
-        if (!gm_table_exists($table)) {
-            continue;
-        }
-
-        try {
-            $inserted = gm_insert_flexible($table, [
-                'request_type' => 'm365_account',
-                'type' => 'm365_account',
-                'status' => 'pending',
-                'person_id' => $personId,
-                'requested_for_person_id' => $personId,
-                'group_id' => $groupId,
-                'requested_by_person_id' => $actorPersonId,
-                'actor_person_id' => $actorPersonId,
-                'requested_email' => $requestedEmail,
-                'email' => $requestedEmail,
-                'personal_email' => $personalEmail,
-                'notes' => $notes !== '' ? $notes : null,
-                'details_json' => json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s'),
-            ]);
-
-            if ($inserted) {
-                return true;
-            }
-        } catch (Throwable $e) {
-        }
+    if ($requestedUpn === '' || !filter_var($requestedUpn, FILTER_VALIDATE_EMAIL)) {
+        return false;
     }
 
-    return false;
+    $stmt = db()->prepare("
+        INSERT INTO m365_account_requests (
+            person_id,
+            requested_by_person_id,
+            requested_upn,
+            status,
+            admin_notes,
+            provision_status,
+            provision_attempts,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            :person_id,
+            :requested_by_person_id,
+            :requested_upn,
+            'requested',
+            :admin_notes,
+            'pending',
+            0,
+            NOW(),
+            NOW()
+        )
+    ");
+
+    return $stmt->execute([
+        'person_id' => $personId,
+        'requested_by_person_id' => $requestedByPersonId,
+        'requested_upn' => $requestedUpn,
+        'admin_notes' => $notes !== '' ? $notes : null,
+    ]);
 }
 
 function gm_person_has_pending_account_request(int $personId, string $personalEmail): bool
@@ -1276,52 +1266,4 @@ function gm_send_calendar_link_instructions(array $person, int $groupId, int $ac
 function gm_nav_url(string $page, int $groupId): string
 {
     return $page . '?group_id=' . $groupId;
-}
-function gm_create_district_email_request(
-    int $requestedByPersonId,
-    int $personId,
-    int $groupId,
-    string $requestedUpn,
-    string $contactEmail,
-    string $notes = ''
-): bool {
-    $requestedUpn = strtolower(trim($requestedUpn));
-    $contactEmail = strtolower(trim($contactEmail));
-    $notes = trim($notes);
-
-    if ($requestedUpn === '' || !filter_var($requestedUpn, FILTER_VALIDATE_EMAIL)) {
-        return false;
-    }
-
-    $stmt = db()->prepare("
-        INSERT INTO m365_account_requests (
-            person_id,
-            requested_by_person_id,
-            requested_upn,
-            status,
-            admin_notes,
-            provision_status,
-            provision_attempts,
-            created_at,
-            updated_at
-        )
-        VALUES (
-            :person_id,
-            :requested_by_person_id,
-            :requested_upn,
-            'requested',
-            :admin_notes,
-            'pending',
-            0,
-            NOW(),
-            NOW()
-        )
-    ");
-
-    return $stmt->execute([
-        'person_id' => $personId,
-        'requested_by_person_id' => $requestedByPersonId,
-        'requested_upn' => $requestedUpn,
-        'admin_notes' => $notes !== '' ? $notes : null,
-    ]);
 }
