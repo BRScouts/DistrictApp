@@ -1277,3 +1277,51 @@ function gm_nav_url(string $page, int $groupId): string
 {
     return $page . '?group_id=' . $groupId;
 }
+function gm_create_district_email_request(
+    int $requestedByPersonId,
+    int $personId,
+    int $groupId,
+    string $requestedUpn,
+    string $contactEmail,
+    string $notes = ''
+): bool {
+    $requestedUpn = strtolower(trim($requestedUpn));
+    $contactEmail = strtolower(trim($contactEmail));
+    $notes = trim($notes);
+
+    if ($requestedUpn === '' || !filter_var($requestedUpn, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+
+    $stmt = db()->prepare("
+        INSERT INTO m365_account_requests (
+            person_id,
+            requested_by_person_id,
+            requested_upn,
+            status,
+            admin_notes,
+            provision_status,
+            provision_attempts,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            :person_id,
+            :requested_by_person_id,
+            :requested_upn,
+            'requested',
+            :admin_notes,
+            'pending',
+            0,
+            NOW(),
+            NOW()
+        )
+    ");
+
+    return $stmt->execute([
+        'person_id' => $personId,
+        'requested_by_person_id' => $requestedByPersonId,
+        'requested_upn' => $requestedUpn,
+        'admin_notes' => $notes !== '' ? $notes : null,
+    ]);
+}
