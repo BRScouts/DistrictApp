@@ -670,7 +670,7 @@ include __DIR__ . '/header.php';
                             </button>
 
                             <p class="gm-muted mt-2 mb-0">
-                                This records a Microsoft 365 account request. A District admin still needs to create the account in Microsoft 365.
+                                We'll create a job for the account to be created, please note that this could take upto 5 mins and the member will recieve thier password to sign in.
                             </p>
                         </div>
                     </div>
