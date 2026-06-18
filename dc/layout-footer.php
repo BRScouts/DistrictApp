@@ -1,4 +1,6 @@
+</main>
 <footer class="lt-footer">
+
     <style>
         .lt-footer {
           
