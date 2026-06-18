@@ -247,27 +247,7 @@ include __DIR__ . '/header.php';
         </aside>
     </div>
 
-    <section class="lt-panel mt-4">
-        <h2 class="lt-section-title">Create or rotate Group calendar link</h2>
-
-        <form method="post" class="lt-panel-grey">
-            <input type="hidden" name="action" value="generate_group_link">
-            <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-
-            <div class="form-group">
-                <label for="label">Link label</label>
-                <input class="form-control" type="text" id="label" name="label" value="Main Group calendar link">
-            </div>
-
-            <label class="lt-check mb-3">
-                <input type="checkbox" name="disable_existing" value="1" checked>
-                <span>Disable existing active links for this Group</span>
-            </label>
-
-            <button class="btn btn-primary lt-btn" type="submit">Generate link</button>
-        </form>
-    </section>
-
+   
     <section class="lt-panel mt-4">
         <h2 class="lt-section-title">Existing links</h2>
 
@@ -314,7 +294,6 @@ include __DIR__ . '/header.php';
                                         <input type="hidden" name="action" value="disable_group_link">
                                         <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
                                         <input type="hidden" name="link_id" value="<?= (int) $link['id'] ?>">
-                                        <button class="btn btn-outline-danger btn-sm" type="submit">Disable</button>
                                     </form>
                                 <?php endif; ?>
                             </td>
