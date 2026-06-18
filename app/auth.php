@@ -71,56 +71,202 @@ function logout_user(): void
 
 function find_or_create_microsoft_user(array $claims): array
 {
-    $microsoftOid = $claims['oid'] ?? null;
-    $email = $claims['preferred_username'] ?? $claims['email'] ?? $claims['upn'] ?? null;
-    $fullName = $claims['name'] ?? $email;
+    $microsoftOid = trim((string) ($claims['oid'] ?? ''));
+    $tenantId = trim((string) ($claims['tid'] ?? ''));
+    $email = strtolower(trim((string) (
+        $claims['preferred_username']
+        ?? $claims['email']
+        ?? $claims['upn']
+        ?? ''
+    )));
+    $fullName = trim((string) ($claims['name'] ?? $email));
 
-    if (!$microsoftOid || !$email) {
+    if ($microsoftOid === '' || $email === '') {
         throw new RuntimeException('Microsoft did not return a usable user identity.');
     }
+
+    $subjectsToTry = array_values(array_unique(array_filter([
+        $microsoftOid,
+        $tenantId !== '' ? $tenantId . ':' . $microsoftOid : null,
+    ])));
 
     $pdo = db();
     $pdo->beginTransaction();
 
     try {
-        $stmt = $pdo->prepare("\n            SELECT p.id\n            FROM user_accounts ua\n            JOIN people p ON p.id = ua.person_id\n            WHERE ua.provider = 'microsoft'\n              AND ua.provider_subject = :provider_subject\n            LIMIT 1\n        ");
+        $personId = null;
 
-        $stmt->execute(['provider_subject' => $microsoftOid]);
-        $personId = $stmt->fetchColumn();
+        /*
+         * 1. Existing linked Microsoft account.
+         */
+        foreach ($subjectsToTry as $subject) {
+            $stmt = $pdo->prepare("
+                SELECT p.id
+                FROM user_accounts ua
+                JOIN people p ON p.id = ua.person_id
+                WHERE ua.provider = 'microsoft'
+                  AND ua.provider_subject = :provider_subject
+                LIMIT 1
+            ");
+            $stmt->execute(['provider_subject' => $subject]);
+            $personId = $stmt->fetchColumn();
 
+            if ($personId) {
+                break;
+            }
+        }
+
+        /*
+         * 2. If the cron stored the Microsoft Graph user ID on people, use that.
+         */
         if (!$personId) {
-            $stmt = $pdo->prepare("\n                SELECT id\n                FROM people\n                WHERE LOWER(primary_email) = LOWER(:email)\n                LIMIT 1\n            ");
+            try {
+                $stmt = $pdo->prepare("
+                    SELECT id
+                    FROM people
+                    WHERE microsoft_user_id = :oid
+                       OR m365_user_id = :oid
+                    LIMIT 1
+                ");
+                $stmt->execute(['oid' => $microsoftOid]);
+                $personId = $stmt->fetchColumn();
+            } catch (Throwable $e) {
+                // Columns may not exist on older installs.
+            }
+        }
 
+        /*
+         * 3. If the cron stored the UPN on people, use that.
+         */
+        if (!$personId) {
+            try {
+                $stmt = $pdo->prepare("
+                    SELECT id
+                    FROM people
+                    WHERE LOWER(microsoft_user_principal_name) = LOWER(:email)
+                       OR LOWER(m365_user_principal_name) = LOWER(:email)
+                       OR LOWER(district_email) = LOWER(:email)
+                    LIMIT 1
+                ");
+                $stmt->execute(['email' => $email]);
+                $personId = $stmt->fetchColumn();
+            } catch (Throwable $e) {
+                // Columns may not exist on older installs.
+            }
+        }
+
+        /*
+         * 4. Match from m365_account_requests.
+         * This is the important bit for accounts created by the cron.
+         */
+        if (!$personId) {
+            try {
+                $stmt = $pdo->prepare("
+                    SELECT person_id
+                    FROM m365_account_requests
+                    WHERE graph_user_id = :oid
+                       OR LOWER(graph_user_principal_name) = LOWER(:email)
+                       OR LOWER(requested_upn) = LOWER(:email)
+                    ORDER BY id DESC
+                    LIMIT 1
+                ");
+                $stmt->execute([
+                    'oid' => $microsoftOid,
+                    'email' => $email,
+                ]);
+                $personId = $stmt->fetchColumn();
+            } catch (Throwable $e) {
+                // Table may not exist on older installs.
+            }
+        }
+
+        /*
+         * 5. Fall back to people.primary_email.
+         */
+        if (!$personId) {
+            $stmt = $pdo->prepare("
+                SELECT id
+                FROM people
+                WHERE LOWER(primary_email) = LOWER(:email)
+                LIMIT 1
+            ");
             $stmt->execute(['email' => $email]);
             $personId = $stmt->fetchColumn();
         }
 
+        /*
+         * 6. If still not found, create a people row.
+         * The existing onboarding redirect will then send them to onboarding
+         * because they will not have a Group membership yet.
+         */
         if ($personId) {
-            $stmt = $pdo->prepare("\n                UPDATE people\n                SET full_name = CASE\n                        WHEN full_name IS NULL OR full_name = '' THEN :full_name\n                        ELSE full_name\n                    END,\n                    primary_email = COALESCE(primary_email, :email),\n                    status = CASE WHEN status = 'inactive' THEN status ELSE 'active' END\n                WHERE id = :person_id\n            ");
-
+            $stmt = $pdo->prepare("
+                UPDATE people
+                SET full_name = CASE
+                        WHEN full_name IS NULL OR full_name = '' THEN :full_name
+                        ELSE full_name
+                    END,
+                    primary_email = COALESCE(primary_email, :email),
+                    status = CASE WHEN status = 'inactive' THEN status ELSE 'active' END
+                WHERE id = :person_id
+            ");
             $stmt->execute([
                 'full_name' => $fullName,
                 'email' => $email,
                 'person_id' => (int) $personId,
             ]);
         } else {
-            $stmt = $pdo->prepare("\n                INSERT INTO people (full_name, primary_email, status)\n                VALUES (:full_name, :email, 'active')\n            ");
-
+            $stmt = $pdo->prepare("
+                INSERT INTO people (
+                    full_name,
+                    primary_email,
+                    status
+                )
+                VALUES (
+                    :full_name,
+                    :email,
+                    'active'
+                )
+            ");
             $stmt->execute([
-                'full_name' => $fullName,
+                'full_name' => $fullName !== '' ? $fullName : $email,
                 'email' => $email,
             ]);
 
             $personId = (int) $pdo->lastInsertId();
         }
 
-        $stmt = $pdo->prepare("\n            INSERT INTO user_accounts (person_id, provider, provider_subject, email, last_login_at)\n            VALUES (:person_id, 'microsoft', :provider_subject, :email, NOW())\n            ON DUPLICATE KEY UPDATE\n                person_id = VALUES(person_id),\n                email = VALUES(email),\n                last_login_at = NOW()\n        ");
-
-        $stmt->execute([
-            'person_id' => (int) $personId,
-            'provider_subject' => $microsoftOid,
-            'email' => $email,
-        ]);
+        /*
+         * 7. Link Microsoft sign-in to the person.
+         * Store the normal oid subject and, if available, tid:oid as well.
+         */
+        foreach ($subjectsToTry as $subject) {
+            $stmt = $pdo->prepare("
+                INSERT INTO user_accounts (
+                    person_id,
+                    provider,
+                    provider_subject,
+                    email,
+                    last_login_at
+                )
+                VALUES (
+                    :person_id,
+                    'microsoft',
+                    :provider_subject,
+                    :email,
+                    NOW()
+                )
+                ON DUPLICATE KEY UPDATE
+                    person_id = VALUES(person_id),
+                    email = VALUES(email),
+                    last_login_at = NOW()
+            ");
+            $stmt->execute([
+                'person_id' => (int) $personId,
+                'provider_subject' => $subject,
+                'email' => $email,
+            ]);
+        }
 
         $pdo->commit();
 
