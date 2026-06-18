@@ -5,10 +5,8 @@ declare(strict_types=1);
 /**
  * Cron: provision Microsoft 365 accounts from m365_account_requests.
  *
- * Recommended cPanel schedule:
- *
- * Every 5 minutes:
- * /usr/local/bin/php /home/YOUR_CPANEL_USER/app.irvalscouts.org.uk/cron/provision-m365-users.php >> /home/YOUR_CPANEL_USER/m365-provisioning.log 2>&1
+ * Recommended cPanel schedule, every 5 minutes:
+ * /usr/local/bin/php /home/brscouts/app.irvalscouts.org.uk/cron/provision_m365_accounts.php >> /home/brscouts/m365-provisioning.log 2>&1
  */
 
 require_once __DIR__ . '/../app/bootstrap.php';
@@ -18,12 +16,6 @@ if (is_file(__DIR__ . '/../app/group-manager-helpers.php')) {
 }
 
 $pdo = db();
-
-/**
- * -------------------------------------------------------------------------
- * Output helpers
- * -------------------------------------------------------------------------
- */
 
 function m365_stdout(string $message): void
 {
@@ -57,17 +49,10 @@ function m365_stderr(string $message): void
     error_log(trim($message));
 }
 
-/**
- * -------------------------------------------------------------------------
- * Config helpers
- * -------------------------------------------------------------------------
- */
-
 function m365_config_value(string $key, ?string $fallbackKey = null, string $default = ''): string
 {
     if (defined($key)) {
         $value = (string) constant($key);
-
         if ($value !== '') {
             return $value;
         }
@@ -75,7 +60,6 @@ function m365_config_value(string $key, ?string $fallbackKey = null, string $def
 
     if (function_exists('app_config')) {
         $value = (string) app_config($key, '');
-
         if ($value !== '') {
             return $value;
         }
@@ -83,7 +67,6 @@ function m365_config_value(string $key, ?string $fallbackKey = null, string $def
 
     if ($fallbackKey !== null && defined($fallbackKey)) {
         $value = (string) constant($fallbackKey);
-
         if ($value !== '') {
             return $value;
         }
@@ -91,7 +74,6 @@ function m365_config_value(string $key, ?string $fallbackKey = null, string $def
 
     if ($fallbackKey !== null && function_exists('app_config')) {
         $value = (string) app_config($fallbackKey, '');
-
         if ($value !== '') {
             return $value;
         }
@@ -102,28 +84,24 @@ function m365_config_value(string $key, ?string $fallbackKey = null, string $def
 
 function m365_config_bool(string $key, bool $default = false): bool
 {
-    $value = m365_config_value($key, null, $default ? 'true' : 'false');
-    $value = strtolower(trim($value));
-
+    $value = strtolower(trim(m365_config_value($key, null, $default ? 'true' : 'false')));
     return in_array($value, ['1', 'true', 'yes', 'on'], true);
 }
 
 function m365_config_int(string $key, int $default): int
 {
     $value = m365_config_value($key, null, (string) $default);
-
-    if (!is_numeric($value)) {
-        return $default;
-    }
-
-    return max(0, (int) $value);
+    return is_numeric($value) ? max(0, (int) $value) : $default;
 }
 
-/**
- * -------------------------------------------------------------------------
- * Database helpers
- * -------------------------------------------------------------------------
- */
+function m365_escape_html(string $value): string
+{
+    if (function_exists('e')) {
+        return e($value);
+    }
+
+    return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
 
 function m365_table_exists(string $table): bool
 {
@@ -134,14 +112,8 @@ function m365_table_exists(string $table): bool
     }
 
     try {
-        $stmt = db()->prepare("
-            SELECT COUNT(*)
-            FROM INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = :table_name
-        ");
+        $stmt = db()->prepare("\n            SELECT COUNT(*)\n            FROM INFORMATION_SCHEMA.TABLES\n            WHERE TABLE_SCHEMA = DATABASE()\n              AND TABLE_NAME = :table_name\n        ");
         $stmt->execute(['table_name' => $table]);
-
         return $cache[$table] = ((int) $stmt->fetchColumn()) > 0;
     } catch (Throwable $e) {
         return $cache[$table] = false;
@@ -158,18 +130,11 @@ function m365_column_exists(string $table, string $column): bool
     }
 
     try {
-        $stmt = db()->prepare("
-            SELECT COUNT(*)
-            FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = :table_name
-              AND COLUMN_NAME = :column_name
-        ");
+        $stmt = db()->prepare("\n            SELECT COUNT(*)\n            FROM INFORMATION_SCHEMA.COLUMNS\n            WHERE TABLE_SCHEMA = DATABASE()\n              AND TABLE_NAME = :table_name\n              AND COLUMN_NAME = :column_name\n        ");
         $stmt->execute([
             'table_name' => $table,
             'column_name' => $column,
         ]);
-
         return $cache[$key] = ((int) $stmt->fetchColumn()) > 0;
     } catch (Throwable $e) {
         return $cache[$key] = false;
@@ -185,127 +150,12 @@ function m365_table_columns(string $table): array
     }
 
     try {
-        $stmt = db()->prepare("
-            SELECT COLUMN_NAME
-            FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = :table_name
-        ");
+        $stmt = db()->prepare("\n            SELECT COLUMN_NAME\n            FROM INFORMATION_SCHEMA.COLUMNS\n            WHERE TABLE_SCHEMA = DATABASE()\n              AND TABLE_NAME = :table_name\n        ");
         $stmt->execute(['table_name' => $table]);
-
         return $cache[$table] = array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN));
     } catch (Throwable $e) {
         return $cache[$table] = [];
     }
-}
-
-function m365_mark_request(int $requestId, array $values): void
-{
-    $columns = m365_table_columns('m365_account_requests');
-    $update = [];
-
-    foreach ($values as $column => $value) {
-        if (in_array($column, $columns, true)) {
-            $update[$column] = $value;
-        }
-    }
-
-    if (!$update) {
-        return;
-    }
-
-    $sets = [];
-
-    foreach (array_keys($update) as $column) {
-        $sets[] = '`' . str_replace('`', '``', $column) . '` = :' . $column;
-    }
-
-    $update['_id'] = $requestId;
-
-    $stmt = db()->prepare("
-        UPDATE m365_account_requests
-        SET " . implode(', ', $sets) . "
-        WHERE id = :_id
-    ");
-    $stmt->execute($update);
-}
-
-function m365_try_lock_request(int $requestId): bool
-{
-    $stmt = db()->prepare("
-        UPDATE m365_account_requests
-        SET
-            provision_status = 'processing',
-            provision_started_at = NOW(),
-            provision_attempts = provision_attempts + 1,
-            provision_error = NULL
-        WHERE id = :id
-          AND provision_status IN ('pending', 'failed')
-          AND status IN ('requested', 'approved')
-    ");
-
-    $stmt->execute(['id' => $requestId]);
-
-    return $stmt->rowCount() === 1;
-}
-
-function m365_fetch_pending_requests(int $limit): array
-{
-    $stmt = db()->prepare("
-        SELECT
-            r.*,
-
-            p.full_name,
-            p.primary_email,
-            p.phone,
-
-            requested_by.full_name AS requested_by_name,
-            requested_by.primary_email AS requested_by_email
-
-        FROM m365_account_requests r
-
-        JOIN people p
-          ON p.id = r.person_id
-
-        LEFT JOIN people requested_by
-          ON requested_by.id = r.requested_by_person_id
-
-        WHERE r.status IN ('requested', 'approved')
-          AND r.provision_status IN ('pending', 'failed')
-          AND r.requested_upn IS NOT NULL
-          AND r.requested_upn <> ''
-          AND r.provision_attempts < 5
-
-        ORDER BY
-            CASE r.status
-                WHEN 'approved' THEN 0
-                ELSE 1
-            END,
-            r.created_at ASC,
-            r.id ASC
-
-        LIMIT :limit
-    ");
-
-    $stmt->bindValue('limit', $limit, PDO::PARAM_INT);
-    $stmt->execute();
-
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
-
-/**
- * -------------------------------------------------------------------------
- * String/email helpers
- * -------------------------------------------------------------------------
- */
-
-function m365_escape_html(string $value): string
-{
-    if (function_exists('e')) {
-        return e($value);
-    }
-
-    return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
 function m365_email_domain(string $email): string
@@ -317,15 +167,19 @@ function m365_email_domain(string $email): string
     }
 
     $parts = explode('@', $email);
-
     return strtolower(trim((string) end($parts)));
 }
 
 function m365_is_allowed_upn(string $email): bool
 {
     $domain = strtolower(ltrim(trim(m365_config_value('M365_DEFAULT_DOMAIN', null, 'irvalscouts.org.uk')), '@'));
-
     return $domain !== '' && m365_email_domain($email) === $domain;
+}
+
+function m365_first_name(string $displayName): string
+{
+    $parts = preg_split('/\s+/', trim($displayName));
+    return trim((string) ($parts[0] ?? ''));
 }
 
 function m365_make_mail_nickname(string $upn): string
@@ -333,28 +187,11 @@ function m365_make_mail_nickname(string $upn): string
     $local = strtolower(trim(strstr($upn, '@', true) ?: $upn));
     $local = preg_replace('/[^a-z0-9._-]+/', '', $local) ?? '';
     $local = trim($local, '._-');
-
     return $local !== '' ? substr($local, 0, 64) : 'user' . random_int(1000, 9999);
-}
-
-function m365_first_name(string $displayName): string
-{
-    $displayName = trim($displayName);
-
-    if ($displayName === '') {
-        return '';
-    }
-
-    $parts = preg_split('/\s+/', $displayName);
-
-    return trim((string) ($parts[0] ?? ''));
 }
 
 function m365_generate_temp_password(): string
 {
-    /*
-     * Avoid ambiguous characters and include mixed character classes.
-     */
     $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
     $lower = 'abcdefghijkmnopqrstuvwxyz';
     $digits = '23456789';
@@ -374,35 +211,27 @@ function m365_generate_temp_password(): string
     }
 
     shuffle($chars);
-
     return implode('', $chars);
 }
 
 function m365_app_url(string $path): string
 {
-    if (function_exists('gm_absolute_url')) {
-        return gm_absolute_url($path);
-    }
-
-    $base = rtrim(m365_config_value('APP_URL', null, ''), '/');
+    $base = rtrim(m365_config_value('M365_APP_URL', null, ''), '/');
 
     if ($base === '') {
-        return $path;
+        $base = rtrim(m365_config_value('APP_URL', null, ''), '/');
+    }
+
+    if ($base === '') {
+        $base = 'https://app.irvalscouts.org.uk';
     }
 
     return $base . '/' . ltrim($path, '/');
 }
 
-/**
- * -------------------------------------------------------------------------
- * Microsoft Graph helpers
- * -------------------------------------------------------------------------
- */
-
 function m365_json_decode_response(string $body): array
 {
     $decoded = json_decode($body, true);
-
     return is_array($decoded) ? $decoded : [];
 }
 
@@ -444,13 +273,8 @@ function m365_graph_token(\GuzzleHttp\Client $client): string
     return (string) $payload['access_token'];
 }
 
-function m365_graph_request(
-    \GuzzleHttp\Client $client,
-    string $method,
-    string $url,
-    string $token,
-    ?array $json = null
-): array {
+function m365_graph_request(\GuzzleHttp\Client $client, string $method, string $url, string $token, ?array $json = null): array
+{
     $options = [
         'headers' => [
             'Authorization' => 'Bearer ' . $token,
@@ -464,13 +288,11 @@ function m365_graph_request(
     }
 
     $response = $client->request($method, $url, $options);
-    $status = $response->getStatusCode();
     $body = (string) $response->getBody();
-    $payload = $body !== '' ? m365_json_decode_response($body) : [];
 
     return [
-        'status' => $status,
-        'payload' => $payload,
+        'status' => $response->getStatusCode(),
+        'payload' => $body !== '' ? m365_json_decode_response($body) : [],
         'body' => $body,
     ];
 }
@@ -494,33 +316,24 @@ function m365_graph_get_user_by_upn(\GuzzleHttp\Client $client, string $token, s
     return $result['payload'];
 }
 
-function m365_graph_create_user(
-    \GuzzleHttp\Client $client,
-    string $token,
-    string $displayName,
-    string $upn,
-    string $temporaryPassword
-): array {
-    $usageLocation = m365_config_value('M365_USAGE_LOCATION', null, 'GB');
-
-    $payload = [
-        'accountEnabled' => true,
-        'displayName' => $displayName,
-        'mailNickname' => m365_make_mail_nickname($upn),
-        'userPrincipalName' => $upn,
-        'usageLocation' => $usageLocation,
-        'passwordProfile' => [
-            'forceChangePasswordNextSignIn' => true,
-            'password' => $temporaryPassword,
-        ],
-    ];
-
+function m365_graph_create_user(\GuzzleHttp\Client $client, string $token, string $displayName, string $upn, string $temporaryPassword): array
+{
     $result = m365_graph_request(
         $client,
         'POST',
         'https://graph.microsoft.com/v1.0/users',
         $token,
-        $payload
+        [
+            'accountEnabled' => true,
+            'displayName' => $displayName,
+            'mailNickname' => m365_make_mail_nickname($upn),
+            'userPrincipalName' => $upn,
+            'usageLocation' => m365_config_value('M365_USAGE_LOCATION', null, 'GB'),
+            'passwordProfile' => [
+                'forceChangePasswordNextSignIn' => true,
+                'password' => $temporaryPassword,
+            ],
+        ]
     );
 
     if ((int) $result['status'] < 200 || (int) $result['status'] >= 300) {
@@ -536,10 +349,6 @@ function m365_graph_assign_license(\GuzzleHttp\Client $client, string $token, st
     $skuId = trim(m365_config_value('M365_DEFAULT_SKU_ID', null, ''));
 
     if ($skuId === '') {
-        /*
-         * Allow account creation without a licence if the SKU is not configured yet.
-         * The support/admin email will still say the account was created.
-         */
         return;
     }
 
@@ -550,9 +359,7 @@ function m365_graph_assign_license(\GuzzleHttp\Client $client, string $token, st
         $token,
         [
             'addLicenses' => [
-                [
-                    'skuId' => $skuId,
-                ],
+                ['skuId' => $skuId],
             ],
             'removeLicenses' => [],
         ]
@@ -564,12 +371,6 @@ function m365_graph_assign_license(\GuzzleHttp\Client $client, string $token, st
     }
 }
 
-/**
- * -------------------------------------------------------------------------
- * Email queue helpers
- * -------------------------------------------------------------------------
- */
-
 function m365_insert_email_queue(array $values): bool
 {
     if (!m365_table_exists('email_queue')) {
@@ -577,11 +378,6 @@ function m365_insert_email_queue(array $values): bool
     }
 
     $columns = m365_table_columns('email_queue');
-
-    if (!$columns) {
-        return false;
-    }
-
     $insert = [];
 
     foreach ($values as $column => $value) {
@@ -602,40 +398,24 @@ function m365_insert_email_queue(array $values): bool
         $insert['created_at'] = date('Y-m-d H:i:s');
     }
 
-    $fieldSql = implode(', ', array_map(
-        static fn(string $column): string => '`' . str_replace('`', '``', $column) . '`',
-        array_keys($insert)
-    ));
+    $fieldSql = implode(', ', array_map(static fn(string $column): string => '`' . str_replace('`', '``', $column) . '`', array_keys($insert)));
+    $placeholderSql = implode(', ', array_map(static fn(string $column): string => ':' . $column, array_keys($insert)));
 
-    $placeholderSql = implode(', ', array_map(
-        static fn(string $column): string => ':' . $column,
-        array_keys($insert)
-    ));
-
-    $stmt = db()->prepare("
-        INSERT INTO email_queue ({$fieldSql})
-        VALUES ({$placeholderSql})
-    ");
-
+    $stmt = db()->prepare("INSERT INTO email_queue ({$fieldSql}) VALUES ({$placeholderSql})");
     return $stmt->execute($insert);
 }
 
-function m365_queue_email(
-    ?int $personId,
-    string $toEmail,
-    string $toName,
-    string $subject,
-    string $plainBody,
-    string $notificationType,
-    ?int $requestId = null
-): bool {
+function m365_queue_email(?int $personId, string $toEmail, string $toName, string $subject, string $plainBody, string $notificationType, ?int $requestId = null, ?string $htmlBody = null): bool
+{
     $toEmail = strtolower(trim($toEmail));
 
     if ($toEmail === '' || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
         return false;
     }
 
-    $htmlBody = nl2br(m365_escape_html($plainBody));
+    if ($htmlBody === null || trim($htmlBody) === '') {
+        $htmlBody = nl2br(m365_escape_html($plainBody));
+    }
 
     return m365_insert_email_queue([
         'person_id' => $personId,
@@ -654,6 +434,225 @@ function m365_queue_email(
     ]);
 }
 
+function m365_email_button(string $url, string $label, string $background = '#7413dc'): string
+{
+    $safeUrl = m365_escape_html($url);
+    $safeLabel = m365_escape_html($label);
+    $safeBackground = m365_escape_html($background);
+
+    return '
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:22px 0;">
+            <tr>
+                <td bgcolor="' . $safeBackground . '" style="border:2px solid #4d0b93;">
+                    <a href="' . $safeUrl . '" style="display:inline-block;padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:20px;color:#ffffff;text-decoration:none;font-weight:bold;">' . $safeLabel . '</a>
+                </td>
+            </tr>
+        </table>
+    ';
+}
+
+function m365_email_shell(string $title, string $previewText, string $bodyHtml): string
+{
+    return '<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>' . m365_escape_html($title) . '</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f2f1;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">' . m365_escape_html($previewText) . '</div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f3f2f1;padding:24px 0;">
+        <tr>
+            <td align="center" style="padding:0 12px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:660px;background:#ffffff;border:2px solid #d8d8d8;">
+                    <tr>
+                        <td style="background:#4d0b93;color:#ffffff;padding:22px 24px;font-family:Arial,Helvetica,sans-serif;">
+                            <div style="font-size:13px;line-height:18px;font-weight:bold;letter-spacing:.03em;text-transform:uppercase;color:#d9c6ff;">Irwell Valley Scout District</div>
+                            <h1 style="margin:6px 0 0;font-size:25px;line-height:31px;font-weight:900;">' . m365_escape_html($title) . '</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:24px;font-family:Arial,Helvetica,sans-serif;color:#1d1d1b;font-size:16px;line-height:24px;">
+                            ' . $bodyHtml . '
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background:#f7f5fb;border-top:1px solid #e6e6e6;padding:16px 24px;font-family:Arial,Helvetica,sans-serif;color:#555555;font-size:13px;line-height:19px;">
+                            This message was sent by the Irwell Valley Leader Tool.<br>
+                            Irwell Valley Scout District
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>';
+}
+
+function m365_detail_table(array $rows): string
+{
+    $html = '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;margin:18px 0;">';
+
+    foreach ($rows as $label => $value) {
+        $html .= '<tr>';
+        $html .= '<td style="border:1px solid #d8d8d8;padding:10px;font-weight:bold;background:#f7f5fb;width:38%;">' . m365_escape_html((string) $label) . '</td>';
+        $html .= '<td style="border:1px solid #d8d8d8;padding:10px;">' . $value . '</td>';
+        $html .= '</tr>';
+    }
+
+    return $html . '</table>';
+}
+
+function m365_onboarding_body(string $firstName, string $displayName, string $upn, string $temporaryPassword): string
+{
+    $ssoUrl = m365_app_url('/auth/microsoft-start.php');
+    $dashboardUrl = m365_app_url('/index.php');
+    $calendarUrl = m365_app_url('/dc/');
+    $helloName = $firstName !== '' ? $firstName : $displayName;
+
+    return "Hello {$helloName},\n\n"
+        . "Welcome to Irwell Valley Scout District. Your District Microsoft 365 account is ready to use.\n\n"
+        . "Username:\n{$upn}\n\n"
+        . "Temporary password:\n{$temporaryPassword}\n\n"
+        . "You will be asked to change this password when you first sign in.\n\n"
+        . "Sign in with Microsoft:\n{$ssoUrl}\n\n"
+        . "District Dashboard:\n{$dashboardUrl}\n\n"
+        . "District Calendar:\n{$calendarUrl}\n\n"
+        . "Thank you for everything you do for Scouting.\n\n"
+        . "Irwell Valley Scout District";
+}
+
+function m365_onboarding_html(string $firstName, string $displayName, string $upn, string $temporaryPassword): string
+{
+    $ssoUrl = m365_app_url('/auth/microsoft-start.php');
+    $dashboardUrl = m365_app_url('/index.php');
+    $calendarUrl = m365_app_url('/dc/');
+    $helloName = $firstName !== '' ? $firstName : $displayName;
+
+    $body = '
+        <p style="margin-top:0;">Hello ' . m365_escape_html($helloName) . ',</p>
+        <p>Welcome to Irwell Valley Scout District — we’re pleased to let you know that your District Microsoft 365 account is ready to use.</p>
+        <p>This account lets you sign in to the District App and access District Microsoft 365 services connected to your role, including District email where enabled.</p>
+        ' . m365_detail_table([
+            'Username' => m365_escape_html($upn),
+            'Temporary password' => '<span style="font-family:Consolas,Monaco,monospace;font-weight:bold;letter-spacing:.02em;">' . m365_escape_html($temporaryPassword) . '</span>',
+        ]) . '
+        <p><strong>You will be asked to change this password when you first sign in.</strong></p>
+        ' . m365_email_button($ssoUrl, 'Sign in with Microsoft') . '
+        <p>You can also open these areas after signing in:</p>
+        <p style="margin-bottom:0;">
+            <a href="' . m365_escape_html($dashboardUrl) . '" style="color:#4d0b93;font-weight:bold;">Open the District Dashboard</a><br>
+            <a href="' . m365_escape_html($calendarUrl) . '" style="color:#4d0b93;font-weight:bold;">Open the District Calendar</a>
+        </p>
+        <p>Thank you for everything you do for Scouting.</p>
+    ';
+
+    return m365_email_shell('Welcome — your Microsoft 365 account is ready', 'Your Irwell Valley District Microsoft 365 account is ready to use.', $body);
+}
+
+function m365_existing_account_body(string $firstName, string $displayName, string $upn): string
+{
+    $ssoUrl = m365_app_url('/auth/microsoft-start.php');
+    $dashboardUrl = m365_app_url('/index.php');
+    $calendarUrl = m365_app_url('/dc/');
+    $helloName = $firstName !== '' ? $firstName : $displayName;
+
+    return "Hello {$helloName},\n\n"
+        . "Good news — your Irwell Valley District Microsoft 365 account is already available.\n\n"
+        . "Username:\n{$upn}\n\n"
+        . "Sign in with Microsoft:\n{$ssoUrl}\n\n"
+        . "District Dashboard:\n{$dashboardUrl}\n\n"
+        . "District Calendar:\n{$calendarUrl}\n\n"
+        . "Irwell Valley Scout District";
+}
+
+function m365_existing_account_html(string $firstName, string $displayName, string $upn): string
+{
+    $ssoUrl = m365_app_url('/auth/microsoft-start.php');
+    $dashboardUrl = m365_app_url('/index.php');
+    $calendarUrl = m365_app_url('/dc/');
+    $helloName = $firstName !== '' ? $firstName : $displayName;
+
+    $body = '
+        <p style="margin-top:0;">Hello ' . m365_escape_html($helloName) . ',</p>
+        <p>Good news — your Irwell Valley District Microsoft 365 account is already available, so no new account needed to be created.</p>
+        ' . m365_detail_table([
+            'Username' => m365_escape_html($upn),
+        ]) . '
+        ' . m365_email_button($ssoUrl, 'Sign in with Microsoft') . '
+        <p style="margin-bottom:0;">
+            <a href="' . m365_escape_html($dashboardUrl) . '" style="color:#4d0b93;font-weight:bold;">Open the District Dashboard</a><br>
+            <a href="' . m365_escape_html($calendarUrl) . '" style="color:#4d0b93;font-weight:bold;">Open the District Calendar</a>
+        </p>
+    ';
+
+    return m365_email_shell('Your Microsoft 365 account is available', 'Your Irwell Valley District Microsoft 365 account is available.', $body);
+}
+
+function m365_requester_created_body(string $requesterName, string $volunteerName, string $upn): string
+{
+    $helloName = trim($requesterName) !== '' ? trim($requesterName) : 'there';
+
+    return "Hello {$helloName},\n\n"
+        . "The Microsoft 365 account you requested has now been created.\n\n"
+        . "Volunteer:\n{$volunteerName}\n\n"
+        . "Microsoft 365 username:\n{$upn}\n\n"
+        . "The volunteer has been sent their username and temporary password. They will be asked to change the password when they first sign in.\n\n"
+        . "Irwell Valley Scout District";
+}
+
+function m365_requester_created_html(string $requesterName, string $volunteerName, string $upn): string
+{
+    $dashboardUrl = m365_app_url('/index.php');
+    $helloName = trim($requesterName) !== '' ? trim($requesterName) : 'there';
+
+    $body = '
+        <p style="margin-top:0;">Hello ' . m365_escape_html($helloName) . ',</p>
+        <p>Thanks for adding a team member. The Microsoft 365 account you requested has now been created.</p>
+        ' . m365_detail_table([
+            'Volunteer' => m365_escape_html($volunteerName),
+            'Microsoft 365 username' => m365_escape_html($upn),
+        ]) . '
+        <p>The volunteer has been sent their username and temporary password. They will be asked to change the password when they first sign in.</p>
+        ' . m365_email_button($dashboardUrl, 'Open District Dashboard') . '
+    ';
+
+    return m365_email_shell('Microsoft 365 account created', 'The Microsoft 365 account you requested has been created.', $body);
+}
+
+function m365_requester_existing_body(string $requesterName, string $volunteerName, string $upn): string
+{
+    $helloName = trim($requesterName) !== '' ? trim($requesterName) : 'there';
+
+    return "Hello {$helloName},\n\n"
+        . "The Microsoft 365 account you requested already exists, so no duplicate account was created.\n\n"
+        . "Volunteer:\n{$volunteerName}\n\n"
+        . "Existing Microsoft 365 username:\n{$upn}\n\n"
+        . "The volunteer has been sent sign-in instructions.\n\n"
+        . "Irwell Valley Scout District";
+}
+
+function m365_requester_existing_html(string $requesterName, string $volunteerName, string $upn): string
+{
+    $dashboardUrl = m365_app_url('/index.php');
+    $helloName = trim($requesterName) !== '' ? trim($requesterName) : 'there';
+
+    $body = '
+        <p style="margin-top:0;">Hello ' . m365_escape_html($helloName) . ',</p>
+        <p>The Microsoft 365 account you requested already exists, so no duplicate account was created.</p>
+        ' . m365_detail_table([
+            'Volunteer' => m365_escape_html($volunteerName),
+            'Existing Microsoft 365 username' => m365_escape_html($upn),
+        ]) . '
+        <p>The volunteer has been sent sign-in instructions.</p>
+        ' . m365_email_button($dashboardUrl, 'Open District Dashboard') . '
+    ';
+
+    return m365_email_shell('Microsoft 365 account already exists', 'The Microsoft 365 account you requested already exists.', $body);
+}
+
 function m365_support_notify(string $subject, string $body, ?int $requestId = null): void
 {
     $supportEmail = m365_config_value('M365_PROVISIONING_SUPPORT_EMAIL', null, 'support@irvalscouts.org.uk');
@@ -662,22 +661,77 @@ function m365_support_notify(string $subject, string $body, ?int $requestId = nu
         return;
     }
 
+    m365_queue_email(null, $supportEmail, 'Irwell Valley Support', $subject, $body, 'm365_provisioning_support', $requestId);
+}
+
+function m365_queue_requester_email(array $request, string $subject, string $body, string $notificationType, ?string $htmlBody = null): void
+{
+    $requesterEmail = strtolower(trim((string) ($request['requested_by_email'] ?? '')));
+    $requesterName = trim((string) ($request['requested_by_name'] ?? ''));
+
+    if ($requesterEmail === '' || !filter_var($requesterEmail, FILTER_VALIDATE_EMAIL)) {
+        return;
+    }
+
     m365_queue_email(
-        null,
-        $supportEmail,
-        'Irwell Valley Support',
+        isset($request['requested_by_person_id']) ? (int) $request['requested_by_person_id'] : null,
+        $requesterEmail,
+        $requesterName !== '' ? $requesterName : $requesterEmail,
         $subject,
         $body,
-        'm365_provisioning_support',
-        $requestId
+        $notificationType,
+        (int) $request['id'],
+        $htmlBody
     );
 }
 
-/**
- * -------------------------------------------------------------------------
- * Person/user-account update helpers
- * -------------------------------------------------------------------------
- */
+function m365_mark_request(int $requestId, array $values): void
+{
+    $columns = m365_table_columns('m365_account_requests');
+    $update = [];
+
+    foreach ($values as $column => $value) {
+        if (in_array($column, $columns, true)) {
+            $update[$column] = $value;
+        }
+    }
+
+    if (!$update) {
+        return;
+    }
+
+    $sets = [];
+
+    foreach (array_keys($update) as $column) {
+        $sets[] = '`' . str_replace('`', '``', $column) . '` = :' . $column;
+    }
+
+    $update['_id'] = $requestId;
+
+    $stmt = db()->prepare("UPDATE m365_account_requests SET " . implode(', ', $sets) . " WHERE id = :_id");
+    $stmt->execute($update);
+}
+
+function m365_try_lock_request(int $requestId): bool
+{
+    $stmt = db()->prepare("\n        UPDATE m365_account_requests\n        SET\n            provision_status = 'processing',\n            provision_started_at = NOW(),\n            provision_attempts = provision_attempts + 1,\n            provision_error = NULL\n        WHERE id = :id\n          AND provision_status IN ('pending', 'failed')\n          AND status IN ('requested', 'approved')\n    ");
+
+    $stmt->execute(['id' => $requestId]);
+    return $stmt->rowCount() === 1;
+}
+
+function m365_fetch_pending_requests(int $limit): array
+{
+    $maxAttempts = m365_config_int('M365_PROVISIONING_MAX_ATTEMPTS', 5);
+
+    $stmt = db()->prepare("\n        SELECT\n            r.*,\n            p.full_name,\n            p.primary_email,\n            p.phone,\n            requested_by.full_name AS requested_by_name,\n            requested_by.primary_email AS requested_by_email\n        FROM m365_account_requests r\n        JOIN people p\n          ON p.id = r.person_id\n        LEFT JOIN people requested_by\n          ON requested_by.id = r.requested_by_person_id\n        WHERE r.status IN ('requested', 'approved')\n          AND r.provision_status IN ('pending', 'failed')\n          AND r.requested_upn IS NOT NULL\n          AND r.requested_upn <> ''\n          AND r.provision_attempts < :max_attempts\n        ORDER BY\n            CASE r.status WHEN 'approved' THEN 0 ELSE 1 END,\n            r.created_at ASC,\n            r.id ASC\n        LIMIT :limit\n    ");
+
+    $stmt->bindValue('max_attempts', $maxAttempts, PDO::PARAM_INT);
+    $stmt->bindValue('limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 function m365_update_person_after_provisioning(int $personId, string $graphUserId, string $upn): void
 {
@@ -700,26 +754,15 @@ function m365_update_person_after_provisioning(int $personId, string $graphUserI
 
         if ($values) {
             $sets = [];
-
             foreach (array_keys($values) as $column) {
                 $sets[] = '`' . str_replace('`', '``', $column) . '` = :' . $column;
             }
-
             $values['_id'] = $personId;
-
-            $stmt = db()->prepare("
-                UPDATE people
-                SET " . implode(', ', $sets) . "
-                WHERE id = :_id
-            ");
+            $stmt = db()->prepare("UPDATE people SET " . implode(', ', $sets) . " WHERE id = :_id");
             $stmt->execute($values);
         }
     }
 
-    /*
-     * If the app has user_accounts, pre-link Microsoft sign-in to this person.
-     * This helps prevent duplicate person records on first Microsoft login.
-     */
     if (!m365_table_exists('user_accounts')) {
         return;
     }
@@ -745,14 +788,7 @@ function m365_update_person_after_provisioning(int $personId, string $graphUserI
 
     try {
         $safeSubjectColumn = '`' . str_replace('`', '``', $subjectColumn) . '`';
-
-        $stmt = db()->prepare("
-            SELECT id
-            FROM user_accounts
-            WHERE provider = 'microsoft'
-              AND {$safeSubjectColumn} = :subject
-            LIMIT 1
-        ");
+        $stmt = db()->prepare("\n            SELECT id\n            FROM user_accounts\n            WHERE provider = 'microsoft'\n              AND {$safeSubjectColumn} = :subject\n            LIMIT 1\n        ");
         $stmt->execute(['subject' => $graphUserId]);
 
         if ($stmt->fetchColumn()) {
@@ -780,109 +816,19 @@ function m365_update_person_after_provisioning(int $personId, string $graphUserI
             $insert['updated_at'] = date('Y-m-d H:i:s');
         }
 
-        $fieldSql = implode(', ', array_map(
-            static fn(string $column): string => '`' . str_replace('`', '``', $column) . '`',
-            array_keys($insert)
-        ));
-
-        $placeholderSql = implode(', ', array_map(
-            static fn(string $column): string => ':' . $column,
-            array_keys($insert)
-        ));
-
-        $stmt = db()->prepare("
-            INSERT INTO user_accounts ({$fieldSql})
-            VALUES ({$placeholderSql})
-        ");
+        $fieldSql = implode(', ', array_map(static fn(string $column): string => '`' . str_replace('`', '``', $column) . '`', array_keys($insert)));
+        $placeholderSql = implode(', ', array_map(static fn(string $column): string => ':' . $column, array_keys($insert)));
+        $stmt = db()->prepare("INSERT INTO user_accounts ({$fieldSql}) VALUES ({$placeholderSql})");
         $stmt->execute($insert);
     } catch (Throwable $e) {
-        /*
-         * Do not fail provisioning if pre-linking is not possible.
-         */
+        // Do not fail provisioning if pre-linking is not possible.
     }
 }
-
-/**
- * -------------------------------------------------------------------------
- * Email body helpers
- * -------------------------------------------------------------------------
- */
-
-function m365_onboarding_body(string $firstName, string $displayName, string $upn, string $temporaryPassword): string
-{
-    $ssoUrl = m365_app_url('/auth/microsoft-start.php');
-    $dashboardUrl = m365_app_url('/index.php');
-    $calendarUrl = m365_app_url('/dc/');
-
-    $helloName = $firstName !== '' ? $firstName : $displayName;
-
-    return "Hello {$helloName},\n\n"
-        . "Your Irwell Valley District Microsoft 365 account has been created.\n\n"
-        . "Username:\n{$upn}\n\n"
-        . "Temporary password:\n{$temporaryPassword}\n\n"
-        . "You will be asked to change this password when you first sign in.\n\n"
-        . "Sign in with Microsoft:\n{$ssoUrl}\n\n"
-        . "Dashboard:\n{$dashboardUrl}\n\n"
-        . "District Calendar:\n{$calendarUrl}\n\n"
-        . "This account gives you access to District Microsoft 365 services connected to your role, including District email where enabled.\n\n"
-        . "Irwell Valley Scout District";
-}
-
-function m365_requester_created_body(string $requesterName, string $volunteerName, string $upn): string
-{
-    $helloName = trim($requesterName) !== '' ? trim($requesterName) : 'there';
-
-    return "Hello {$helloName},\n\n"
-        . "The Microsoft 365 account you requested has now been created.\n\n"
-        . "Volunteer:\n{$volunteerName}\n\n"
-        . "Microsoft 365 username:\n{$upn}\n\n"
-        . "The volunteer has been sent their username and temporary password. They will be asked to change the password when they first sign in.\n\n"
-        . "Irwell Valley Scout District";
-}
-
-function m365_requester_existing_body(string $requesterName, string $volunteerName, string $upn): string
-{
-    $helloName = trim($requesterName) !== '' ? trim($requesterName) : 'there';
-
-    return "Hello {$helloName},\n\n"
-        . "The Microsoft 365 account you requested already exists, so no duplicate account was created.\n\n"
-        . "Volunteer:\n{$volunteerName}\n\n"
-        . "Existing Microsoft 365 username:\n{$upn}\n\n"
-        . "The volunteer has been sent sign-in instructions.\n\n"
-        . "Irwell Valley Scout District";
-}
-
-function m365_queue_requester_email(array $request, string $subject, string $body, string $notificationType): void
-{
-    $requesterEmail = strtolower(trim((string) ($request['requested_by_email'] ?? '')));
-    $requesterName = trim((string) ($request['requested_by_name'] ?? ''));
-
-    if ($requesterEmail === '' || !filter_var($requesterEmail, FILTER_VALIDATE_EMAIL)) {
-        return;
-    }
-
-    m365_queue_email(
-        isset($request['requested_by_person_id']) ? (int) $request['requested_by_person_id'] : null,
-        $requesterEmail,
-        $requesterName !== '' ? $requesterName : $requesterEmail,
-        $subject,
-        $body,
-        $notificationType,
-        (int) $request['id']
-    );
-}
-
-/**
- * -------------------------------------------------------------------------
- * Main provisioning
- * -------------------------------------------------------------------------
- */
 
 function m365_process_request(array $request, \GuzzleHttp\Client $client, string $token): void
 {
     $requestId = (int) $request['id'];
     $personId = (int) $request['person_id'];
-
     $displayName = trim((string) ($request['full_name'] ?? ''));
     $personalEmail = strtolower(trim((string) ($request['primary_email'] ?? '')));
     $upn = strtolower(trim((string) ($request['requested_upn'] ?? '')));
@@ -905,8 +851,6 @@ function m365_process_request(array $request, \GuzzleHttp\Client $client, string
         throw new RuntimeException('The person does not have a valid primary email address for onboarding.');
     }
 
-    $temporaryPassword = m365_generate_temp_password();
-
     $existingUser = m365_graph_get_user_by_upn($client, $token, $upn);
 
     if ($existingUser) {
@@ -923,26 +867,19 @@ function m365_process_request(array $request, \GuzzleHttp\Client $client, string
             $personId,
             $personalEmail,
             $displayName,
-            'Your Irwell Valley District Microsoft 365 account',
-            "Hello {$firstName},\n\n"
-            . "Your Irwell Valley District Microsoft 365 account is already available.\n\n"
-            . "Username:\n{$graphUpn}\n\n"
-            . "Please use the Microsoft sign-in button to access the District Dashboard and District Calendar.\n\n"
-            . "Sign in with Microsoft:\n" . m365_app_url('/auth/microsoft-start.php') . "\n\n"
-            . "Irwell Valley Scout District",
+            'Your Irwell Valley District Microsoft 365 account is available',
+            m365_existing_account_body($firstName, $displayName, $graphUpn),
             'm365_account_already_exists',
-            $requestId
+            $requestId,
+            m365_existing_account_html($firstName, $displayName, $graphUpn)
         );
 
         m365_queue_requester_email(
             $request,
             'Microsoft 365 account already exists',
-            m365_requester_existing_body(
-                (string) ($request['requested_by_name'] ?? ''),
-                $displayName,
-                $graphUpn
-            ),
-            'm365_account_requester_existing'
+            m365_requester_existing_body((string) ($request['requested_by_name'] ?? ''), $displayName, $graphUpn),
+            'm365_account_requester_existing',
+            m365_requester_existing_html((string) ($request['requested_by_name'] ?? ''), $displayName, $graphUpn)
         );
 
         m365_mark_request($requestId, [
@@ -958,6 +895,7 @@ function m365_process_request(array $request, \GuzzleHttp\Client $client, string
         return;
     }
 
+    $temporaryPassword = m365_generate_temp_password();
     $createdUser = m365_graph_create_user($client, $token, $displayName, $upn, $temporaryPassword);
     $graphUserId = (string) ($createdUser['id'] ?? '');
 
@@ -972,21 +910,19 @@ function m365_process_request(array $request, \GuzzleHttp\Client $client, string
         $personId,
         $personalEmail,
         $displayName,
-        'Your Irwell Valley District Microsoft 365 account is ready',
+        'Welcome — your Irwell Valley Microsoft 365 account is ready',
         m365_onboarding_body($firstName, $displayName, $upn, $temporaryPassword),
         'm365_account_created',
-        $requestId
+        $requestId,
+        m365_onboarding_html($firstName, $displayName, $upn, $temporaryPassword)
     );
 
     m365_queue_requester_email(
         $request,
         'Microsoft 365 account created',
-        m365_requester_created_body(
-            (string) ($request['requested_by_name'] ?? ''),
-            $displayName,
-            $upn
-        ),
-        'm365_account_requester_created'
+        m365_requester_created_body((string) ($request['requested_by_name'] ?? ''), $displayName, $upn),
+        'm365_account_requester_created',
+        m365_requester_created_html((string) ($request['requested_by_name'] ?? ''), $displayName, $upn)
     );
 
     m365_mark_request($requestId, [
@@ -1000,12 +936,6 @@ function m365_process_request(array $request, \GuzzleHttp\Client $client, string
         'provision_error' => null,
     ]);
 }
-
-/**
- * -------------------------------------------------------------------------
- * Cron runner
- * -------------------------------------------------------------------------
- */
 
 if (!m365_config_bool('M365_PROVISIONING_ENABLED', false)) {
     m365_stdout('Microsoft 365 provisioning is disabled.');
@@ -1041,14 +971,8 @@ try {
     $token = m365_graph_token($client);
 } catch (Throwable $e) {
     $message = 'Microsoft 365 provisioning could not start: ' . $e->getMessage();
-
     m365_stderr($message);
-
-    m365_support_notify(
-        'Microsoft 365 provisioning failed to start',
-        $message
-    );
-
+    m365_support_notify('Microsoft 365 provisioning failed to start', $message);
     exit(1);
 }
 
@@ -1065,7 +989,6 @@ foreach ($requests as $request) {
     try {
         m365_process_request($request, $client, $token);
         $processed++;
-
         m365_stdout("Provisioned request {$requestId}.");
     } catch (Throwable $e) {
         $failed++;
