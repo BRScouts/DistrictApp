@@ -563,7 +563,11 @@ function m365_graph_assign_license(\GuzzleHttp\Client $client, string $token, st
         throw new RuntimeException((string) $message);
     }
 }
-
+m365_stdout('PHP_SAPI = ' . PHP_SAPI);
+m365_stdout('Script path = ' . __FILE__);
+m365_stdout('M365_PROVISIONING_ENABLED = ' . m365_config_value('M365_PROVISIONING_ENABLED', null, 'NOT SET'));
+m365_stdout('M365_PROVISIONING_MODE = ' . m365_config_value('M365_PROVISIONING_MODE', null, 'NOT SET'));
+exit;
 /**
  * -------------------------------------------------------------------------
  * Email queue helpers
