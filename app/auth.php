@@ -201,20 +201,20 @@ function find_or_create_microsoft_user(array $claims): array
          */
         if ($personId) {
             $stmt = $pdo->prepare("
-                UPDATE people
-                SET full_name = CASE
-                        WHEN full_name IS NULL OR full_name = '' THEN :full_name
-                        ELSE full_name
-                    END,
-                    primary_email = COALESCE(primary_email, :email),
-                    status = CASE WHEN status = 'inactive' THEN status ELSE 'active' END
-                WHERE id = :person_id
-            ");
-            $stmt->execute([
-                'full_name' => $fullName,
-                'email' => $email,
-                'person_id' => (int) $personId,
-            ]);
+    UPDATE people
+    SET full_name = CASE
+            WHEN full_name IS NULL OR full_name = '' THEN :full_name
+            ELSE full_name
+        END,
+        primary_email = :email,
+        status = CASE WHEN status = 'inactive' THEN status ELSE 'active' END
+    WHERE id = :person_id
+");
+$stmt->execute([
+    'full_name' => $fullName,
+    'email' => $email,
+    'person_id' => (int) $personId,
+]);
         } else {
             $stmt = $pdo->prepare("
                 INSERT INTO people (
