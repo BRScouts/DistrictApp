@@ -10,9 +10,8 @@ if (is_logged_in()) {
 
 $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
 $authError = $_SESSION['auth_error'] ?? '';
-$oldEmail = $_SESSION['old_email'] ?? '';
 
-unset($_SESSION['auth_error'], $_SESSION['old_email']);
+unset($_SESSION['auth_error']);
 ?>
 <!doctype html>
 <html lang="en">
@@ -82,8 +81,7 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
         }
 
         a:focus,
-        button:focus,
-        input:focus {
+        button:focus {
             outline: 3px solid var(--lt-yellow);
             outline-offset: 0;
             box-shadow: 0 0 0 5px #000000;
@@ -152,7 +150,7 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
 
         .lt-login-grid {
             display: grid;
-            min-height: 620px;
+            min-height: 610px;
         }
 
         @media (min-width: 920px) {
@@ -162,12 +160,15 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
         }
 
         .lt-login-form-side {
+            display: flex;
+            flex-direction: column;
             padding: clamp(1.5rem, 4vw, 3rem);
             background: #ffffff;
         }
 
         .lt-login-kicker {
             display: inline-block;
+            width: fit-content;
             margin-bottom: 0.9rem;
             padding: 0.22rem 0.5rem;
             background: var(--lt-teal);
@@ -218,76 +219,35 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
             line-height: 1.45;
         }
 
-        .lt-login-form {
-            max-width: 480px;
+        .lt-login-sso-panel {
+            max-width: 500px;
             margin-top: 1.75rem;
+            padding: 1.25rem;
+            border-left: 8px solid var(--lt-teal);
+            background: #f7f3fc;
         }
 
-        .lt-form-group {
-            margin-bottom: 1.4rem;
-        }
-
-        .lt-form-group--error {
-            padding-left: 1rem;
-            border-left: 5px solid var(--lt-error);
-        }
-
-        .lt-label {
-            display: block;
-            margin-bottom: 0.45rem;
+        .lt-login-sso-panel h2 {
+            margin: 0;
             color: var(--lt-ink);
-            font-size: 1.06rem;
+            font-size: 1.2rem;
             font-weight: 900;
-            line-height: 1.25;
+            line-height: 1.2;
         }
 
-        .lt-hint {
-            display: block;
-            margin: -0.2rem 0 0.55rem;
+        .lt-login-sso-panel p {
+            margin: 0.6rem 0 0;
             color: var(--lt-muted);
-            font-size: 0.98rem;
+            font-size: 0.99rem;
             font-weight: 700;
-            line-height: 1.45;
-        }
-
-        .lt-error-message {
-            display: block;
-            margin: 0 0 0.55rem;
-            color: var(--lt-error);
-            font-size: 0.98rem;
-            font-weight: 900;
-            line-height: 1.35;
-        }
-
-        .lt-input {
-            display: block;
-            width: 100%;
-            min-height: 48px;
-            padding: 0.6rem 0.75rem;
-            border: 2px solid #101820;
-            border-radius: 0;
-            background: #ffffff;
-            color: var(--lt-ink);
-            font: inherit;
-            font-size: 1.08rem;
-            font-weight: 800;
-            line-height: 1.35;
-            appearance: none;
-        }
-
-        .lt-input:hover {
-            background: #f8f8f8;
-        }
-
-        .lt-input--error {
-            border-color: var(--lt-error);
+            line-height: 1.5;
         }
 
         .lt-login-actions {
             display: flex;
             flex-direction: column;
             gap: 0.9rem;
-            margin-top: 1.7rem;
+            margin-top: 1.2rem;
         }
 
         .lt-login-button {
@@ -295,7 +255,7 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
             align-items: center;
             justify-content: center;
             width: fit-content;
-            min-width: 190px;
+            min-width: 235px;
             min-height: 52px;
             padding: 0.85rem 1.2rem;
             background: var(--lt-purple);
@@ -320,32 +280,27 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
             text-decoration: none;
         }
 
-        .lt-login-secondary-link {
-            align-self: flex-start;
-            color: var(--lt-purple-dark);
-            font-size: 0.98rem;
-            font-weight: 900;
-        }
-
-        .lt-login-sso-panel {
-            margin-top: 1.8rem;
+        .lt-login-note {
+            max-width: 500px;
+            margin-top: 1.4rem;
             padding: 1rem;
+            border: 1px solid var(--lt-border);
             border-left: 8px solid var(--lt-teal);
-            background: #f7f3fc;
+            background: #ffffff;
         }
 
-        .lt-login-sso-panel h2 {
+        .lt-login-note h2 {
             margin: 0;
             color: var(--lt-ink);
-            font-size: 1.08rem;
+            font-size: 1.05rem;
             font-weight: 900;
             line-height: 1.2;
         }
 
-        .lt-login-sso-panel p {
+        .lt-login-note p {
             margin: 0.55rem 0 0;
             color: var(--lt-muted);
-            font-size: 0.98rem;
+            font-size: 0.96rem;
             font-weight: 700;
             line-height: 1.5;
         }
@@ -356,22 +311,10 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
             min-height: 420px;
             padding: clamp(1.5rem, 4vw, 3rem);
             background:
-                linear-gradient(135deg, rgba(77, 11, 147, 0.96), rgba(116, 19, 220, 0.96)),
+                linear-gradient(135deg, rgba(47, 0, 92, 0.98), rgba(77, 11, 147, 0.98) 48%, rgba(116, 19, 220, 0.98)),
                 var(--lt-purple-dark);
             color: #ffffff;
             overflow: hidden;
-        }
-
-        .lt-login-visual-side::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background:
-                linear-gradient(90deg, rgba(255, 221, 0, 0.22) 0 8px, transparent 8px 100%),
-                linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 100%);
-            background-size: 96px 100%, 100% 56px;
-            opacity: 0.42;
-            pointer-events: none;
         }
 
         .lt-visual-content {
@@ -453,10 +396,11 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
         }
 
         .lt-dashboard-heading {
-            width: 68%;
-            height: 18px;
-            margin-bottom: 1rem;
-            background: var(--lt-ink);
+            margin: 0 0 1rem;
+            color: var(--lt-ink);
+            font-size: 1.05rem;
+            font-weight: 900;
+            line-height: 1.2;
         }
 
         .lt-dashboard-row {
@@ -477,20 +421,25 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
             background: #f7f3fc;
             border-left: 6px solid var(--lt-teal);
             color: var(--lt-purple-dark);
-            font-size: 1.35rem;
+            font-size: 1rem;
             font-weight: 900;
+            line-height: 1;
         }
 
-        .lt-dashboard-line {
-            height: 12px;
-            margin-bottom: 0.45rem;
-            background: #101820;
+        .lt-dashboard-service-title {
+            margin: 0;
+            color: var(--lt-ink);
+            font-size: 1.02rem;
+            font-weight: 900;
+            line-height: 1.25;
         }
 
-        .lt-dashboard-line--short {
-            width: 58%;
-            margin-bottom: 0;
-            background: #b1b4b6;
+        .lt-dashboard-service-text {
+            margin: 0.22rem 0 0;
+            color: var(--lt-muted);
+            font-size: 0.93rem;
+            font-weight: 700;
+            line-height: 1.35;
         }
 
         .lt-login-meta {
@@ -504,6 +453,20 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
 
         .lt-login-meta span {
             color: var(--lt-purple-dark);
+        }
+
+        .lt-login-credit {
+            margin: 0.25rem 0 0;
+            color: var(--lt-muted);
+            font-size: 0.86rem;
+            font-weight: 800;
+            line-height: 1.35;
+            text-align: center;
+        }
+
+        .lt-login-credit span {
+            color: var(--lt-ink);
+            font-weight: 900;
         }
 
         @media (max-width: 919.98px) {
@@ -583,9 +546,11 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
             <div class="lt-login-grid">
                 <div class="lt-login-form-side">
                     <span class="lt-login-kicker">District access</span>
+
                     <h1 id="login-title">Access your District email and accounts</h1>
+
                     <p class="lt-login-lede">
-                        Sign in with your District account to manage leader tools, directory details, Group information and calendar access.
+                        Clean access for volunteers, with account areas designed around roles, Groups and District services.
                     </p>
 
                     <?php if ($authError !== ''): ?>
@@ -595,53 +560,23 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
                         </div>
                     <?php endif; ?>
 
-                    <form class="lt-login-form" method="post" action="/auth/login.php" novalidate>
-                        <div class="lt-form-group<?= $authError !== '' ? ' lt-form-group--error' : '' ?>">
-                            <label class="lt-label" for="email">Email address</label>
-                            <span class="lt-hint" id="email-hint">Use your District email address.</span>
-                            <?php if ($authError !== ''): ?>
-                                <span class="lt-error-message" id="email-error">Enter a valid District email address.</span>
-                            <?php endif; ?>
-                            <input
-                                class="lt-input<?= $authError !== '' ? ' lt-input--error' : '' ?>"
-                                id="email"
-                                name="email"
-                                type="email"
-                                inputmode="email"
-                                autocomplete="username"
-                                spellcheck="false"
-                                value="<?= e($oldEmail) ?>"
-                                aria-describedby="email-hint<?= $authError !== '' ? ' email-error' : '' ?>"
-                                required
-                            >
-                        </div>
-
-                        <div class="lt-form-group<?= $authError !== '' ? ' lt-form-group--error' : '' ?>">
-                            <label class="lt-label" for="password">Password</label>
-                            <?php if ($authError !== ''): ?>
-                                <span class="lt-error-message" id="password-error">Enter your password.</span>
-                            <?php endif; ?>
-                            <input
-                                class="lt-input<?= $authError !== '' ? ' lt-input--error' : '' ?>"
-                                id="password"
-                                name="password"
-                                type="password"
-                                autocomplete="current-password"
-                                aria-describedby="<?= $authError !== '' ? 'password-error' : '' ?>"
-                                required
-                            >
-                        </div>
+                    <div class="lt-login-sso-panel" aria-labelledby="sso-title">
+                        <h2 id="sso-title">Use your District Microsoft account</h2>
+                        <p>
+                            Single sign-on keeps access tied to your District account, role and Group permissions.
+                        </p>
 
                         <div class="lt-login-actions">
-                            <button class="lt-login-button" type="submit">Sign in</button>
-                            <a class="lt-login-secondary-link" href="/forgot-password.php">Forgotten your password?</a>
+                            <a href="/auth/microsoft-start.php" class="lt-login-button">
+                                Sign in with Microsoft
+                            </a>
                         </div>
-                    </form>
+                    </div>
 
-                    <div class="lt-login-sso-panel">
-                        <h2>Use Microsoft single sign-on</h2>
+                    <div class="lt-login-note">
+                        <h2>Using a Group calendar link?</h2>
                         <p>
-                            Volunteers with a District Microsoft account can also <a href="/auth/microsoft-start.php">sign in with Microsoft</a>.
+                            Open the link provided by your Group. A Group calendar link gives access to that Group’s calendar area only and does not sign you in as a named person.
                         </p>
                     </div>
                 </div>
@@ -652,7 +587,7 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
                             <span class="lt-visual-label">Irwell Valley Scouts</span>
                             <h2>One secure place for District tools.</h2>
                             <p>
-                                Clean access for volunteers, with account areas designed around roles, Groups and District services.
+                                Access the core services volunteers need without separate local passwords.
                             </p>
                         </div>
 
@@ -662,27 +597,31 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
                                 <span class="lt-dashboard-dot"></span>
                                 <span class="lt-dashboard-dot"></span>
                             </div>
+
                             <div class="lt-dashboard-body">
-                                <div class="lt-dashboard-heading"></div>
+                                <h3 class="lt-dashboard-heading">District services</h3>
+
                                 <div class="lt-dashboard-row">
                                     <div class="lt-dashboard-icon">@</div>
                                     <div>
-                                        <div class="lt-dashboard-line"></div>
-                                        <div class="lt-dashboard-line lt-dashboard-line--short"></div>
+                                        <p class="lt-dashboard-service-title">Your District Email</p>
+                                        <p class="lt-dashboard-service-text">Access your District mailbox and account services.</p>
                                     </div>
                                 </div>
+
                                 <div class="lt-dashboard-row">
-                                    <div class="lt-dashboard-icon">✓</div>
+                                    <div class="lt-dashboard-icon">Cal</div>
                                     <div>
-                                        <div class="lt-dashboard-line"></div>
-                                        <div class="lt-dashboard-line lt-dashboard-line--short"></div>
+                                        <p class="lt-dashboard-service-title">District Calendar</p>
+                                        <p class="lt-dashboard-service-text">View shared dates, meetings and District activity.</p>
                                     </div>
                                 </div>
+
                                 <div class="lt-dashboard-row">
-                                    <div class="lt-dashboard-icon">#</div>
+                                    <div class="lt-dashboard-icon">RA</div>
                                     <div>
-                                        <div class="lt-dashboard-line"></div>
-                                        <div class="lt-dashboard-line lt-dashboard-line--short"></div>
+                                        <p class="lt-dashboard-service-title">Risk Assessments</p>
+                                        <p class="lt-dashboard-service-text">Find the documents and checks linked to your role.</p>
                                     </div>
                                 </div>
                             </div>
@@ -693,6 +632,7 @@ unset($_SESSION['auth_error'], $_SESSION['old_email']);
         </section>
 
         <p class="lt-login-meta"><span><?= e($appName) ?></span> · Irwell Valley Scout District</p>
+        <p class="lt-login-credit">Credit: <span>CK Enterprises UK</span></p>
     </div>
 </main>
 
