@@ -583,9 +583,7 @@ unset($_SESSION['auth_error']);
                         <div>
                             <span class="lt-visual-label">Irwell Valley Scouts</span>
                             <h2>One secure place for District tools.</h2>
-                            <p>
-                                Access the core services volunteers need without separate local passwords.
-                            </p>
+                         
                         </div>
 
                         <div class="lt-dashboard-mockup" aria-hidden="true">
