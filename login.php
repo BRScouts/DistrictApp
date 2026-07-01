@@ -317,15 +317,14 @@ unset($_SESSION['auth_error']);
             overflow: hidden;
         }
 
-        .lt-visual-content {
-            position: relative;
-            z-index: 1;
-            display: flex;
-            width: 100%;
-            flex-direction: column;
-            justify-content: space-between;
-            gap: 2rem;
-        }
+        .lt-visual-content > div > p {
+    max-width: 540px;
+    margin: 1rem 0 0;
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 1.04rem;
+    font-weight: 800;
+    line-height: 1.48;
+}
 
         .lt-visual-label {
             display: inline-block;
@@ -357,14 +356,21 @@ unset($_SESSION['auth_error']);
             line-height: 1.48;
         }
 
-        .lt-dashboard-mockup {
-            width: min(100%, 520px);
-            margin-left: auto;
-            border: 2px solid rgba(255, 255, 255, 0.85);
-            background: #ffffff;
-            box-shadow: 12px 12px 0 rgba(0, 0, 0, 0.32);
-            color: var(--lt-ink);
-        }
+        .lt-dashboard-mockup .lt-dashboard-service-title {
+    margin: 0;
+    color: var(--lt-ink);
+    font-size: 1.02rem;
+    font-weight: 900;
+    line-height: 1.25;
+}
+
+.lt-dashboard-mockup .lt-dashboard-service-text {
+    margin: 0.22rem 0 0;
+    color: var(--lt-muted);
+    font-size: 0.93rem;
+    font-weight: 700;
+    line-height: 1.35;
+}
 
         .lt-dashboard-topbar {
             display: flex;
@@ -547,11 +553,9 @@ unset($_SESSION['auth_error']);
                 <div class="lt-login-form-side">
                     <span class="lt-login-kicker">District access</span>
 
-                    <h1 id="login-title">Access your District email and accounts</h1>
+                    <h1 id="login-title">Access your District accounts</h1>
 
-                    <p class="lt-login-lede">
-                        Clean access for volunteers, with account areas designed around roles, Groups and District services.
-                    </p>
+                    
 
                     <?php if ($authError !== ''): ?>
                         <div class="lt-login-error-summary" role="alert" aria-labelledby="login-error-title" tabindex="-1">
@@ -562,9 +566,7 @@ unset($_SESSION['auth_error']);
 
                     <div class="lt-login-sso-panel" aria-labelledby="sso-title">
                         <h2 id="sso-title">Use your District Microsoft account</h2>
-                        <p>
-                            Single sign-on keeps access tied to your District account, role and Group permissions.
-                        </p>
+                      
 
                         <div class="lt-login-actions">
                             <a href="/auth/microsoft-start.php" class="lt-login-button">
