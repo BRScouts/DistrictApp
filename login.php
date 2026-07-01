@@ -628,8 +628,7 @@ unset($_SESSION['auth_error']);
             </div>
         </section>
 
-        <p class="lt-login-meta"><span><?= e($appName) ?></span> · Irwell Valley Scout District</p>
-        <p class="lt-login-credit">Portal Designed by: <span>CK Enterprises UK</span></p>
+        <p class="lt-login-credit">Portal Designed by: <span><a href="https://www.ckenterprises.co.uk" target="_blank">CK Enterprises UK</a></span></p>
     </div>
 </main>
 
