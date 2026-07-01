@@ -548,7 +548,7 @@ unset($_SESSION['auth_error']);
                 <div class="lt-login-form-side">
                     <span class="lt-login-kicker">District access</span>
 
-                    <h1 id="login-title">Access your District accounts</h1>
+                    <h1 id="login-title">Access your District account</h1>
 
                     
 
