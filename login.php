@@ -9,6 +9,10 @@ if (is_logged_in()) {
 }
 
 $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
+$authError = $_SESSION['auth_error'] ?? '';
+$oldEmail = $_SESSION['old_email'] ?? '';
+
+unset($_SESSION['auth_error'], $_SESSION['old_email']);
 ?>
 <!doctype html>
 <html lang="en">
@@ -43,7 +47,8 @@ $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
             --lt-border: #d8dde3;
             --lt-canvas: #f5f6f8;
             --lt-white: #ffffff;
-            --lt-width: 1040px;
+            --lt-error: #d4351c;
+            --lt-width: 1120px;
         }
 
         * {
@@ -52,14 +57,14 @@ $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
 
         html {
             min-height: 100%;
-            background: var(--lt-purple-deep);
+            background: var(--lt-canvas);
         }
 
         body {
             min-height: 100vh;
             margin: 0;
             background:
-                linear-gradient(135deg, var(--lt-purple-deep) 0%, var(--lt-purple-dark) 48%, var(--lt-purple) 100%);
+                linear-gradient(180deg, var(--lt-purple-deep) 0 265px, var(--lt-canvas) 265px 100%);
             color: var(--lt-ink);
             font-family: "Nunito Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             text-rendering: optimizeLegibility;
@@ -77,16 +82,15 @@ $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
         }
 
         a:focus,
-        button:focus {
+        button:focus,
+        input:focus {
             outline: 3px solid var(--lt-yellow);
-            outline-offset: 3px;
+            outline-offset: 0;
             box-shadow: 0 0 0 5px #000000;
         }
 
         .lt-login-page {
             min-height: 100vh;
-            display: flex;
-            align-items: center;
             padding: clamp(1rem, 4vw, 3rem);
         }
 
@@ -99,7 +103,7 @@ $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
             display: inline-flex;
             align-items: center;
             gap: 0.85rem;
-            margin-bottom: 1rem;
+            margin-bottom: 1.25rem;
             color: #ffffff;
             text-decoration: none;
         }
@@ -139,105 +143,168 @@ $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
         }
 
         .lt-login-card {
+            overflow: hidden;
             background: #ffffff;
             border: 1px solid rgba(16, 24, 32, 0.18);
             border-top: 10px solid var(--lt-teal);
-            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
         }
 
         .lt-login-grid {
             display: grid;
+            min-height: 620px;
         }
 
-        @media (min-width: 900px) {
+        @media (min-width: 920px) {
             .lt-login-grid {
-                grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+                grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
             }
         }
 
-        .lt-login-intro {
-            background: var(--lt-purple-dark);
-            color: #ffffff;
-            padding: clamp(1.5rem, 4vw, 2.25rem);
-        }
-
-        .lt-login-intro h1 {
-            margin: 0;
-            color: #ffffff;
-            font-size: clamp(2rem, 5vw, 3.4rem);
-            font-weight: 900;
-            line-height: 0.98;
-            letter-spacing: -0.05em;
-        }
-
-        .lt-login-intro p {
-            max-width: 520px;
-            margin: 1rem 0 0;
-            color: rgba(255, 255, 255, 0.94);
-            font-size: 1.05rem;
-            font-weight: 800;
-            line-height: 1.45;
-        }
-
-        .lt-login-panel {
-            padding: clamp(1.5rem, 4vw, 2.5rem);
+        .lt-login-form-side {
+            padding: clamp(1.5rem, 4vw, 3rem);
             background: #ffffff;
         }
 
-        .lt-login-panel h2 {
+        .lt-login-kicker {
+            display: inline-block;
+            margin-bottom: 0.9rem;
+            padding: 0.22rem 0.5rem;
+            background: var(--lt-teal);
+            color: #ffffff;
+            font-size: 0.9rem;
+            font-weight: 900;
+            line-height: 1.2;
+        }
+
+        .lt-login-form-side h1 {
+            max-width: 620px;
             margin: 0;
             color: var(--lt-ink);
-            font-size: clamp(1.7rem, 4vw, 2.6rem);
+            font-size: clamp(2.05rem, 5vw, 3.45rem);
             font-weight: 900;
-            line-height: 1;
-            letter-spacing: -0.045em;
+            line-height: 0.98;
+            letter-spacing: -0.055em;
         }
 
         .lt-login-lede {
-            max-width: 640px;
+            max-width: 620px;
             margin: 1rem 0 0;
             color: var(--lt-ink);
-            font-size: clamp(1.05rem, 2vw, 1.2rem);
+            font-size: clamp(1.03rem, 1.8vw, 1.16rem);
             font-weight: 800;
             line-height: 1.45;
         }
 
-        .lt-login-action-panel {
+        .lt-login-error-summary {
             margin-top: 1.5rem;
-            padding: 1.25rem;
-            background: #f7f3fc;
-            border-left: 8px solid var(--lt-purple);
+            padding: 1rem;
+            border: 4px solid var(--lt-error);
+            background: #ffffff;
         }
 
-        .lt-login-action-panel h3 {
+        .lt-login-error-summary h2 {
             margin: 0;
             color: var(--lt-ink);
-            font-size: 1.2rem;
+            font-size: 1.25rem;
             font-weight: 900;
-            line-height: 1.15;
-            letter-spacing: -0.015em;
+            line-height: 1.2;
         }
 
-        .lt-login-action-panel p {
-            margin: 0.65rem 0 0;
+        .lt-login-error-summary p {
+            margin: 0.6rem 0 0;
             color: var(--lt-ink);
-            font-size: 1rem;
+            font-weight: 800;
+            line-height: 1.45;
+        }
+
+        .lt-login-form {
+            max-width: 480px;
+            margin-top: 1.75rem;
+        }
+
+        .lt-form-group {
+            margin-bottom: 1.4rem;
+        }
+
+        .lt-form-group--error {
+            padding-left: 1rem;
+            border-left: 5px solid var(--lt-error);
+        }
+
+        .lt-label {
+            display: block;
+            margin-bottom: 0.45rem;
+            color: var(--lt-ink);
+            font-size: 1.06rem;
+            font-weight: 900;
+            line-height: 1.25;
+        }
+
+        .lt-hint {
+            display: block;
+            margin: -0.2rem 0 0.55rem;
+            color: var(--lt-muted);
+            font-size: 0.98rem;
             font-weight: 700;
-            line-height: 1.5;
+            line-height: 1.45;
+        }
+
+        .lt-error-message {
+            display: block;
+            margin: 0 0 0.55rem;
+            color: var(--lt-error);
+            font-size: 0.98rem;
+            font-weight: 900;
+            line-height: 1.35;
+        }
+
+        .lt-input {
+            display: block;
+            width: 100%;
+            min-height: 48px;
+            padding: 0.6rem 0.75rem;
+            border: 2px solid #101820;
+            border-radius: 0;
+            background: #ffffff;
+            color: var(--lt-ink);
+            font: inherit;
+            font-size: 1.08rem;
+            font-weight: 800;
+            line-height: 1.35;
+            appearance: none;
+        }
+
+        .lt-input:hover {
+            background: #f8f8f8;
+        }
+
+        .lt-input--error {
+            border-color: var(--lt-error);
+        }
+
+        .lt-login-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.9rem;
+            margin-top: 1.7rem;
         }
 
         .lt-login-button {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 100%;
-            min-height: 54px;
-            margin-top: 1rem;
-            padding: 0.85rem 1rem;
+            width: fit-content;
+            min-width: 190px;
+            min-height: 52px;
+            padding: 0.85rem 1.2rem;
             background: var(--lt-purple);
             border: 2px solid var(--lt-purple);
+            border-radius: 0;
             color: #ffffff;
             box-shadow: 0 4px 0 #000000;
+            cursor: pointer;
+            font: inherit;
             font-size: 1.05rem;
             font-weight: 900;
             line-height: 1.15;
@@ -253,23 +320,29 @@ $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
             text-decoration: none;
         }
 
-        .lt-login-note {
-            margin-top: 1.5rem;
-            padding: 1rem;
-            background: #ffffff;
-            border: 1px solid var(--lt-border);
-            border-left: 8px solid var(--lt-teal);
+        .lt-login-secondary-link {
+            align-self: flex-start;
+            color: var(--lt-purple-dark);
+            font-size: 0.98rem;
+            font-weight: 900;
         }
 
-        .lt-login-note h3 {
+        .lt-login-sso-panel {
+            margin-top: 1.8rem;
+            padding: 1rem;
+            border-left: 8px solid var(--lt-teal);
+            background: #f7f3fc;
+        }
+
+        .lt-login-sso-panel h2 {
             margin: 0;
             color: var(--lt-ink);
-            font-size: 1.05rem;
+            font-size: 1.08rem;
             font-weight: 900;
             line-height: 1.2;
         }
 
-        .lt-login-note p {
+        .lt-login-sso-panel p {
             margin: 0.55rem 0 0;
             color: var(--lt-muted);
             font-size: 0.98rem;
@@ -277,35 +350,183 @@ $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
             line-height: 1.5;
         }
 
+        .lt-login-visual-side {
+            position: relative;
+            display: flex;
+            min-height: 420px;
+            padding: clamp(1.5rem, 4vw, 3rem);
+            background:
+                linear-gradient(135deg, rgba(77, 11, 147, 0.96), rgba(116, 19, 220, 0.96)),
+                var(--lt-purple-dark);
+            color: #ffffff;
+            overflow: hidden;
+        }
+
+        .lt-login-visual-side::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(90deg, rgba(255, 221, 0, 0.22) 0 8px, transparent 8px 100%),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 100%);
+            background-size: 96px 100%, 100% 56px;
+            opacity: 0.42;
+            pointer-events: none;
+        }
+
+        .lt-visual-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            width: 100%;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 2rem;
+        }
+
+        .lt-visual-label {
+            display: inline-block;
+            width: fit-content;
+            padding: 0.22rem 0.5rem;
+            background: var(--lt-yellow);
+            color: #101820;
+            font-size: 0.85rem;
+            font-weight: 900;
+            line-height: 1.2;
+        }
+
+        .lt-visual-content h2 {
+            max-width: 560px;
+            margin: 1rem 0 0;
+            color: #ffffff;
+            font-size: clamp(1.9rem, 4vw, 3rem);
+            font-weight: 900;
+            line-height: 1;
+            letter-spacing: -0.045em;
+        }
+
+        .lt-visual-content p {
+            max-width: 540px;
+            margin: 1rem 0 0;
+            color: rgba(255, 255, 255, 0.92);
+            font-size: 1.04rem;
+            font-weight: 800;
+            line-height: 1.48;
+        }
+
+        .lt-dashboard-mockup {
+            width: min(100%, 520px);
+            margin-left: auto;
+            border: 2px solid rgba(255, 255, 255, 0.85);
+            background: #ffffff;
+            box-shadow: 12px 12px 0 rgba(0, 0, 0, 0.32);
+            color: var(--lt-ink);
+        }
+
+        .lt-dashboard-topbar {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            min-height: 46px;
+            padding: 0.75rem;
+            border-bottom: 2px solid #101820;
+            background: #f3f2f1;
+        }
+
+        .lt-dashboard-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: var(--lt-purple);
+        }
+
+        .lt-dashboard-dot:nth-child(2) {
+            background: var(--lt-teal);
+        }
+
+        .lt-dashboard-dot:nth-child(3) {
+            background: var(--lt-yellow);
+        }
+
+        .lt-dashboard-body {
+            padding: 1rem;
+        }
+
+        .lt-dashboard-heading {
+            width: 68%;
+            height: 18px;
+            margin-bottom: 1rem;
+            background: var(--lt-ink);
+        }
+
+        .lt-dashboard-row {
+            display: grid;
+            grid-template-columns: 52px 1fr;
+            gap: 0.8rem;
+            align-items: center;
+            padding: 0.78rem 0;
+            border-top: 1px solid var(--lt-border);
+        }
+
+        .lt-dashboard-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 52px;
+            height: 52px;
+            background: #f7f3fc;
+            border-left: 6px solid var(--lt-teal);
+            color: var(--lt-purple-dark);
+            font-size: 1.35rem;
+            font-weight: 900;
+        }
+
+        .lt-dashboard-line {
+            height: 12px;
+            margin-bottom: 0.45rem;
+            background: #101820;
+        }
+
+        .lt-dashboard-line--short {
+            width: 58%;
+            margin-bottom: 0;
+            background: #b1b4b6;
+        }
+
         .lt-login-meta {
             margin-top: 1rem;
-            color: rgba(255, 255, 255, 0.94);
+            color: var(--lt-muted);
             font-size: 0.95rem;
             font-weight: 900;
             line-height: 1.35;
             text-align: center;
         }
 
-        @media (max-width: 899.98px) {
-            .lt-login-page {
-                align-items: flex-start;
+        .lt-login-meta span {
+            color: var(--lt-purple-dark);
+        }
+
+        @media (max-width: 919.98px) {
+            body {
+                background:
+                    linear-gradient(180deg, var(--lt-purple-deep) 0 220px, var(--lt-canvas) 220px 100%);
             }
 
-            .lt-login-service-mark {
-                margin-bottom: 0.75rem;
+            .lt-login-grid {
+                min-height: 0;
             }
 
-            .lt-login-service-mark img {
-                height: 54px;
-                max-width: 180px;
+            .lt-login-visual-side {
+                min-height: 0;
+                border-top: 6px solid var(--lt-teal);
             }
 
-            .lt-login-intro {
-                border-bottom: 6px solid var(--lt-teal);
+            .lt-dashboard-mockup {
+                margin-left: 0;
             }
         }
 
-        @media (max-width: 520px) {
+        @media (max-width: 560px) {
             .lt-login-page {
                 padding: 0.75rem;
             }
@@ -316,9 +537,17 @@ $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
                 gap: 0.45rem;
             }
 
-            .lt-login-action-panel,
-            .lt-login-note {
-                padding: 1rem;
+            .lt-login-service-mark img {
+                height: 54px;
+                max-width: 180px;
+            }
+
+            .lt-login-button {
+                width: 100%;
+            }
+
+            .lt-dashboard-mockup {
+                box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.32);
             }
         }
 
@@ -352,42 +581,118 @@ $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
 
         <section class="lt-login-card" aria-labelledby="login-title">
             <div class="lt-login-grid">
-                <div class="lt-login-intro">
-                    <h1 id="login-title">Sign in to the District Dashboard</h1>
-                    <p>
-                        Use your District Microsoft account to access leader tools, directory details and Group information.
-                    </p>
-                </div>
-
-                <div class="lt-login-panel">
-                    <h2>Sign in</h2>
-
+                <div class="lt-login-form-side">
+                    <span class="lt-login-kicker">District access</span>
+                    <h1 id="login-title">Access your District email and accounts</h1>
                     <p class="lt-login-lede">
-                        This is for Irwell Valley Scouts volunteers with a District Microsoft account.
+                        Sign in with your District account to manage leader tools, directory details, Group information and calendar access.
                     </p>
 
-                    <div class="lt-login-action-panel">
-                        <h3>Microsoft account</h3>
-                        <p>
-                            Sign in to open your dashboard and continue to the tools available to your role.
-                        </p>
+                    <?php if ($authError !== ''): ?>
+                        <div class="lt-login-error-summary" role="alert" aria-labelledby="login-error-title" tabindex="-1">
+                            <h2 id="login-error-title">There is a problem</h2>
+                            <p><?= e($authError) ?></p>
+                        </div>
+                    <?php endif; ?>
 
-                        <a href="/auth/microsoft-start.php" class="lt-login-button">
-                            Sign in with Microsoft
-                        </a>
-                    </div>
+                    <form class="lt-login-form" method="post" action="/auth/login.php" novalidate>
+                        <div class="lt-form-group<?= $authError !== '' ? ' lt-form-group--error' : '' ?>">
+                            <label class="lt-label" for="email">Email address</label>
+                            <span class="lt-hint" id="email-hint">Use your District email address.</span>
+                            <?php if ($authError !== ''): ?>
+                                <span class="lt-error-message" id="email-error">Enter a valid District email address.</span>
+                            <?php endif; ?>
+                            <input
+                                class="lt-input<?= $authError !== '' ? ' lt-input--error' : '' ?>"
+                                id="email"
+                                name="email"
+                                type="email"
+                                inputmode="email"
+                                autocomplete="username"
+                                spellcheck="false"
+                                value="<?= e($oldEmail) ?>"
+                                aria-describedby="email-hint<?= $authError !== '' ? ' email-error' : '' ?>"
+                                required
+                            >
+                        </div>
 
-                    <div class="lt-login-note">
-                        <h3>Using a Group calendar link?</h3>
+                        <div class="lt-form-group<?= $authError !== '' ? ' lt-form-group--error' : '' ?>">
+                            <label class="lt-label" for="password">Password</label>
+                            <?php if ($authError !== ''): ?>
+                                <span class="lt-error-message" id="password-error">Enter your password.</span>
+                            <?php endif; ?>
+                            <input
+                                class="lt-input<?= $authError !== '' ? ' lt-input--error' : '' ?>"
+                                id="password"
+                                name="password"
+                                type="password"
+                                autocomplete="current-password"
+                                aria-describedby="<?= $authError !== '' ? 'password-error' : '' ?>"
+                                required
+                            >
+                        </div>
+
+                        <div class="lt-login-actions">
+                            <button class="lt-login-button" type="submit">Sign in</button>
+                            <a class="lt-login-secondary-link" href="/forgot-password.php">Forgotten your password?</a>
+                        </div>
+                    </form>
+
+                    <div class="lt-login-sso-panel">
+                        <h2>Use Microsoft single sign-on</h2>
                         <p>
-                            Open the link provided by your Group. A Group calendar link gives access to that Group’s calendar area only and does not sign you in as a named person.
+                            Volunteers with a District Microsoft account can also <a href="/auth/microsoft-start.php">sign in with Microsoft</a>.
                         </p>
                     </div>
                 </div>
+
+                <aside class="lt-login-visual-side" aria-label="District account services">
+                    <div class="lt-visual-content">
+                        <div>
+                            <span class="lt-visual-label">Irwell Valley Scouts</span>
+                            <h2>One secure place for District tools.</h2>
+                            <p>
+                                Clean access for volunteers, with account areas designed around roles, Groups and District services.
+                            </p>
+                        </div>
+
+                        <div class="lt-dashboard-mockup" aria-hidden="true">
+                            <div class="lt-dashboard-topbar">
+                                <span class="lt-dashboard-dot"></span>
+                                <span class="lt-dashboard-dot"></span>
+                                <span class="lt-dashboard-dot"></span>
+                            </div>
+                            <div class="lt-dashboard-body">
+                                <div class="lt-dashboard-heading"></div>
+                                <div class="lt-dashboard-row">
+                                    <div class="lt-dashboard-icon">@</div>
+                                    <div>
+                                        <div class="lt-dashboard-line"></div>
+                                        <div class="lt-dashboard-line lt-dashboard-line--short"></div>
+                                    </div>
+                                </div>
+                                <div class="lt-dashboard-row">
+                                    <div class="lt-dashboard-icon">✓</div>
+                                    <div>
+                                        <div class="lt-dashboard-line"></div>
+                                        <div class="lt-dashboard-line lt-dashboard-line--short"></div>
+                                    </div>
+                                </div>
+                                <div class="lt-dashboard-row">
+                                    <div class="lt-dashboard-icon">#</div>
+                                    <div>
+                                        <div class="lt-dashboard-line"></div>
+                                        <div class="lt-dashboard-line lt-dashboard-line--short"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
             </div>
         </section>
 
-        <p class="lt-login-meta"><?= e($appName) ?></p>
+        <p class="lt-login-meta"><span><?= e($appName) ?></span> · Irwell Valley Scout District</p>
     </div>
 </main>
 
