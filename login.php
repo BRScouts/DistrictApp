@@ -364,13 +364,6 @@ unset($_SESSION['auth_error']);
     line-height: 1.25;
 }
 
-.lt-dashboard-mockup .lt-dashboard-service-text {
-    margin: 0.22rem 0 0;
-    color: var(--lt-muted);
-    font-size: 0.93rem;
-    font-weight: 700;
-    line-height: 1.35;
-}
 
         .lt-dashboard-topbar {
             display: flex;
