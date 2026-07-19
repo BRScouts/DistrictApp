@@ -395,7 +395,10 @@ if (!in_array($selectedAccessRoute, ['microsoft', 'calendar_link_only'], true)) 
     $selectedAccessRoute = 'microsoft';
 }
 
+$gmNavCurrent = 'add';
+
 include __DIR__ . '/header.php';
+include __DIR__ . '/app/group-manager-nav.php';
 ?>
 
 <style>
@@ -408,25 +411,6 @@ include __DIR__ . '/header.php';
         .gm-grid-2 {
             grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
         }
-    }
-
-    .gm-back-link {
-        display: inline-block;
-        margin-bottom: 1.25rem;
-        font-weight: 900;
-        font-size: .95rem;
-        color: var(--iv-grey-700);
-        text-decoration: none;
-    }
-
-    .gm-back-link::before {
-        content: "\2190";
-        margin-right: .4rem;
-    }
-
-    .gm-back-link:hover {
-        color: var(--iv-black);
-        text-decoration: underline;
     }
 
     .gm-flow-step {
@@ -579,7 +563,6 @@ include __DIR__ . '/header.php';
 </style>
 
 <main class="lt-main">
-    <a class="gm-back-link" href="/group-manager.php?group_id=<?= (int) $selectedGroupId ?>">Back to Group Manager</a>
 
     <?php if ($errors): ?>
         <div class="alert alert-danger">

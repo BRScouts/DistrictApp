@@ -10,6 +10,7 @@ require_once __DIR__ . '/options.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/microsoft.php';
 require_once __DIR__ . '/csrf.php';
+require_once __DIR__ . '/security-headers.php';
 define('WORDPRESS_PATH', '/home/brscouts/irvalscouts.org.uk');
 define('WORDPRESS_SITE_URL', 'https://irvalscouts.org.uk');
 
@@ -44,6 +45,11 @@ if (!function_exists('e')) {
 if (!function_exists('redirect')) {
     function redirect(string $path): void
     {
+        // Prevent open redirects: only allow relative paths starting with /
+        if (!str_starts_with($path, '/') || str_starts_with($path, '//')) {
+            $path = '/';
+        }
+
         header('Location: ' . $path);
         exit;
     }

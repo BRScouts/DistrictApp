@@ -143,29 +143,13 @@ $heroTitle = 'Manage person';
 $heroText = (string) $person['full_name'] . ' in ' . (string) $selectedGroup['group_name'] . '.';
 $breadcrumb = '<a href="/index.php">Home</a> / <a href="/group-manager.php?group_id=' . $selectedGroupId . '">Group Manager</a> / Manage person';
 
+$gmNavCurrent = 'people';
+
 include __DIR__ . '/header.php';
+include __DIR__ . '/app/group-manager-nav.php';
 ?>
 
 <style>
-    .gm-back-link {
-        display: inline-block;
-        margin-bottom: 1.25rem;
-        font-weight: 900;
-        font-size: .95rem;
-        color: var(--iv-grey-700);
-        text-decoration: none;
-    }
-
-    .gm-back-link::before {
-        content: "\2190";
-        margin-right: .4rem;
-    }
-
-    .gm-back-link:hover {
-        color: var(--iv-black);
-        text-decoration: underline;
-    }
-
     .gm-grid {
         display: grid;
         gap: 1rem;
@@ -244,7 +228,6 @@ include __DIR__ . '/header.php';
 </style>
 
 <main class="lt-main">
-    <a class="gm-back-link" href="/group-manager.php?group_id=<?= (int) $selectedGroupId ?>">Back to Group Manager</a>
 
     <?php if ($errors): ?>
         <div class="alert alert-danger">
