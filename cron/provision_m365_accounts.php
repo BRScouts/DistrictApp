@@ -603,26 +603,33 @@ function m365_requester_created_body(string $requesterName, string $volunteerNam
 
     return "Hello {$helloName},\n\n"
         . "The Microsoft 365 account you requested has now been created.\n\n"
-        . "Volunteer:\n{$volunteerName}\n\n"
-        . "Microsoft 365 username:\n{$upn}\n\n"
+        . "\n"
+        . "ACCOUNT DETAILS\n\n"
+        . "Volunteer: {$volunteerName}\n\n"
+        . "Microsoft 365 username: {$upn}\n\n"
+        . "\n"
         . "The volunteer has been sent their username and temporary password. They will be asked to change the password when they first sign in.\n\n"
         . "Irwell Valley Scout District";
 }
 
 function m365_requester_created_html(string $requesterName, string $volunteerName, string $upn): string
 {
-    $dashboardUrl = m365_app_url('/index.php');
+    $appUrl = m365_app_url('/');
     $helloName = trim($requesterName) !== '' ? trim($requesterName) : 'there';
 
     $body = '
         <p style="margin-top:0;">Hello ' . m365_escape_html($helloName) . ',</p>
+
         <p>Thanks for adding a team member. The Microsoft 365 account you requested has now been created.</p>
+
         ' . m365_detail_table([
             'Volunteer' => m365_escape_html($volunteerName),
             'Microsoft 365 username' => m365_escape_html($upn),
         ]) . '
+
         <p>The volunteer has been sent their username and temporary password. They will be asked to change the password when they first sign in.</p>
-        ' . m365_email_button($dashboardUrl, 'Open District Dashboard') . '
+
+        ' . m365_email_button($appUrl, 'Open the District App') . '
     ';
 
     return m365_email_shell('Microsoft 365 account created', 'The Microsoft 365 account you requested has been created.', $body);
@@ -634,26 +641,33 @@ function m365_requester_existing_body(string $requesterName, string $volunteerNa
 
     return "Hello {$helloName},\n\n"
         . "The Microsoft 365 account you requested already exists, so no duplicate account was created.\n\n"
-        . "Volunteer:\n{$volunteerName}\n\n"
-        . "Existing Microsoft 365 username:\n{$upn}\n\n"
+        . "\n"
+        . "ACCOUNT DETAILS\n\n"
+        . "Volunteer: {$volunteerName}\n\n"
+        . "Existing Microsoft 365 username: {$upn}\n\n"
+        . "\n"
         . "The volunteer has been sent sign-in instructions.\n\n"
         . "Irwell Valley Scout District";
 }
 
 function m365_requester_existing_html(string $requesterName, string $volunteerName, string $upn): string
 {
-    $dashboardUrl = m365_app_url('/index.php');
+    $appUrl = m365_app_url('/');
     $helloName = trim($requesterName) !== '' ? trim($requesterName) : 'there';
 
     $body = '
         <p style="margin-top:0;">Hello ' . m365_escape_html($helloName) . ',</p>
+
         <p>The Microsoft 365 account you requested already exists, so no duplicate account was created.</p>
+
         ' . m365_detail_table([
             'Volunteer' => m365_escape_html($volunteerName),
             'Existing Microsoft 365 username' => m365_escape_html($upn),
         ]) . '
+
         <p>The volunteer has been sent sign-in instructions.</p>
-        ' . m365_email_button($dashboardUrl, 'Open District Dashboard') . '
+
+        ' . m365_email_button($appUrl, 'Open the District App') . '
     ';
 
     return m365_email_shell('Microsoft 365 account already exists', 'The Microsoft 365 account you requested already exists.', $body);
