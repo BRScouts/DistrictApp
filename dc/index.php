@@ -321,6 +321,42 @@ foreach ($events as $event) {
     ];
 }
 
+/*
+ * Build a colour palette for groups so each group's events are visually
+ * distinct on the calendar. Colours are assigned in order from a curated
+ * palette that works well on white backgrounds.
+ */
+$groupColorPalette = [
+    '#7413dc', // Purple (Scouts brand)
+    '#00a794', // Teal
+    '#006ddf', // Blue
+    '#d4a300', // Amber
+    '#dc2626', // Red
+    '#16a34a', // Green
+    '#9333ea', // Violet
+    '#0891b2', // Cyan
+    '#ea580c', // Orange
+    '#6366f1', // Indigo
+    '#db2777', // Pink
+    '#65a30d', // Lime
+];
+
+$groupColorsMap = []; // group_id => color hex
+$groupsInCalendar = []; // group_id => group_name (only groups that have events this month)
+
+foreach ($events as $event) {
+    $gId = (int) ($event['group_id'] ?? 0);
+    if ($gId && !isset($groupsInCalendar[$gId])) {
+        $groupsInCalendar[$gId] = (string) ($event['group_name'] ?? 'Unknown');
+    }
+}
+
+$colorIndex = 0;
+foreach ($groupsInCalendar as $gId => $gName) {
+    $groupColorsMap[$gId] = $groupColorPalette[$colorIndex % count($groupColorPalette)];
+    $colorIndex++;
+}
+
 $weeks = [];
 $cursor = $calendarStart;
 
@@ -454,6 +490,47 @@ require __DIR__ . '/layout.php';
         font-size: 0.88rem;
         font-weight: 600;
         line-height: 1.5;
+    }
+
+    .dc-group-legend {
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--dc-border, #e2e8f0);
+    }
+
+    .dc-group-legend-title {
+        margin: 0 0 0.75rem;
+        color: var(--dc-ink, #1d2939);
+        font-size: 0.95rem;
+        font-weight: 700;
+    }
+
+    .dc-group-legend-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.5rem;
+    }
+
+    .dc-group-legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+    }
+
+    .dc-group-legend-swatch {
+        flex-shrink: 0;
+        width: 14px;
+        height: 14px;
+        border-radius: 2px;
+    }
+
+    .dc-group-legend-label {
+        color: var(--dc-ink, #1d2939);
+        font-size: 0.85rem;
+        font-weight: 600;
+        line-height: 1.3;
     }
 
     .dc-calendar-main {
@@ -603,7 +680,7 @@ require __DIR__ . '/layout.php';
         padding: 0.45rem 0.55rem;
         background: #f8f5fc;
         border: 0;
-        border-left: 4px solid #7413dc;
+        border-left: 4px solid var(--dc-group-color, #7413dc);
         border-radius: 0;
         color: var(--dc-ink, #1d2939);
         cursor: pointer;
@@ -615,7 +692,7 @@ require __DIR__ . '/layout.php';
     .dc-cal-event:hover,
     .dc-cal-event:focus {
         color: var(--dc-ink, #1d2939);
-        outline: 2px solid var(--dc-scouts-purple, #7413dc);
+        outline: 2px solid var(--dc-group-color, #7413dc);
         outline-offset: 1px;
         box-shadow: none;
         text-decoration: none;
@@ -624,7 +701,7 @@ require __DIR__ . '/layout.php';
 
     .dc-cal-event.is-locked {
         background: #eff6ff;
-        border-left-color: #006ddf;
+        border-left-color: var(--dc-group-color, #006ddf);
     }
 
     .dc-cal-event-title {
@@ -662,29 +739,29 @@ require __DIR__ . '/layout.php';
 
     .dc-cal-event-approved {
         background: #f0fdf9;
-        border-left-color: #00a794;
+        border-left-color: var(--dc-group-color, #00a794);
     }
 
     .dc-cal-event-submitted,
     .dc-cal-event-under_review {
         background: #fefce8;
-        border-left-color: #d4a300;
+        border-left-color: var(--dc-group-color, #d4a300);
     }
 
     .dc-cal-event-changes_requested {
         background: #fef2f2;
-        border-left-color: #dc2626;
+        border-left-color: var(--dc-group-color, #dc2626);
     }
 
     .dc-cal-event-draft {
         background: var(--dc-canvas, #f8fafc);
-        border-left-color: #94a3b8;
+        border-left-color: var(--dc-group-color, #94a3b8);
     }
 
     .dc-cal-event-cancelled,
     .dc-cal-event-rejected {
         background: #fef2f2;
-        border-left-color: #dc2626;
+        border-left-color: var(--dc-group-color, #dc2626);
         opacity: 0.7;
         text-decoration: line-through;
     }
@@ -841,32 +918,32 @@ require __DIR__ . '/layout.php';
         .dc-cal-event {
             padding: 0.35rem 0.45rem;
             border-left: 0;
-            border-top: 3px solid #7413dc;
+            border-top: 3px solid var(--dc-group-color, #7413dc);
             border-radius: 0;
             overflow: hidden;
         }
 
         .dc-cal-event.is-locked {
-            border-top-color: #006ddf;
+            border-top-color: var(--dc-group-color, #006ddf);
         }
 
         .dc-cal-event-approved {
-            border-top-color: #00a794;
+            border-top-color: var(--dc-group-color, #00a794);
         }
 
         .dc-cal-event-submitted,
         .dc-cal-event-under_review {
-            border-top-color: #d4a300;
+            border-top-color: var(--dc-group-color, #d4a300);
         }
 
         .dc-cal-event-changes_requested,
         .dc-cal-event-cancelled,
         .dc-cal-event-rejected {
-            border-top-color: #dc2626;
+            border-top-color: var(--dc-group-color, #dc2626);
         }
 
         .dc-cal-event-draft {
-            border-top-color: #94a3b8;
+            border-top-color: var(--dc-group-color, #94a3b8);
         }
 
         .dc-cal-event-title {
@@ -986,6 +1063,20 @@ require __DIR__ . '/layout.php';
             <?= count($events) ?> event<?= count($events) === 1 ? '' : 's' ?> shown.
             Click any event to see details.
         </p>
+
+        <?php if ($groupsInCalendar): ?>
+            <div class="dc-group-legend" aria-label="Group colour key">
+                <h3 class="dc-group-legend-title">Groups</h3>
+                <ul class="dc-group-legend-list">
+                    <?php foreach ($groupsInCalendar as $gId => $gName): ?>
+                        <li class="dc-group-legend-item">
+                            <span class="dc-group-legend-swatch" style="background-color: <?= e($groupColorsMap[$gId]) ?>;"></span>
+                            <span class="dc-group-legend-label"><?= e($gName) ?></span>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        <?php endif; ?>
     </aside>
 
     <section class="dc-calendar-main" aria-labelledby="calendar-heading">
@@ -1071,11 +1162,13 @@ require __DIR__ . '/layout.php';
                                             $timeLabel = date('H:i', strtotime((string) $event['starts_at']));
                                             $continuationPrefix = $dayEvent['continues_before'] ? '← ' : '';
                                             $continuationSuffix = $dayEvent['continues_after'] ? ' →' : '';
+                                            $groupColor = $groupColorsMap[(int) $event['group_id']] ?? '#7413dc';
                                             ?>
                                             <button
                                                 type="button"
                                                 class="<?= e($eventClass) ?> <?= $canManage ? '' : 'is-locked' ?>"
                                                 data-event-id="<?= (int) $event['id'] ?>"
+                                                style="--dc-group-color: <?= e($groupColor) ?>;"
                                             >
                                                 <span class="dc-cal-event-title"><?= e($continuationPrefix . (string) $event['title'] . $continuationSuffix) ?></span>
                                                 <span class="dc-cal-event-meta"><?= e($timeLabel) ?> · <?= e((string) $event['group_name']) ?></span>

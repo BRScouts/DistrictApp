@@ -1061,7 +1061,6 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
     function postSharedMailboxAction(action, data) {
         var body = new FormData();
         body.append('shared_mailbox_action', action);
-        body.append('_csrf_token', '<?= csrf_token() ?>');
 
         Object.keys(data || {}).forEach(function (key) {
             body.append(key, data[key]);

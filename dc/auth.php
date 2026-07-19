@@ -572,20 +572,23 @@ function dc_context(bool $redirectIfMissing = true): array
     if (!empty($_SESSION['dc_group_link'])) {
         $link = $_SESSION['dc_group_link'];
 
+        /*
+         * Group-link users can VIEW all events across the District calendar.
+         * Load all active groups so the calendar is not filtered to only the
+         * link's own group. The link's group_id is still recorded for audit
+         * and "home group" context.
+         */
+        $allActiveGroups = dc_fetch_all_active_groups_for_access('group_link', 'group_link');
+        $allGroupIds = array_keys($allActiveGroups);
+        $allGroupsList = array_values($allActiveGroups);
+
         $context = [
             'actor_type' => 'group_link',
             'person_id' => null,
             'name' => 'Group link user',
             'email' => null,
-            'groups' => [[
-                'id' => (int) $link['group_id'],
-                'group_id' => (int) $link['group_id'],
-                'group_name' => (string) $link['group_name'],
-                'slug' => (string) $link['slug'],
-                'access_level' => 'group_link',
-                'membership_role' => 'group_link',
-            ]],
-            'group_ids' => [(int) $link['group_id']],
+            'groups' => $allGroupsList,
+            'group_ids' => $allGroupIds,
             'group_id' => (int) $link['group_id'],
             'access_levels' => ['group_link'],
             'membership_roles' => ['group_link'],
