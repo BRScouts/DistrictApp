@@ -13,29 +13,46 @@ $cronJobs = [
         'label' => 'Leavers Notification',
         'description' => 'Detects inactive people with M365 accounts and emails support to disable them.',
         'file' => '/cron/leavers_notification.php',
-        'schedule' => 'Daily at 06:30',
+        'cron_expression' => '30 6 * * *',
+        'schedule_human' => 'Daily at 06:30',
+        'expected_interval_seconds' => 86400, // 24 hours
         'audit_code' => AUDIT_CRON_LEAVERS_RUN,
     ],
     'provision' => [
         'label' => 'Provision M365 Accounts',
         'description' => 'Creates Microsoft 365 accounts from pending requests and sends onboarding emails.',
         'file' => '/cron/provision_m365_accounts.php',
-        'schedule' => 'Every 5 minutes',
+        'cron_expression' => '*/5 * * * *',
+        'schedule_human' => 'Every 5 minutes',
+        'expected_interval_seconds' => 300, // 5 minutes
         'audit_code' => AUDIT_CRON_PROVISION_RUN,
     ],
     'reminders' => [
         'label' => 'Reminders & Cleanse',
         'description' => 'Sends draft/review reminders and deletes old cancelled/rejected events.',
         'file' => '/cron/Reminders-and-clense.php',
-        'schedule' => 'Daily at 06:10',
+        'cron_expression' => '10 6 * * *',
+        'schedule_human' => 'Daily at 06:10',
+        'expected_interval_seconds' => 86400,
         'audit_code' => AUDIT_CRON_REMINDERS_RUN,
     ],
     'sync' => [
         'label' => 'Sync M365 Profiles',
         'description' => 'Syncs department, job title and manager in Microsoft 365 from the Leader Tool.',
         'file' => '/cron/sync_m365_profiles.php',
-        'schedule' => 'Daily at 05:15',
+        'cron_expression' => '15 5 * * *',
+        'schedule_human' => 'Daily at 05:15',
+        'expected_interval_seconds' => 86400,
         'audit_code' => AUDIT_CRON_SYNC_PROFILES_RUN,
+    ],
+    'send_email' => [
+        'label' => 'Send Email Queue',
+        'description' => 'Sends pending emails from the queue via Microsoft Graph API.',
+        'file' => '/cron/send-email-queue.php',
+        'cron_expression' => '* * * * *',
+        'schedule_human' => 'Every minute',
+        'expected_interval_seconds' => 60,
+        'audit_code' => AUDIT_CRON_SEND_EMAIL_RUN,
     ],
 ];
 
@@ -218,6 +235,40 @@ include __DIR__ . '/header.php';
         color: #666;
     }
 
+    .cron-badge-overdue {
+        background: #f8d7da;
+        color: #842029;
+        animation: pulse-badge 2s infinite;
+    }
+
+    .cron-badge-ontime {
+        background: #d1e7dd;
+        color: #0f5132;
+    }
+
+    @keyframes pulse-badge {
+        0%, 100% { opacity: 1; }
+        50% { opacity: .7; }
+    }
+
+    .cron-schedule-info {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
+        align-items: center;
+        margin-bottom: .5rem;
+        font-size: .82rem;
+    }
+
+    .cron-expression {
+        font-family: Consolas, Monaco, 'Courier New', monospace;
+        background: #1d1d1b;
+        color: #e0e0e0;
+        padding: .15rem .45rem;
+        font-size: .75rem;
+        font-weight: 700;
+    }
+
     .cron-last-run {
         font-size: .82rem;
         color: #555;
@@ -291,15 +342,15 @@ include __DIR__ . '/header.php';
         <a class="sa-nav-link" href="/system-admin-cron.php" aria-current="page">Cron Jobs</a>
         <a class="sa-nav-link" href="/system-admin-gdpr.php">GDPR Reports</a>
         <a class="sa-nav-link" href="/system-admin-permissions.php">Permissions</a>
+        <a class="sa-nav-link" href="/system-admin-kb.php">Knowledge Base</a>
     </div>
 </nav>
 
 <main class="lt-main">
 
     <div class="cron-warning">
-        <strong>Running cron jobs manually.</strong>
-        These jobs normally run on a schedule via cPanel. Use this page to trigger them manually for troubleshooting or when a scheduled run was missed.
-        The <strong>Send Email Queue</strong> cron is excluded as it runs frequently and doesn't need manual intervention.
+        <strong>Cron job monitoring and manual execution.</strong>
+        These jobs run automatically via cPanel on the schedules shown below. Use this page to check their status, view last run details, or trigger them manually if a scheduled run was missed.
     </div>
 
     <?php if ($runOutput !== null && $runJob !== null): ?>
@@ -316,14 +367,35 @@ include __DIR__ . '/header.php';
                 $lastDetails = $lastRun['details'] ?? [];
                 $lastStatus = (string) ($lastDetails['status'] ?? '');
                 $lastTime = $lastRun ? $lastRun['time'] : null;
+
+                // Calculate if overdue
+                $isOverdue = false;
+                $overdueBy = '';
+                if ($lastTime && isset($job['expected_interval_seconds'])) {
+                    $elapsed = time() - strtotime($lastTime);
+                    // Consider overdue if more than 2x the expected interval has passed
+                    $threshold = (int) $job['expected_interval_seconds'] * 2;
+                    if ($elapsed > $threshold) {
+                        $isOverdue = true;
+                        $overdueBy = cron_time_ago(date('Y-m-d H:i:s', time() - ($elapsed - (int) $job['expected_interval_seconds'])));
+                    }
+                }
             ?>
-            <div class="cron-card">
+            <div class="cron-card" style="<?= $isOverdue ? 'border-left: 4px solid #d4351c;' : '' ?>">
                 <h3><?= e($job['label']) ?></h3>
                 <p><?= e($job['description']) ?></p>
 
-                <div class="cron-meta">
-                    <span class="cron-badge cron-badge-schedule"><?= e($job['schedule']) ?></span>
+                <div class="cron-schedule-info">
+                    <span class="cron-expression" title="cPanel cron expression"><?= e($job['cron_expression']) ?></span>
+                    <span class="cron-badge cron-badge-schedule"><?= e($job['schedule_human']) ?></span>
+                    <?php if ($isOverdue): ?>
+                        <span class="cron-badge cron-badge-overdue">Overdue</span>
+                    <?php elseif ($lastTime): ?>
+                        <span class="cron-badge cron-badge-ontime">On schedule</span>
+                    <?php endif; ?>
+                </div>
 
+                <div class="cron-meta">
                     <?php if ($lastTime): ?>
                         <?php if ($lastStatus === 'success'): ?>
                             <span class="cron-badge cron-badge-success">Last run: OK</span>
@@ -343,6 +415,9 @@ include __DIR__ . '/header.php';
                     <div class="cron-last-run">
                         <strong>Last run:</strong> <?= e(date('d M Y H:i:s', strtotime($lastTime))) ?>
                         (<?= e(cron_time_ago($lastTime)) ?>)
+                        <?php if ($isOverdue): ?>
+                            <span style="color:#d4351c;font-weight:900;"> &mdash; overdue by <?= e($overdueBy) ?></span>
+                        <?php endif; ?>
                     </div>
 
                     <?php if ($lastDetails): ?>
