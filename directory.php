@@ -350,7 +350,7 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $people = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$defaultPhotoUrl = BASE_URL . '/assets/img/default-profile.webp';
+$defaultPhotoUrl = rtrim(BASE_URL, '/') . '/assets/img/default-profile.webp';
 
 $directoryPeople = [];
 
