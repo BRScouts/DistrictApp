@@ -58,7 +58,26 @@ $ctxMembershipRoles = array_values(array_unique($ctxMembershipRoles));
 
 $membershipSummaryParts = [];
 
-foreach ($groups as $group) {
+/*
+ * For signed-in users who are reviewers/admins, $ctx['groups'] contains ALL
+ * active groups (for access-control purposes). The header should only show
+ * the groups the user is actually a member of, so we fetch their real
+ * memberships separately.
+ */
+$summaryGroups = $groups;
+
+if ($isSignedIn && ($isReviewer || $isDistrictAdmin || $isSystemAdmin) && !empty($ctx['person_id'])) {
+    $actualMemberships = dc_fetch_person_memberships((int) $ctx['person_id']);
+    $summaryGroups = [];
+
+    foreach ($actualMemberships as $m) {
+        $summaryGroups[] = [
+            'group_name' => $m['group_name'] ?? null,
+        ];
+    }
+}
+
+foreach ($summaryGroups as $group) {
     $name = $group['group_name'] ?? $group['name'] ?? null;
 
     if (!$name) {

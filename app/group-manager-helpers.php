@@ -993,12 +993,84 @@ function gm_create_district_email_request(
         )
     ");
 
-    return $stmt->execute([
+    $success = $stmt->execute([
         'person_id' => $personId,
         'requested_by_person_id' => $requestedByPersonId,
         'requested_upn' => $requestedUpn,
         'admin_notes' => $notes !== '' ? $notes : null,
     ]);
+
+    if ($success) {
+        gm_notify_admins_new_account_request($requestedByPersonId, $personId, $groupId, $requestedUpn);
+    }
+
+    return $success;
+}
+
+/**
+ * Notify district admins that a new M365 account request has been created.
+ */
+function gm_notify_admins_new_account_request(int $requestedByPersonId, int $personId, int $groupId, string $requestedUpn): void
+{
+    try {
+        // Look up requester and person details for the notification body
+        $requesterStmt = db()->prepare("SELECT full_name, primary_email FROM people WHERE id = :id LIMIT 1");
+        $requesterStmt->execute(['id' => $requestedByPersonId]);
+        $requester = $requesterStmt->fetch(PDO::FETCH_ASSOC);
+
+        $personStmt = db()->prepare("SELECT full_name, primary_email FROM people WHERE id = :id LIMIT 1");
+        $personStmt->execute(['id' => $personId]);
+        $person = $personStmt->fetch(PDO::FETCH_ASSOC);
+
+        $groupStmt = db()->prepare("SELECT group_name FROM groups WHERE id = :id LIMIT 1");
+        $groupStmt->execute(['id' => $groupId]);
+        $groupName = (string) ($groupStmt->fetchColumn() ?: 'Unknown Group');
+
+        $requesterName = (string) ($requester['full_name'] ?? 'Unknown');
+        $personName = (string) ($person['full_name'] ?? 'Unknown');
+        $appUrl = gm_absolute_url('/');
+
+        $subject = 'New M365 account request: ' . $requestedUpn;
+        $body = "A new Microsoft 365 account request has been submitted.\n\n"
+            . "ACCOUNT DETAILS\n\n"
+            . "- Requested UPN: {$requestedUpn}\n"
+            . "- Person: {$personName}\n"
+            . "- Group: {$groupName}\n"
+            . "- Requested by: {$requesterName}\n\n"
+            . "The account will be provisioned automatically by the next cron run (every 5 minutes). "
+            . "If there are any issues, check the System Admin dashboard.\n\n"
+            . $appUrl;
+
+        // Find district_admin and system_admin members to notify
+        $adminStmt = db()->query("
+            SELECT DISTINCT
+                p.id AS person_id,
+                p.full_name,
+                p.primary_email
+            FROM group_memberships gm
+            JOIN people p ON p.id = gm.person_id
+            WHERE gm.access_level IN ('district_admin', 'system_admin')
+              AND gm.status = 'active'
+              AND p.status = 'active'
+              AND p.primary_email IS NOT NULL
+              AND p.primary_email <> ''
+        ");
+
+        $admins = $adminStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($admins as $admin) {
+            gm_queue_email_and_log(
+                $personId,
+                (string) $admin['primary_email'],
+                (string) $admin['full_name'],
+                $subject,
+                $body,
+                'm365_account_request_admin_notification'
+            );
+        }
+    } catch (Throwable $e) {
+        // Notification failure must not break the account request flow.
+    }
 }
 
 function gm_person_has_pending_account_request(int $personId, string $personalEmail): bool
