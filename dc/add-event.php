@@ -591,8 +591,9 @@ require __DIR__ . '/layout.php';
         width: 100%;
         max-width: 100%;
         overflow: hidden;
-        border: 2px solid #000;
-        background: #f5f5f5;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
+        background: var(--dc-canvas, #f8fafc);
         margin-top: 1rem;
         isolation: isolate;
     }
@@ -609,7 +610,8 @@ require __DIR__ . '/layout.php';
 
     .dc-location-results {
         margin-top: 1rem;
-        border: 1px solid #d8d8d8;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
         background: #fff;
     }
 
@@ -618,7 +620,7 @@ require __DIR__ . '/layout.php';
         width: 100%;
         padding: 0.75rem;
         border: 0;
-        border-bottom: 1px solid #d8d8d8;
+        border-bottom: 1px solid var(--dc-border, #e2e8f0);
         background: #fff;
         text-align: left;
         cursor: pointer;
@@ -626,7 +628,7 @@ require __DIR__ . '/layout.php';
 
     .dc-location-result:hover,
     .dc-location-result:focus {
-        background: #f5f5f5;
+        background: var(--dc-canvas, #f8fafc);
         outline: 3px solid #ffdd00;
         outline-offset: -3px;
     }
@@ -634,8 +636,9 @@ require __DIR__ . '/layout.php';
     .dc-selected-location {
         margin-top: 0.75rem;
         padding: 0.75rem;
-        border-left: 5px solid #00a794;
-        background: #f5f5f5;
+        border-left: 3px solid #00a794;
+        border-radius: 0.375rem;
+        background: #f0fdf9;
     }
 
     .dc-section-count-grid {
@@ -647,7 +650,8 @@ require __DIR__ . '/layout.php';
         display: grid;
         grid-template-columns: 1fr;
         gap: 0.5rem;
-        border: 1px solid #d8d8d8;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
         padding: 0.75rem;
         background: #fff;
     }
@@ -675,7 +679,8 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-table-wrap {
         overflow-x: auto;
-        border: 1px solid #d8d8d8;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
         background: #fff;
     }
 
@@ -688,19 +693,23 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-table th,
     .dc-risk-table td {
-        border-bottom: 1px solid #d8d8d8;
-        padding: 0.75rem;
+        border-bottom: 1px solid var(--dc-border, #e2e8f0);
+        padding: 0.7rem;
         vertical-align: top;
     }
 
     .dc-risk-table th {
-        background: #f5f5f5;
+        background: var(--dc-canvas, #f8fafc);
         text-align: left;
-        font-weight: 800;
+        font-weight: 700;
+        font-size: 0.82rem;
+        color: var(--dc-muted, #64748b);
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
     }
 
     .dc-risk-file-name {
-        font-weight: 800;
+        font-weight: 700;
         display: block;
         max-width: 220px;
         overflow-wrap: anywhere;
@@ -708,21 +717,24 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-empty {
         padding: 1rem;
-        background: #f5f5f5;
-        border: 1px dashed #888;
+        background: var(--dc-canvas, #f8fafc);
+        border: 1px dashed var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
     }
 
     .dc-remove-risk-file {
-        border: 2px solid #d4351c;
+        border: 1px solid #dc2626;
+        border-radius: 0.375rem;
         background: #fff;
-        color: #d4351c;
-        font-weight: 800;
-        padding: 0.35rem 0.65rem;
+        color: #dc2626;
+        font-weight: 700;
+        font-size: 0.85rem;
+        padding: 0.3rem 0.6rem;
     }
 
     .dc-remove-risk-file:hover,
     .dc-remove-risk-file:focus {
-        background: #d4351c;
+        background: #dc2626;
         color: #fff;
     }
 

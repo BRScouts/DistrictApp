@@ -12,4 +12,7 @@ $authorizationUrl = $provider->getAuthorizationUrl([
 
 $_SESSION['oauth2state'] = $provider->getState();
 
-redirect($authorizationUrl);
+// Cannot use redirect() here — it only allows relative paths (open-redirect protection).
+// The Microsoft authorization URL is an external absolute URL.
+header('Location: ' . $authorizationUrl);
+exit;

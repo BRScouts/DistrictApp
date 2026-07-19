@@ -2303,13 +2303,16 @@ include __DIR__ . '/header.php';
         && storedLng !== null
         && !isZeroZero(storedLat, storedLng);
 
-    const defaultLat = 53.5933;
-    const defaultLng = -2.2966;
+    const defaultLat = 53.5934;
+    const defaultLng = -2.2967;
 
     const map = L.map(mapElement).setView(
         hasStoredPin ? [storedLat, storedLng] : [defaultLat, defaultLng],
         hasStoredPin ? 16 : 13
     );
+
+    // Expose map globally so the tab switcher can call invalidateSize
+    window._gwaMap = map;
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
@@ -2867,21 +2870,10 @@ include __DIR__ . '/header.php';
         });
 
         // Invalidate Leaflet map size if switching to location tab
-        if (targetId === 'tab-location' && typeof L !== 'undefined') {
-            var mapEl = document.getElementById('gwa-map');
-            if (mapEl && mapEl._leaflet_id) {
-                setTimeout(function () {
-                    var mapInstance = Object.values(L).length ? null : null;
-                    // Use the global map reference created in the existing script
-                    document.querySelectorAll('.leaflet-container').forEach(function (el) {
-                        if (el._leaflet_id) {
-                            // Leaflet stores maps on elements; trigger resize
-                            var evt = new Event('resize');
-                            window.dispatchEvent(evt);
-                        }
-                    });
-                }, 100);
-            }
+        if (targetId === 'tab-location' && window._gwaMap) {
+            setTimeout(function () {
+                window._gwaMap.invalidateSize();
+            }, 150);
         }
 
         try { sessionStorage.setItem('gwa-active-tab', targetId); } catch (e) {}

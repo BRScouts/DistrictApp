@@ -725,22 +725,25 @@ require __DIR__ . '/layout.php';
 
 <style>
     .dc-notice {
-        border-left: 6px solid #7413dc;
-        background: #f5f5f5;
+        border-left: 3px solid var(--dc-scouts-purple, #7413dc);
+        border-radius: 0.375rem;
+        background: var(--dc-canvas, #f8fafc);
         padding: 1rem;
         margin-bottom: 1rem;
     }
 
     .dc-warning-box {
-        border-left: 6px solid #ffdd00;
-        background: #fff8d6;
+        border-left: 3px solid #d4a300;
+        border-radius: 0.375rem;
+        background: #fefce8;
         padding: 1rem;
         margin-bottom: 1rem;
     }
 
     .dc-danger-box {
-        border-left: 6px solid #d4351c;
-        background: #fff1f0;
+        border-left: 3px solid #dc2626;
+        border-radius: 0.375rem;
+        background: #fef2f2;
         padding: 1rem;
         margin-bottom: 1rem;
     }
@@ -757,12 +760,14 @@ require __DIR__ . '/layout.php';
     }
 
     .dc-detail {
-        border-bottom: 1px solid #d8d8d8;
+        border-bottom: 1px solid var(--dc-border, #e2e8f0);
         padding-bottom: 0.75rem;
     }
 
     .dc-detail dt {
-        font-weight: 900;
+        font-weight: 700;
+        font-size: 0.88rem;
+        color: var(--dc-muted, #64748b);
     }
 
     .dc-detail dd {
@@ -806,7 +811,8 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-table-wrap {
         overflow-x: auto;
-        border: 1px solid #d8d8d8;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
         background: #fff;
     }
 
@@ -819,19 +825,23 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-table th,
     .dc-risk-table td {
-        border-bottom: 1px solid #d8d8d8;
-        padding: 0.75rem;
+        border-bottom: 1px solid var(--dc-border, #e2e8f0);
+        padding: 0.7rem;
         vertical-align: top;
     }
 
     .dc-risk-table th {
-        background: #f5f5f5;
+        background: var(--dc-canvas, #f8fafc);
         text-align: left;
-        font-weight: 800;
+        font-weight: 700;
+        font-size: 0.82rem;
+        color: var(--dc-muted, #64748b);
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
     }
 
     .dc-risk-file-name {
-        font-weight: 800;
+        font-weight: 700;
         display: block;
         max-width: 220px;
         overflow-wrap: anywhere;
@@ -839,21 +849,24 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-empty {
         padding: 1rem;
-        background: #f5f5f5;
-        border: 1px dashed #888;
+        background: var(--dc-canvas, #f8fafc);
+        border: 1px dashed var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
     }
 
     .dc-remove-risk-file {
-        border: 2px solid #d4351c;
+        border: 1px solid #dc2626;
+        border-radius: 0.375rem;
         background: #fff;
-        color: #d4351c;
-        font-weight: 800;
-        padding: 0.35rem 0.65rem;
+        color: #dc2626;
+        font-weight: 700;
+        font-size: 0.85rem;
+        padding: 0.3rem 0.6rem;
     }
 
     .dc-remove-risk-file:hover,
     .dc-remove-risk-file:focus {
-        background: #d4351c;
+        background: #dc2626;
         color: #fff;
     }
 
@@ -876,7 +889,8 @@ require __DIR__ . '/layout.php';
         justify-content: space-between;
         gap: 1rem;
         align-items: flex-start;
-        border: 1px solid #d8d8d8;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
         background: #fff;
         padding: 0.75rem;
     }
@@ -885,7 +899,7 @@ require __DIR__ . '/layout.php';
         position: fixed;
         inset: 0;
         z-index: 2000;
-        background: rgba(0, 0, 0, 0.65);
+        background: rgba(0, 0, 0, 0.4);
         display: none;
         padding: 0.75rem;
         overflow-y: auto;
@@ -897,7 +911,9 @@ require __DIR__ . '/layout.php';
 
     .dc-modal {
         background: #fff;
-        border: 4px solid #000;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.5rem;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
         max-width: 1120px;
         margin: 1rem auto;
     }
@@ -905,11 +921,11 @@ require __DIR__ . '/layout.php';
     .dc-modal-header,
     .dc-modal-footer {
         padding: 1rem;
-        border-bottom: 1px solid #d8d8d8;
+        border-bottom: 1px solid var(--dc-border, #e2e8f0);
     }
 
     .dc-modal-footer {
-        border-top: 1px solid #d8d8d8;
+        border-top: 1px solid var(--dc-border, #e2e8f0);
         border-bottom: 0;
     }
 
@@ -937,7 +953,8 @@ require __DIR__ . '/layout.php';
     }
 
     .dc-risk-card {
-        border: 1px solid #d8d8d8;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
         padding: 0.75rem;
         background: #fff;
         display: grid;
@@ -953,14 +970,14 @@ require __DIR__ . '/layout.php';
     }
 
     .dc-risk-card h3 {
-        font-size: 1rem;
+        font-size: 0.95rem;
         margin: 0 0 0.25rem;
-        font-weight: 900;
+        font-weight: 700;
     }
 
     .dc-risk-meta {
-        font-size: 0.875rem;
-        color: #4a4a4a;
+        font-size: 0.82rem;
+        color: var(--dc-muted, #64748b);
     }
 
     .dc-risk-reason {
@@ -977,7 +994,7 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-card.is-selected {
         border-color: #00a794;
-        box-shadow: inset 0 0 0 3px #00a794;
+        box-shadow: inset 0 0 0 2px #00a794;
     }
 
     .dc-location-map-wrap {
@@ -985,8 +1002,9 @@ require __DIR__ . '/layout.php';
         width: 100%;
         max-width: 100%;
         overflow: hidden;
-        border: 2px solid #000;
-        background: #f5f5f5;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
+        background: var(--dc-canvas, #f8fafc);
         margin-top: 1rem;
         isolation: isolate;
     }
@@ -1034,26 +1052,28 @@ require __DIR__ . '/layout.php';
     .dc-selected-location {
         margin-top: 0.75rem;
         padding: 0.75rem;
-        border-left: 5px solid #00a794;
-        background: #f5f5f5;
+        border-left: 3px solid #00a794;
+        border-radius: 0.375rem;
+        background: #f0fdf9;
     }
 
     .dc-audit-list {
         display: grid;
-        gap: 0.75rem;
+        gap: 0.65rem;
     }
 
     .dc-audit-item {
-        border-left: 5px solid #7413dc;
+        border-left: 3px solid var(--dc-scouts-purple, #7413dc);
+        border-radius: 0.375rem;
         background: #fff;
         padding: 0.75rem;
-        border-top: 1px solid #d8d8d8;
-        border-right: 1px solid #d8d8d8;
-        border-bottom: 1px solid #d8d8d8;
+        border-top: 1px solid var(--dc-border, #e2e8f0);
+        border-right: 1px solid var(--dc-border, #e2e8f0);
+        border-bottom: 1px solid var(--dc-border, #e2e8f0);
     }
 
     .dc-audit-item small {
-        color: #4a4a4a;
+        color: var(--dc-muted, #64748b);
     }
 </style>
 

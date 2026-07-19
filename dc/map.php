@@ -349,28 +349,28 @@ require __DIR__ . '/layout.php';
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
-    .dc-map-toolbar { background:#fff; border:1px solid #e6e6e6; border-radius:.75rem; padding:1rem; margin-bottom:1rem; }
+    .dc-map-toolbar { background:#fff; border:1px solid var(--dc-border, #e2e8f0); border-radius:0.375rem; padding:1rem; margin-bottom:1rem; }
     .dc-map-toolbar-grid { display:grid; gap:.75rem; }
     @media (min-width: 900px) { .dc-map-toolbar-grid { grid-template-columns:minmax(220px,1.7fr) repeat(3,minmax(140px,1fr)) auto; align-items:end; } }
-    .dc-map-shell { background:#fff; border:1px solid #e6e6e6; border-radius:.75rem; overflow:hidden; }
-    .dc-map-summary { padding:.85rem 1rem; background:#f7f5fb; border-bottom:1px solid #e6e6e6; font-weight:800; display:flex; flex-wrap:wrap; gap:.5rem 1rem; }
+    .dc-map-shell { background:#fff; border:1px solid var(--dc-border, #e2e8f0); border-radius:0.375rem; overflow:hidden; }
+    .dc-map-summary { padding:.75rem 1rem; background:var(--dc-canvas, #f8fafc); border-bottom:1px solid var(--dc-border, #e2e8f0); font-weight:600; font-size:0.88rem; display:flex; flex-wrap:wrap; gap:.5rem 1rem; color:var(--dc-muted, #64748b); }
     #dc-map { width:100%; height:68vh; min-height:420px; background:#f3f2f1; }
     @media (max-width:600px) { #dc-map { height:60vh; min-height:360px; } }
     .dc-map-empty { padding:1rem; }
     .dc-map-popup { min-width:240px; max-width:340px; }
-    .dc-map-popup h3 { margin:0 0 .35rem; color:#4d0b93; font-size:1.05rem; font-weight:900; line-height:1.2; }
-    .dc-map-popup p { margin:.25rem 0; font-size:.9rem; }
+    .dc-map-popup h3 { margin:0 0 .35rem; color:var(--dc-scouts-purple-dark, #4d0b93); font-size:1rem; font-weight:700; line-height:1.2; }
+    .dc-map-popup p { margin:.25rem 0; font-size:.85rem; }
     .dc-map-popup ul { margin:.35rem 0 0; padding-left:1.1rem; }
-    .dc-map-popup-badge { display:inline-block; margin:.35rem .25rem .35rem 0; padding:.15rem .45rem; border-radius:999px; background:#f3f2f1; color:#333; font-size:.78rem; font-weight:900; }
-    .dc-map-popup-action { display:inline-block; margin-top:.45rem; padding:.35rem .55rem; border-radius:.3rem; background:#7413dc; color:#fff !important; text-decoration:none; font-weight:900; }
+    .dc-map-popup-badge { display:inline-block; margin:.35rem .25rem .35rem 0; padding:.15rem .45rem; border-radius:0.25rem; background:var(--dc-canvas, #f8fafc); border:1px solid var(--dc-border, #e2e8f0); color:var(--dc-ink, #1d2939); font-size:.75rem; font-weight:700; }
+    .dc-map-popup-action { display:inline-block; margin-top:.45rem; padding:.35rem .55rem; border-radius:0.375rem; background:var(--dc-scouts-purple, #7413dc); color:#fff !important; text-decoration:none; font-weight:700; font-size:.85rem; }
     .dc-map-list { display:grid; gap:.5rem; margin-top:1rem; }
-    .dc-map-list-item { background:#fff; border:1px solid #e6e6e6; border-radius:.6rem; padding:.8rem; display:grid; gap:.5rem; }
+    .dc-map-list-item { background:#fff; border:1px solid var(--dc-border, #e2e8f0); border-radius:0.375rem; padding:.8rem; display:grid; gap:.5rem; }
     @media (min-width:760px) { .dc-map-list-item { grid-template-columns:minmax(0,1fr) auto; align-items:center; } }
-    .dc-map-list-item h3 { margin:0; color:#4d0b93; font-size:1rem; font-weight:900; }
-    .dc-map-list-item p { margin:.25rem 0 0; color:#555; font-weight:700; }
-    .dc-map-risk-links { margin-top:.3rem; font-size:.9rem; }
-    .dc-map-risk-links a { font-weight:900; }
-    .dc-map-list-button { display:inline-flex; align-items:center; justify-content:center; min-height:38px; padding:.4rem .7rem; border-radius:.35rem; background:#7413dc; color:#fff; text-decoration:none; font-weight:900; border:0; cursor:pointer; }
+    .dc-map-list-item h3 { margin:0; color:var(--dc-scouts-purple-dark, #4d0b93); font-size:.95rem; font-weight:700; }
+    .dc-map-list-item p { margin:.25rem 0 0; color:var(--dc-muted, #64748b); font-weight:500; font-size:0.88rem; }
+    .dc-map-risk-links { margin-top:.3rem; font-size:.85rem; }
+    .dc-map-risk-links a { font-weight:700; }
+    .dc-map-list-button { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:.35rem .65rem; border-radius:0.375rem; background:var(--dc-scouts-purple, #7413dc); color:#fff; text-decoration:none; font-weight:700; font-size:0.85rem; border:0; cursor:pointer; }
 </style>
 
 <section class="dc-map-toolbar" aria-label="Map filters">

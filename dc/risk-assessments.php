@@ -279,9 +279,8 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-main-panel {
         background: #ffffff;
-        border: 1px solid #d8dde3;
-        border-top: 8px solid #7413dc;
-        box-shadow: 0 2px 0 rgba(16, 24, 32, 0.08);
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
     }
 
     .dc-risk-main-panel-inner {
@@ -303,27 +302,27 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-results-head h2 {
         margin: 0;
-        color: #101820;
-        font-size: clamp(1.65rem, 3vw, 2.35rem);
-        font-weight: 900;
-        line-height: 1.05;
-        letter-spacing: -0.035em;
+        color: var(--dc-ink, #1d2939);
+        font-size: clamp(1.4rem, 2.5vw, 1.85rem);
+        font-weight: 800;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
     }
 
     .dc-risk-count {
-        margin-top: 0.45rem;
-        color: #4b5563;
-        font-size: 1rem;
-        font-weight: 800;
-        line-height: 1.35;
+        margin-top: 0.35rem;
+        color: var(--dc-muted, #64748b);
+        font-size: 0.9rem;
+        font-weight: 600;
+        line-height: 1.4;
     }
 
     .dc-risk-search {
         margin-bottom: 1.75rem;
         padding: 1.25rem;
-        background: #f7f3fc;
-        border: 1px solid #d8dde3;
-        border-left: 8px solid #00a794;
+        background: var(--dc-canvas, #f8fafc);
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
     }
 
     .dc-risk-search-grid {
@@ -370,26 +369,27 @@ require __DIR__ . '/layout.php';
     .dc-risk-search-actions label {
         display: block;
         margin-bottom: 0.35rem;
-        color: #101820;
-        font-weight: 900;
+        color: var(--dc-ink, #1d2939);
+        font-weight: 700;
+        font-size: 0.88rem;
         line-height: 1.2;
     }
 
     .dc-risk-search .form-control,
     .dc-risk-search-actions .form-control {
-        min-height: 46px;
-        border: 2px solid #101820;
-        border-radius: 0;
-        color: #101820;
-        font-weight: 700;
+        min-height: 42px;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
+        color: var(--dc-ink, #1d2939);
+        font-weight: 500;
     }
 
     .dc-risk-search .form-control:focus,
     .dc-risk-search-actions .form-control:focus {
-        border-color: #101820;
+        border-color: var(--dc-scouts-purple, #7413dc);
         outline: 3px solid #ffdd00;
         outline-offset: 0;
-        box-shadow: 0 0 0 5px #000000;
+        box-shadow: none;
     }
 
     .dc-risk-search-actions {
@@ -417,13 +417,13 @@ require __DIR__ . '/layout.php';
     .dc-risk-download,
     .dc-pagination a,
     .dc-pagination span {
-        border-radius: 0;
-        font-weight: 900;
+        border-radius: 0.375rem;
+        font-weight: 700;
     }
 
     .dc-risk-search-actions .btn,
     .dc-risk-search-actions .lt-btn {
-        min-height: 46px;
+        min-height: 42px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -460,52 +460,52 @@ require __DIR__ . '/layout.php';
     .dc-risk-row {
         display: grid;
         gap: 1rem;
-        padding: 1.1rem;
+        padding: 1rem;
         background: #ffffff;
-        border: 1px solid #d8dde3;
-        border-left: 8px solid #7413dc;
-        box-shadow: 0 2px 0 rgba(16, 24, 32, 0.06);
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-left: 3px solid var(--dc-scouts-purple, #7413dc);
+        border-radius: 0.375rem;
     }
 
     @media (min-width: 760px) {
         .dc-risk-row {
             grid-template-columns: minmax(0, 1fr) auto;
             align-items: center;
-            padding: 1.25rem;
+            padding: 1.15rem;
         }
     }
 
     .dc-risk-title {
         margin: 0;
-        color: #101820;
-        font-size: clamp(1.15rem, 2vw, 1.35rem);
-        font-weight: 900;
-        line-height: 1.18;
-        letter-spacing: -0.015em;
+        color: var(--dc-ink, #1d2939);
+        font-size: clamp(1.05rem, 1.8vw, 1.2rem);
+        font-weight: 700;
+        line-height: 1.25;
+        letter-spacing: -0.01em;
     }
 
     .dc-risk-title a {
-        color: #4d0b93;
-        text-decoration-thickness: 2px;
+        color: var(--dc-scouts-purple-dark, #4d0b93);
+        text-decoration-thickness: 1px;
         text-underline-offset: 0.16em;
     }
 
     .dc-risk-title a:hover {
-        color: #2f005c;
-        text-decoration-thickness: 3px;
+        color: var(--dc-scouts-purple-deep, #2f005c);
+        text-decoration-thickness: 2px;
     }
 
     .dc-risk-meta {
-        margin: 0.5rem 0 0;
-        color: #4b5563;
-        font-size: 0.95rem;
-        font-weight: 800;
-        line-height: 1.45;
+        margin: 0.4rem 0 0;
+        color: var(--dc-muted, #64748b);
+        font-size: 0.88rem;
+        font-weight: 600;
+        line-height: 1.5;
     }
 
     .dc-risk-meta strong {
-        color: #101820;
-        font-weight: 900;
+        color: var(--dc-ink, #1d2939);
+        font-weight: 700;
     }
 
     .dc-risk-desc {
@@ -527,20 +527,21 @@ require __DIR__ . '/layout.php';
     .dc-risk-badge {
         display: inline-flex;
         align-items: center;
-        min-height: 30px;
-        padding: 0.25rem 0.6rem;
-        background: #f5f6f8;
-        border: 1px solid #d8dde3;
-        color: #101820;
-        font-size: 0.78rem;
-        font-weight: 900;
+        min-height: 26px;
+        padding: 0.2rem 0.5rem;
+        background: var(--dc-canvas, #f8fafc);
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.25rem;
+        color: var(--dc-ink, #1d2939);
+        font-size: 0.75rem;
+        font-weight: 700;
         line-height: 1.1;
     }
 
     .dc-risk-badge-district {
-        background: #f7f3fc;
-        border-color: #7413dc;
-        color: #4d0b93;
+        background: #f8f5fc;
+        border-color: rgba(116, 19, 220, 0.3);
+        color: var(--dc-scouts-purple-dark, #4d0b93);
     }
 
     .dc-risk-actions {
@@ -558,54 +559,57 @@ require __DIR__ . '/layout.php';
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-height: 46px;
-        padding: 0.65rem 0.95rem;
-        background: #7413dc;
-        border: 2px solid #7413dc;
+        min-height: 40px;
+        padding: 0.55rem 0.85rem;
+        background: var(--dc-scouts-purple, #7413dc);
+        border: 1px solid var(--dc-scouts-purple, #7413dc);
+        border-radius: 0.375rem;
         color: #ffffff;
-        box-shadow: 0 4px 0 #000000;
+        box-shadow: none;
         text-decoration: none;
+        font-size: 0.88rem;
         line-height: 1.15;
         white-space: nowrap;
     }
 
     .dc-risk-download:hover,
     .dc-risk-download:focus {
-        background: #4d0b93;
-        border-color: #4d0b93;
+        background: var(--dc-scouts-purple-dark, #4d0b93);
+        border-color: var(--dc-scouts-purple-dark, #4d0b93);
         color: #ffffff;
         text-decoration: none;
     }
 
     .dc-risk-empty {
         padding: 1.25rem;
-        background: #f5f6f8;
-        border: 2px dashed #6b7280;
+        background: var(--dc-canvas, #f8fafc);
+        border: 1px dashed var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
     }
 
     .dc-risk-empty h3 {
         margin: 0;
-        color: #101820;
-        font-size: 1.25rem;
-        font-weight: 900;
+        color: var(--dc-ink, #1d2939);
+        font-size: 1.1rem;
+        font-weight: 700;
         line-height: 1.2;
     }
 
     .dc-risk-empty p {
         margin: 0.5rem 0 0;
-        color: #101820;
-        font-weight: 700;
+        color: var(--dc-muted, #64748b);
+        font-weight: 500;
         line-height: 1.5;
     }
 
     .dc-pagination {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.45rem;
+        gap: 0.35rem;
         align-items: center;
         margin-top: 1.5rem;
         padding-top: 1.25rem;
-        border-top: 1px solid #d8dde3;
+        border-top: 1px solid var(--dc-border, #e2e8f0);
     }
 
     .dc-pagination a,
@@ -613,61 +617,66 @@ require __DIR__ . '/layout.php';
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 42px;
-        min-height: 42px;
-        padding: 0.4rem 0.7rem;
-        border: 2px solid #d8dde3;
+        min-width: 38px;
+        min-height: 38px;
+        padding: 0.35rem 0.6rem;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
         background: #ffffff;
-        color: #4d0b93;
+        color: var(--dc-scouts-purple-dark, #4d0b93);
         text-decoration: none;
     }
 
     .dc-pagination a:hover {
-        border-color: #7413dc;
-        background: #f7f3fc;
-        color: #2f005c;
+        border-color: var(--dc-scouts-purple, #7413dc);
+        background: #f8f5fc;
+        color: var(--dc-scouts-purple-deep, #2f005c);
     }
 
     .dc-pagination .current {
-        background: #4d0b93;
+        background: var(--dc-scouts-purple-dark, #4d0b93);
         color: #ffffff;
-        border-color: #4d0b93;
+        border-color: var(--dc-scouts-purple-dark, #4d0b93);
     }
 
     .dc-pagination .disabled {
-        color: #6b7280;
-        background: #f5f6f8;
+        color: var(--dc-muted, #64748b);
+        background: var(--dc-canvas, #f8fafc);
     }
 
     .dc-success {
         margin-bottom: 1.25rem;
-        padding: 1rem 1.25rem;
-        background: #e9f8f4;
-        border-left: 8px solid #00a794;
-        color: #101820;
-        font-weight: 900;
-        line-height: 1.45;
+        padding: 0.85rem 1.15rem;
+        background: #f0fdf9;
+        border-left: 3px solid #00a794;
+        border-radius: 0.375rem;
+        color: var(--dc-ink, #1d2939);
+        font-weight: 600;
+        font-size: 0.92rem;
+        line-height: 1.5;
     }
 
     .dc-error-summary {
         margin-bottom: 1.25rem;
-        padding: 1rem 1.25rem;
-        background: #fff1f0;
-        border-left: 8px solid #d4351c;
-        color: #101820;
+        padding: 1rem 1.15rem;
+        background: #fef2f2;
+        border-left: 3px solid #dc2626;
+        border-radius: 0.375rem;
+        color: var(--dc-ink, #1d2939);
     }
 
     .dc-error-summary h2 {
         margin: 0 0 0.5rem;
-        color: #101820;
-        font-size: 1.35rem;
-        font-weight: 900;
+        color: var(--dc-ink, #1d2939);
+        font-size: 1.1rem;
+        font-weight: 700;
     }
 
     .dc-error-summary ul {
         margin: 0;
         padding-left: 1.25rem;
-        font-weight: 700;
+        font-weight: 500;
+        font-size: 0.92rem;
     }
 
     @media (max-width: 767.98px) {
