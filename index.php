@@ -487,7 +487,7 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
     /* ===== DASHBOARD HERO BANNER ===== */
     .lt-dash-hero {
         position: relative;
-        background: var(--iv-purple);
+        background: var(--iv-purple-dark);
         color: #fff;
         overflow: hidden;
     }
