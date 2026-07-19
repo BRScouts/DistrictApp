@@ -463,7 +463,16 @@ $modules = [
         'image' => '/assets/img/cubs-crate-stacking-jpg.jpg',
         'visible' => $isSystemAdmin,
     ],
-];
+    [
+        'title' => 'Website Editor',
+        'description' => 'Edit and manage the Irwell Valley District Scouts website content.',
+        'url' => 'https://www.irvalscouts.org.uk/?sso_for_azure_ad=start',
+        'status' => 'available',
+        'image' => '/assets/img/white-ir-logo.png',
+        'visible' => $isSystemAdmin,
+    ],
+];  
+
 
 $modules = array_values(array_filter(
     $modules,

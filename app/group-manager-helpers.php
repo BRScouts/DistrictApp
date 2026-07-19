@@ -438,6 +438,10 @@ function gm_fetch_people(int $groupId, string $membershipStatus = 'active', stri
 
 function gm_fetch_person_for_group(int $groupId, int $personId): ?array
 {
+    $canReviewCol = gm_column_exists('group_memberships', 'can_review_events')
+        ? 'COALESCE(gm.can_review_events, 0) AS can_review_events,'
+        : '0 AS can_review_events,';
+
     $stmt = db()->prepare("
         SELECT
             p.id AS person_id,
@@ -449,6 +453,7 @@ function gm_fetch_person_for_group(int $groupId, int $personId): ?array
             gm.membership_role,
             gm.access_level,
             gm.status AS membership_status,
+            {$canReviewCol}
             dp.role_title,
             dp.visible_in_directory,
             dp.share_phone,
@@ -1593,13 +1598,16 @@ function gm_find_potential_duplicates(string $fullName, string $email, int $excl
 }
 
 /**
- * Set or remove group_reviewer access for a person in a specific group.
+ * Set or remove event review permission for a person in a specific group.
+ *
+ * Toggles the can_review_events column on group_memberships.
+ * Does NOT alter the person's access_level — this is purely additive.
  *
  * Only District Admins (or higher) should call this.
  *
- * @param int  $personId       The person to grant/revoke group reviewer access.
+ * @param int  $personId       The person to grant/revoke review access.
  * @param int  $groupId        The group the permission applies to.
- * @param bool $grantReviewer  True to grant, false to revoke (resets to member or group_admin based on role).
+ * @param bool $grantReviewer  True to grant, false to revoke.
  * @param int  $actorPersonId  The admin performing the action.
  */
 function gm_set_group_reviewer(int $personId, int $groupId, bool $grantReviewer, int $actorPersonId): void
@@ -1608,7 +1616,7 @@ function gm_set_group_reviewer(int $personId, int $groupId, bool $grantReviewer,
         throw new RuntimeException('Invalid person or group.');
     }
 
-    // Fetch current membership to check it exists and get the current role
+    // Verify membership exists
     $stmt = db()->prepare("
         SELECT id, membership_role, access_level
         FROM group_memberships
@@ -1624,35 +1632,17 @@ function gm_set_group_reviewer(int $personId, int $groupId, bool $grantReviewer,
         throw new RuntimeException('This person does not have an active membership in this Group.');
     }
 
-    $currentAccessLevel = (string) ($membership['access_level'] ?? 'member');
-    $membershipRole = (string) ($membership['membership_role'] ?? '');
-
-    if ($grantReviewer) {
-        // Don't downgrade someone who already has a higher access level
-        if (in_array($currentAccessLevel, ['district_reviewer', 'district_admin', 'system_admin'], true)) {
-            throw new RuntimeException('This person already has district-level or higher access. No change needed.');
-        }
-
-        $newAccessLevel = 'group_reviewer';
-    } else {
-        // Only revoke if they currently are a group_reviewer
-        if ($currentAccessLevel !== 'group_reviewer') {
-            return; // Nothing to revoke
-        }
-
-        // Reset to appropriate level based on their membership role
-        $newAccessLevel = gm_access_level_for_membership_role($membershipRole);
-    }
+    $newValue = $grantReviewer ? 1 : 0;
 
     $stmt = db()->prepare("
         UPDATE group_memberships
-        SET access_level = :access_level
+        SET can_review_events = :can_review
         WHERE person_id = :person_id
           AND group_id = :group_id
           AND status = 'active'
     ");
     $stmt->execute([
-        'access_level' => $newAccessLevel,
+        'can_review' => $newValue,
         'person_id' => $personId,
         'group_id' => $groupId,
     ]);
@@ -1664,8 +1654,7 @@ function gm_set_group_reviewer(int $personId, int $groupId, bool $grantReviewer,
         $personId,
         [
             'group_id' => $groupId,
-            'previous_access_level' => $currentAccessLevel,
-            'new_access_level' => $newAccessLevel,
+            'can_review_events' => $newValue,
         ]
     );
 }

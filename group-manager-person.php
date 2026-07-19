@@ -358,7 +358,7 @@ include __DIR__ . '/app/group-manager-nav.php';
 
     <?php
         $personCurrentAccessLevel = (string) ($person['access_level'] ?? 'member');
-        $isCurrentlyGroupReviewer = $personCurrentAccessLevel === 'group_reviewer';
+        $isCurrentlyGroupReviewer = (int) ($person['can_review_events'] ?? 0) === 1;
         $hasHigherAccess = in_array($personCurrentAccessLevel, ['district_reviewer', 'district_admin', 'system_admin'], true);
         $initials = implode('', array_map(fn($w) => mb_strtoupper(mb_substr($w, 0, 1)), array_slice(explode(' ', trim((string) $person['full_name'])), 0, 2)));
     ?>
@@ -427,7 +427,7 @@ include __DIR__ . '/app/group-manager-nav.php';
             <div class="gmp-card">
                 <?php
                     $stmtAllMemberships = $pdo->prepare("
-                        SELECT gm.group_id, gm.membership_role, gm.access_level, gm.status AS membership_status, gm.is_primary, g.group_name
+                        SELECT gm.group_id, gm.membership_role, gm.access_level, gm.can_review_events, gm.status AS membership_status, gm.is_primary, g.group_name
                         FROM group_memberships gm
                         INNER JOIN groups g ON g.id = gm.group_id
                         WHERE gm.person_id = :person_id AND gm.status = 'active'
@@ -453,7 +453,7 @@ include __DIR__ . '/app/group-manager-nav.php';
                             <div class="gmp-role-label">
                                 <?= e($mGroupName) ?>
                                 <?php if ($mIsPrimary): ?><span class="gmp-badge gmp-badge-primary">Primary</span><?php endif; ?>
-                                <?php if ($mAccessLevel === 'group_reviewer'): ?><span class="gmp-badge gmp-badge-reviewer">Reviewer</span><?php endif; ?>
+                                <?php if ((int) ($membership['can_review_events'] ?? 0) === 1): ?><span class="gmp-badge gmp-badge-reviewer">Reviewer</span><?php endif; ?>
                             </div>
                             <?php if ($canEditThisRole): ?>
                                 <form method="post">
