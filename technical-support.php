@@ -408,6 +408,7 @@ if (!in_array($form['raise_for'], ['self', 'other'], true)) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_validate();
     $selectedIssueType = $issueTypes[$form['issue_type']] ?? '';
     $affectedPerson = $currentPerson;
     $affectedPersonId = $personId;
@@ -645,6 +646,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <h2>Raise a support request</h2>
 
             <form method="post" novalidate>
+                <?= csrf_field() ?>
                 <fieldset class="form-group">
                     <legend class="h5 font-weight-bold">Who is this for?</legend>
 

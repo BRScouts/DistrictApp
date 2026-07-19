@@ -299,6 +299,7 @@ function gmi_fetch_inactive_people(int $groupId, string $search = ''): array
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_validate();
     $action = (string) ($_POST['action'] ?? '');
     $postedGroupId = (int) ($_POST['group_id'] ?? 0);
     $personId = (int) ($_POST['person_id'] ?? 0);
@@ -614,6 +615,7 @@ include __DIR__ . '/header.php';
 
                                 <td>
                                     <form method="post" class="gmi-action-form">
+                                        <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="reactivate_person">
                                         <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
                                         <input type="hidden" name="person_id" value="<?= (int) $personId ?>">

@@ -269,6 +269,7 @@ function home_shared_mailbox_json_response(array $payload): void
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['shared_mailbox_action'])) {
+    csrf_validate();
     $action = (string) ($_POST['shared_mailbox_action'] ?? '');
 
     try {
@@ -1060,6 +1061,7 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
     function postSharedMailboxAction(action, data) {
         var body = new FormData();
         body.append('shared_mailbox_action', action);
+        body.append('_csrf_token', '<?= csrf_token() ?>');
 
         Object.keys(data || {}).forEach(function (key) {
             body.append(key, data[key]);

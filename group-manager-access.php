@@ -300,6 +300,7 @@ include __DIR__ . '/header.php';
                             <td>
                                 <?php if (($link['status'] ?? '') === 'active'): ?>
                                     <form method="post" onsubmit="return confirm('Disable this Group calendar link?');">
+                                        <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="disable_group_link">
                                         <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
                                         <input type="hidden" name="link_id" value="<?= (int) $link['id'] ?>">
