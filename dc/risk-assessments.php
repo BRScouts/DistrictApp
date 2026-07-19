@@ -280,7 +280,7 @@ require __DIR__ . '/layout.php';
     .dc-risk-main-panel {
         background: #ffffff;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
     }
 
     .dc-risk-main-panel-inner {
@@ -322,7 +322,7 @@ require __DIR__ . '/layout.php';
         padding: 1.25rem;
         background: var(--dc-canvas, #f8fafc);
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
     }
 
     .dc-risk-search-grid {
@@ -379,7 +379,7 @@ require __DIR__ . '/layout.php';
     .dc-risk-search-actions .form-control {
         min-height: 42px;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         color: var(--dc-ink, #1d2939);
         font-weight: 500;
     }
@@ -417,7 +417,7 @@ require __DIR__ . '/layout.php';
     .dc-risk-download,
     .dc-pagination a,
     .dc-pagination span {
-        border-radius: 0.375rem;
+        border-radius: 0;
         font-weight: 700;
     }
 
@@ -464,7 +464,7 @@ require __DIR__ . '/layout.php';
         background: #ffffff;
         border: 1px solid var(--dc-border, #e2e8f0);
         border-left: 3px solid var(--dc-scouts-purple, #7413dc);
-        border-radius: 0.375rem;
+        border-radius: 0;
     }
 
     @media (min-width: 760px) {
@@ -531,7 +531,7 @@ require __DIR__ . '/layout.php';
         padding: 0.2rem 0.5rem;
         background: var(--dc-canvas, #f8fafc);
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.25rem;
+        border-radius: 0;
         color: var(--dc-ink, #1d2939);
         font-size: 0.75rem;
         font-weight: 700;
@@ -563,7 +563,7 @@ require __DIR__ . '/layout.php';
         padding: 0.55rem 0.85rem;
         background: var(--dc-scouts-purple, #7413dc);
         border: 1px solid var(--dc-scouts-purple, #7413dc);
-        border-radius: 0.375rem;
+        border-radius: 0;
         color: #ffffff;
         box-shadow: none;
         text-decoration: none;
@@ -584,7 +584,7 @@ require __DIR__ . '/layout.php';
         padding: 1.25rem;
         background: var(--dc-canvas, #f8fafc);
         border: 1px dashed var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
     }
 
     .dc-risk-empty h3 {
@@ -621,7 +621,7 @@ require __DIR__ . '/layout.php';
         min-height: 38px;
         padding: 0.35rem 0.6rem;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #ffffff;
         color: var(--dc-scouts-purple-dark, #4d0b93);
         text-decoration: none;
@@ -649,7 +649,7 @@ require __DIR__ . '/layout.php';
         padding: 0.85rem 1.15rem;
         background: #f0fdf9;
         border-left: 3px solid #00a794;
-        border-radius: 0.375rem;
+        border-radius: 0;
         color: var(--dc-ink, #1d2939);
         font-weight: 600;
         font-size: 0.92rem;
@@ -661,7 +661,7 @@ require __DIR__ . '/layout.php';
         padding: 1rem 1.15rem;
         background: #fef2f2;
         border-left: 3px solid #dc2626;
-        border-radius: 0.375rem;
+        border-radius: 0;
         color: var(--dc-ink, #1d2939);
     }
 

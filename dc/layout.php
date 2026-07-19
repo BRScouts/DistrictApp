@@ -161,7 +161,7 @@ $profileUrl = '/profile.php';
             --dc-border: #e2e8f0;
             --dc-panel: #ffffff;
             --dc-canvas: #f8fafc;
-            --dc-radius: 0.375rem;
+            --dc-radius: 0;
             --dc-width: 1120px;
         }
 

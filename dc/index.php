@@ -385,7 +385,7 @@ require __DIR__ . '/layout.php';
     .dc-calendar-sidebar {
         background: #ffffff;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         padding: 1.25rem;
     }
 
@@ -421,7 +421,7 @@ require __DIR__ . '/layout.php';
     .dc-calendar-filter-form .form-control {
         min-height: 42px;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         color: var(--dc-ink, #1d2939);
         font-weight: 500;
     }
@@ -442,7 +442,7 @@ require __DIR__ . '/layout.php';
     .dc-calendar-sidebar-actions .lt-btn,
     .dc-calendar-filter-form .lt-btn {
         min-height: 42px;
-        border-radius: 0.375rem;
+        border-radius: 0;
         font-weight: 700;
     }
 
@@ -467,7 +467,7 @@ require __DIR__ . '/layout.php';
         padding: 1rem 1.25rem;
         background: #ffffff;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
     }
 
     @media (min-width: 768px) {
@@ -503,7 +503,7 @@ require __DIR__ . '/layout.php';
 
     .dc-calendar-month-nav .lt-btn {
         min-height: 38px;
-        border-radius: 0.375rem;
+        border-radius: 0;
         font-weight: 700;
         font-size: 0.88rem;
     }
@@ -511,7 +511,7 @@ require __DIR__ . '/layout.php';
     .dc-calendar-shell {
         background: #ffffff;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         overflow: hidden;
     }
 
@@ -604,7 +604,7 @@ require __DIR__ . '/layout.php';
         background: #f8f5fc;
         border: 0;
         border-left: 4px solid #7413dc;
-        border-radius: 0.25rem;
+        border-radius: 0;
         color: var(--dc-ink, #1d2939);
         cursor: pointer;
         line-height: 1.25;
@@ -694,7 +694,7 @@ require __DIR__ . '/layout.php';
         padding: 1.25rem;
         background: #ffffff;
         border: 1px dashed var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         color: var(--dc-muted, #64748b);
         font-weight: 600;
     }
@@ -720,7 +720,7 @@ require __DIR__ . '/layout.php';
         overflow-y: auto;
         background: #ffffff;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.5rem;
+        border-radius: 0;
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), 0 4px 16px rgba(0, 0, 0, 0.08);
     }
 
@@ -733,7 +733,7 @@ require __DIR__ . '/layout.php';
         background: var(--dc-scouts-purple-dark, #4d0b93);
         color: #ffffff;
         border-bottom: none;
-        border-radius: 0.5rem 0.5rem 0 0;
+        border-radius: 0;
     }
 
     .dc-event-modal-header h2 {
@@ -749,7 +749,7 @@ require __DIR__ . '/layout.php';
         min-width: 36px;
         min-height: 36px;
         border: 1px solid rgba(255, 255, 255, 0.4);
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: transparent;
         color: #ffffff;
         cursor: pointer;
@@ -842,7 +842,7 @@ require __DIR__ . '/layout.php';
             padding: 0.35rem 0.45rem;
             border-left: 0;
             border-top: 3px solid #7413dc;
-            border-radius: 0.25rem;
+            border-radius: 0;
             overflow: hidden;
         }
 
@@ -907,7 +907,7 @@ require __DIR__ . '/layout.php';
             margin-bottom: 0.65rem;
             border: 1px solid var(--dc-border, #e2e8f0);
             border-left: 3px solid var(--dc-scouts-purple, #7413dc);
-            border-radius: 0.375rem;
+            border-radius: 0;
         }
 
         .dc-calendar-day.is-empty {

@@ -291,7 +291,7 @@ require __DIR__ . '/layout.php';
 
     .dc-stat-card {
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #fff;
         padding: 1rem;
     }
@@ -315,7 +315,7 @@ require __DIR__ . '/layout.php';
     .dc-leader-table-wrap {
         overflow-x: auto;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #fff;
     }
 
@@ -355,7 +355,7 @@ require __DIR__ . '/layout.php';
 
     .dc-link-box {
         border: 1px solid rgba(0, 109, 223, 0.3);
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #eff6ff;
         padding: 1rem;
         margin-bottom: 1rem;
@@ -367,7 +367,7 @@ require __DIR__ . '/layout.php';
         font-size: 0.88rem;
         padding: 0.6rem;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #fff;
     }
 
@@ -378,7 +378,7 @@ require __DIR__ . '/layout.php';
 
     .dc-group-link-item {
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #fff;
         padding: 0.75rem;
     }
@@ -390,14 +390,14 @@ require __DIR__ . '/layout.php';
 
     .dc-mobile-leader-card {
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #fff;
         padding: 0.75rem;
     }
 
     .dc-warning-panel {
         border-left: 3px solid #d4a300;
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #fefce8;
         padding: 1rem;
         margin-bottom: 1rem;

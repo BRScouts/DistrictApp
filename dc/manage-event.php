@@ -726,7 +726,7 @@ require __DIR__ . '/layout.php';
 <style>
     .dc-notice {
         border-left: 3px solid var(--dc-scouts-purple, #7413dc);
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: var(--dc-canvas, #f8fafc);
         padding: 1rem;
         margin-bottom: 1rem;
@@ -734,7 +734,7 @@ require __DIR__ . '/layout.php';
 
     .dc-warning-box {
         border-left: 3px solid #d4a300;
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #fefce8;
         padding: 1rem;
         margin-bottom: 1rem;
@@ -742,7 +742,7 @@ require __DIR__ . '/layout.php';
 
     .dc-danger-box {
         border-left: 3px solid #dc2626;
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #fef2f2;
         padding: 1rem;
         margin-bottom: 1rem;
@@ -812,7 +812,7 @@ require __DIR__ . '/layout.php';
     .dc-risk-table-wrap {
         overflow-x: auto;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #fff;
     }
 
@@ -851,12 +851,12 @@ require __DIR__ . '/layout.php';
         padding: 1rem;
         background: var(--dc-canvas, #f8fafc);
         border: 1px dashed var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
     }
 
     .dc-remove-risk-file {
         border: 1px solid #dc2626;
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #fff;
         color: #dc2626;
         font-weight: 700;
@@ -890,7 +890,7 @@ require __DIR__ . '/layout.php';
         gap: 1rem;
         align-items: flex-start;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #fff;
         padding: 0.75rem;
     }
@@ -912,7 +912,7 @@ require __DIR__ . '/layout.php';
     .dc-modal {
         background: #fff;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.5rem;
+        border-radius: 0;
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
         max-width: 1120px;
         margin: 1rem auto;
@@ -954,7 +954,7 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-card {
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         padding: 0.75rem;
         background: #fff;
         display: grid;
@@ -1003,7 +1003,7 @@ require __DIR__ . '/layout.php';
         max-width: 100%;
         overflow: hidden;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: var(--dc-canvas, #f8fafc);
         margin-top: 1rem;
         isolation: isolate;
@@ -1053,7 +1053,7 @@ require __DIR__ . '/layout.php';
         margin-top: 0.75rem;
         padding: 0.75rem;
         border-left: 3px solid #00a794;
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #f0fdf9;
     }
 
@@ -1064,7 +1064,7 @@ require __DIR__ . '/layout.php';
 
     .dc-audit-item {
         border-left: 3px solid var(--dc-scouts-purple, #7413dc);
-        border-radius: 0.375rem;
+        border-radius: 0;
         background: #fff;
         padding: 0.75rem;
         border-top: 1px solid var(--dc-border, #e2e8f0);

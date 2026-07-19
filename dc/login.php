@@ -179,20 +179,67 @@ require __DIR__ . '/layout.php';
         font-weight: 700;
     }
 
-    .dc-login-sso-box {
+    .dc-login-recommend-box {
         margin-top: 1.5rem;
-        padding: 1rem;
-        background: #f5f6f8;
+        padding: 1.25rem;
+        background: #f0faf8;
+        border: 2px solid #00a794;
         border-left: 8px solid #00a794;
+        position: relative;
     }
 
-    .dc-login-sso-box h3 {
+    .dc-login-recommend-badge {
+        display: inline-block;
         margin-bottom: 0.5rem;
+        padding: 0.2rem 0.6rem;
+        background: #00a794;
+        color: #ffffff;
+        font-size: 0.8rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
     }
 
-    .dc-login-sso-box p {
+    .dc-login-recommend-box h3 {
+        margin: 0 0 0.4rem;
+    }
+
+    .dc-login-recommend-box p {
         margin: 0;
         color: #101820;
+        font-weight: 700;
+    }
+
+    .dc-login-recommend-box .dc-login-actions {
+        margin-top: 1rem;
+    }
+
+    .dc-login-divider {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin: 1.5rem 0;
+    }
+
+    .dc-login-divider::before,
+    .dc-login-divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: #d8dde3;
+    }
+
+    .dc-login-divider span {
+        color: #4b5563;
+        font-size: 0.9rem;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+
+    .dc-login-group-note {
+        margin: 1rem 0 0;
+        color: #4b5563 !important;
+        font-size: 0.95rem !important;
         font-weight: 700;
     }
 
@@ -263,33 +310,43 @@ require __DIR__ . '/layout.php';
     <section class="dc-login-card">
         <div class="dc-login-card-inner">
             <?php if ($hasGroupLink): ?>
-                <h2>Continue to your Group calendar</h2>
+                <h2>Open District Calendar</h2>
 
                 <p class="lt-lede dc-login-lede">
-                    Your Group link has been recognised. Continue with this link to open the calendar for your Group.
+                    Choose how you'd like to access the District Calendar.
                 </p>
+
+                <div class="dc-login-recommend-box">
+                    <span class="dc-login-recommend-badge">Recommended</span>
+                    <h3>Sign in with Microsoft</h3>
+                    <p>
+                        If you have a District Microsoft 365 account, sign in for personal access,
+                        stronger security and the full calendar experience.
+                    </p>
+                    <div class="dc-login-actions">
+                        <a class="btn lt-btn dc-login-primary" href="/auth/microsoft-start.php">
+                            Sign in with Microsoft
+                        </a>
+                    </div>
+                </div>
+
+                <div class="dc-login-divider">
+                    <span>or</span>
+                </div>
 
                 <div class="dc-login-group-summary">
                     <span>Group link recognised for</span>
                     <strong><?= e((string) ($groupLink['group_name'] ?? 'your Group')) ?></strong>
                 </div>
 
+                <p class="dc-login-group-note">
+                    Don't have a Microsoft account? You can continue with shared Group access instead.
+                </p>
+
                 <div class="dc-login-actions">
-                    <a class="btn lt-btn dc-login-primary" href="/dc/login.php?continue=group-link">
+                    <a class="btn lt-btn dc-login-secondary" href="/dc/login.php?continue=group-link">
                         Continue with Group link
                     </a>
-
-                    <a class="btn lt-btn dc-login-secondary" href="/auth/microsoft-start.php">
-                        Sign in with Microsoft
-                    </a>
-                </div>
-
-                <div class="dc-login-sso-box">
-                    <h3>Have a District Microsoft account?</h3>
-                    <p>
-                        Microsoft sign-in is better if you have a District account because it gives you personal access,
-                        stronger security and the full District Calendar experience.
-                    </p>
                 </div>
             <?php else: ?>
                 <h2>Sign in with Microsoft</h2>
@@ -319,15 +376,17 @@ require __DIR__ . '/layout.php';
                 <h2>Which option should I use?</h2>
 
                 <p>
-                    Most Group volunteers can continue with the Group link.
+                    <strong>Microsoft sign-in</strong> is for anyone with a District Microsoft 365 account.
+                    It gives you personal access and the full calendar experience.
                 </p>
 
                 <p>
-                    Use Microsoft sign-in only if you already have a District Microsoft 365 account.
+                    <strong>Group link</strong> provides shared access for your Group. It is not a personal
+                    account and has limited features.
                 </p>
 
                 <div class="dc-login-warning">
-                    Group-link access is shared access for your Group. It is not a personal District account.
+                    Not sure? Ask your District team whether you have a Microsoft 365 account.
                 </div>
             <?php else: ?>
                 <h2>Using a Group link?</h2>
