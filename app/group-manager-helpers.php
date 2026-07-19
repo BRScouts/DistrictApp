@@ -1215,20 +1215,30 @@ function gm_send_microsoft_instructions(array $person, int $groupId, int $actorP
 {
     $firstName = explode(' ', trim((string) $person['full_name']))[0] ?: 'there';
     $ssoUrl = gm_absolute_url('/auth/microsoft-start.php');
-    $dashboardUrl = gm_absolute_url('/index.php');
-    $calendarUrl = gm_absolute_url('/dc/');
 
     gm_queue_email_and_log(
         (int) $person['person_id'],
         (string) $person['primary_email'],
         (string) $person['full_name'],
-        'Your Irwell Valley District Microsoft sign-in instructions',
+        'How to sign in to the Irwell Valley District App',
         "Hello {$firstName},\n\n"
-        . "You have been added to the District Leader Tool.\n\n"
-        . "Use the Microsoft sign-in button to access the District Dashboard and District Calendar.\n\n"
-        . "Sign in with Microsoft:\n{$ssoUrl}\n\n"
-        . "Dashboard:\n{$dashboardUrl}\n\n"
-        . "District Calendar:\n{$calendarUrl}\n\n"
+        . "Here are your sign-in instructions for the Irwell Valley District App.\n\n"
+        . "\n"
+        . "HOW TO SIGN IN\n\n"
+        . "Go to the link below and click \"Sign in with Microsoft\". Use your District Microsoft 365 email address and password to sign in.\n\n"
+        . "{$ssoUrl}\n\n"
+        . "\n"
+        . "WHAT YOU CAN ACCESS\n\n"
+        . "Once signed in you will have access to:\n\n"
+        . "- The District Dashboard\n"
+        . "- The District Directory\n"
+        . "- The District Calendar\n"
+        . "- Your Scout email and OneDrive\n\n"
+        . "\n"
+        . "NEED HELP?\n\n"
+        . "If you have trouble signing in, check that you are using your @" . gm_default_district_email_domain() . " email address. If you have forgotten your password, use the \"Forgot password\" option on the Microsoft sign-in page.\n\n"
+        . "If you still need help, ask your Group Lead Volunteer.\n\n"
+        . "\n"
         . "Irwell Valley Scout District",
         'microsoft_signin_instructions'
     );
@@ -1247,11 +1257,22 @@ function gm_send_calendar_link_instructions(array $person, int $groupId, int $ac
         (int) $person['person_id'],
         (string) $person['primary_email'],
         (string) $person['full_name'],
-        'Your Irwell Valley District Calendar access',
+        'Your Irwell Valley District Calendar link',
         "Hello {$firstName},\n\n"
-        . "You have been added to the District Calendar.\n\n"
-        . "Access the calendar here:\n{$inviteUrl}\n\n"
-        . "If you later receive a District Microsoft 365 account, please use the Microsoft sign-in button instead.\n\n"
+        . "Here is your personal link to access the Irwell Valley District Calendar.\n\n"
+        . "\n"
+        . "YOUR CALENDAR LINK\n\n"
+        . "{$inviteUrl}\n\n"
+        . "Bookmark this link or save this email so you can find it again easily.\n\n"
+        . "\n"
+        . "WHAT YOU CAN ACCESS\n\n"
+        . "This link gives you access to the District Calendar where you can view upcoming events and activities.\n\n"
+        . "This link does not give access to the District Dashboard, Directory, Scout email, or OneDrive.\n\n"
+        . "\n"
+        . "IMPORTANT\n\n"
+        . "This link is personal to you. Please do not share it with others.\n\n"
+        . "If you later receive a District Microsoft 365 account, you should use the Microsoft sign-in button instead of this link.\n\n"
+        . "\n"
         . "Irwell Valley Scout District",
         'group_calendar_invite_resent'
     );

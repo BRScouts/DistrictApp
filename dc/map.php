@@ -345,8 +345,8 @@ $active = 'map';
 require __DIR__ . '/layout.php';
 ?>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
     .dc-map-toolbar { background:#fff; border:1px solid var(--dc-border, #e2e8f0); border-radius:0; padding:1rem; margin-bottom:1rem; }

@@ -264,6 +264,12 @@ function sync_graph_remove_manager(\GuzzleHttp\Client $client, string $token, st
 
 // ─── Membership role → job title mapping ────────────────────────────────────
 
+/**
+ * Maps internal membership_role values to human-readable job titles for M365.
+ *
+ * These must match the values used in gm_membership_role_options() from
+ * group-manager-helpers.php. If new roles are added there, add them here too.
+ */
 function sync_role_to_job_title(string $membershipRole): string
 {
     $map = [
@@ -273,10 +279,91 @@ function sync_role_to_job_title(string $membershipRole): string
         'section_assistant' => 'Section Assistant',
         'trustee' => 'Trustee',
         'district_volunteer' => 'District Volunteer',
+        'group_link' => 'Volunteer', // calendar-link pseudo role, unlikely to hit
         'other' => 'Volunteer',
     ];
 
     return $map[$membershipRole] ?? 'Volunteer';
+}
+
+// ─── District team GLV (manager for all GLVs) ───────────────────────────────
+
+/**
+ * The group/team ID whose Group Lead Volunteer acts as the manager for
+ * all other Group Lead Volunteers in the district.
+ */
+define('SYNC_DISTRICT_TEAM_ID', 3);
+
+/**
+ * Resolve the M365 user ID of the GLV of the district team (group ID 3).
+ * This person is set as the manager for all other GLVs.
+ */
+function sync_resolve_district_glv_m365_id(): ?string
+{
+    $source = sync_resolve_m365_id_source();
+
+    if ($source === '' ) {
+        return null;
+    }
+
+    $pdo = db();
+    $districtTeamId = SYNC_DISTRICT_TEAM_ID;
+
+    if ($source === 'user_accounts') {
+        $stmt = $pdo->prepare("
+            SELECT ua.provider_subject
+            FROM group_memberships gm
+            INNER JOIN people p ON p.id = gm.person_id AND p.status = 'active'
+            INNER JOIN user_accounts ua
+                ON ua.person_id = p.id
+                AND ua.provider = 'microsoft'
+                AND ua.provider_subject IS NOT NULL
+                AND ua.provider_subject <> ''
+            WHERE gm.group_id = :group_id
+              AND gm.membership_role = 'group_lead_volunteer'
+              AND gm.status = 'active'
+            LIMIT 1
+        ");
+        $stmt->execute(['group_id' => $districtTeamId]);
+        $result = $stmt->fetchColumn();
+        return $result !== false ? (string) $result : null;
+    }
+
+    if ($source === 'm365_account_requests') {
+        $stmt = $pdo->prepare("
+            SELECT mar.graph_user_id
+            FROM group_memberships gm
+            INNER JOIN people p ON p.id = gm.person_id AND p.status = 'active'
+            INNER JOIN m365_account_requests mar
+                ON mar.person_id = p.id
+                AND mar.graph_user_id IS NOT NULL
+                AND mar.graph_user_id <> ''
+            WHERE gm.group_id = :group_id
+              AND gm.membership_role = 'group_lead_volunteer'
+              AND gm.status = 'active'
+            LIMIT 1
+        ");
+        $stmt->execute(['group_id' => $districtTeamId]);
+        $result = $stmt->fetchColumn();
+        return $result !== false ? (string) $result : null;
+    }
+
+    // people:<column> fallback
+    $m365IdColumn = substr($source, strlen('people:'));
+    $stmt = $pdo->prepare("
+        SELECT p.`{$m365IdColumn}`
+        FROM group_memberships gm
+        INNER JOIN people p ON p.id = gm.person_id AND p.status = 'active'
+        WHERE gm.group_id = :group_id
+          AND gm.membership_role = 'group_lead_volunteer'
+          AND gm.status = 'active'
+          AND p.`{$m365IdColumn}` IS NOT NULL
+          AND p.`{$m365IdColumn}` <> ''
+        LIMIT 1
+    ");
+    $stmt->execute(['group_id' => $districtTeamId]);
+    $result = $stmt->fetchColumn();
+    return $result !== false ? (string) $result : null;
 }
 
 // ─── Fetch people to sync ───────────────────────────────────────────────────
@@ -463,6 +550,17 @@ function sync_fetch_people_to_sync(): array
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // De-duplicate: keep only the first (highest priority) membership per person.
+    // The SQL ORDER BY FIELD(...) ensures the "primary" role is selected when a
+    // person has multiple group memberships. Priority order:
+    //   1. Group Lead Volunteer (most senior)
+    //   2. Section Leader
+    //   3. Assistant Section Leader
+    //   4. Section Assistant
+    //   5. Trustee
+    //   6. District Volunteer
+    //   7. Other
+    // This means if someone is a GLV in one group and a Section Leader in another,
+    // their M365 profile will reflect the GLV role and that group as department.
     $people = [];
     foreach ($rows as $row) {
         $personId = (int) $row['person_id'];
@@ -496,6 +594,15 @@ if ($total === 0) {
     exit(0);
 }
 
+// Resolve the district team GLV — this person manages all other GLVs.
+$districtGlvM365Id = sync_resolve_district_glv_m365_id();
+
+if ($districtGlvM365Id !== null) {
+    sync_log("District team (group " . SYNC_DISTRICT_TEAM_ID . ") GLV M365 ID: {$districtGlvM365Id}");
+} else {
+    sync_log("WARNING: Could not resolve district team GLV (group " . SYNC_DISTRICT_TEAM_ID . "). GLVs will have no manager set.");
+}
+
 $updated = 0;
 $skipped = 0;
 $errors = 0;
@@ -511,9 +618,20 @@ foreach ($people as $person) {
     $desiredDepartment = $groupName;
     $desiredJobTitle = sync_role_to_job_title($membershipRole);
 
-    // Don't set a person as their own manager.
-    if ($glvM365Id === $m365UserId) {
-        $glvM365Id = null;
+    // Manager logic:
+    // - Regular volunteers → managed by their group's GLV
+    // - GLVs → managed by the district team (group 3) GLV
+    // - Never set someone as their own manager
+    if ($membershipRole === 'group_lead_volunteer') {
+        // GLVs are managed by the district team GLV, not themselves.
+        $desiredManagerId = $districtGlvM365Id;
+    } else {
+        $desiredManagerId = $glvM365Id;
+    }
+
+    // Safety: never set someone as their own manager.
+    if ($desiredManagerId === $m365UserId) {
+        $desiredManagerId = null;
     }
 
     try {
@@ -558,20 +676,21 @@ foreach ($people as $person) {
         // Check and update manager.
         $currentManagerId = sync_graph_get_manager($client, $token, $m365UserId);
 
-        if ($glvM365Id !== null && $currentManagerId !== $glvM365Id) {
-            $managerSet = sync_graph_set_manager($client, $token, $m365UserId, $glvM365Id);
+        if ($desiredManagerId !== null && $currentManagerId !== $desiredManagerId) {
+            $managerSet = sync_graph_set_manager($client, $token, $m365UserId, $desiredManagerId);
             if ($managerSet) {
-                sync_log("  UPDATED [{$fullName}]: manager set to GLV (ID: {$glvM365Id}).");
+                $managerLabel = $membershipRole === 'group_lead_volunteer' ? 'district GLV' : 'group GLV';
+                sync_log("  UPDATED [{$fullName}]: manager set to {$managerLabel} (ID: {$desiredManagerId}).");
             } else {
                 sync_log("  WARNING [{$fullName}]: Could not set manager.");
             }
-        } elseif ($glvM365Id === null && $currentManagerId !== null) {
-            // No GLV with M365 account for this group — remove stale manager.
+        } elseif ($desiredManagerId === null && $currentManagerId !== null) {
+            // No suitable manager available — remove stale manager.
             sync_graph_remove_manager($client, $token, $m365UserId);
-            sync_log("  UPDATED [{$fullName}]: manager removed (no GLV with M365 in group).");
+            sync_log("  UPDATED [{$fullName}]: manager removed (no suitable manager available).");
         }
 
-        if ($patch || ($glvM365Id !== null && $currentManagerId !== $glvM365Id)) {
+        if ($patch || ($desiredManagerId !== null && $currentManagerId !== $desiredManagerId)) {
             $updated++;
         } else {
             $skipped++;

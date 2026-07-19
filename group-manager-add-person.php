@@ -258,8 +258,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $finalAccessRoute = 'district_account_requested';
 
                 $ssoUrl = gm_absolute_url('/auth/microsoft-start.php');
-                $dashboardUrl = gm_absolute_url('/index.php');
-                $calendarUrl = gm_absolute_url('/dc/');
 
                 if ($useCalendarLinkOnly) {
                     $finalAccessRoute = 'calendar_link_only';
@@ -269,12 +267,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $personId,
                         $personalEmail,
                         $fullName,
-                        'Your Irwell Valley District Calendar access',
+                        'Your Irwell Valley District Calendar link',
                         "Hello {$firstName},\n\n"
-                        . "Your Group Lead Volunteer has added you to the District Calendar using calendar-link-only access.\n\n"
-                        . "Access the calendar here:\n{$createdInviteUrl}\n\n"
-                        . "This link gives access to the District Calendar only. It does not give access to the District Dashboard, Directory, Microsoft 365 email, OneDrive or other signed-in features.\n\n"
-                        . "If you later receive a District Microsoft 365 account, please use the Microsoft sign-in button instead.\n\n"
+                        . "Welcome to Irwell Valley Scout District. Your Group Lead Volunteer has set up calendar access for you.\n\n"
+                        . "\n"
+                        . "YOUR CALENDAR LINK\n\n"
+                        . "{$createdInviteUrl}\n\n"
+                        . "Bookmark this link or save this email so you can find it again easily.\n\n"
+                        . "\n"
+                        . "WHAT YOU CAN ACCESS\n\n"
+                        . "This link gives you access to the District Calendar where you can view upcoming events and activities.\n\n"
+                        . "This link does not give access to the District Dashboard, Directory, Scout email, or OneDrive.\n\n"
+                        . "\n"
+                        . "IMPORTANT\n\n"
+                        . "This link is personal to you. Please do not share it with others.\n\n"
+                        . "If you later receive a District Microsoft 365 account, you should use the Microsoft sign-in button instead of this link.\n\n"
+                        . "\n"
                         . "Irwell Valley Scout District",
                         'group_calendar_invite'
                     );
@@ -285,15 +293,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $personId,
                         $personalEmail,
                         $fullName,
-                        'You have been added to the Irwell Valley District App',
+                        'Welcome to the Irwell Valley District App',
                         "Hello {$firstName},\n\n"
-                        . "Your Group Lead Volunteer has added you to {$selectedGroup['group_name']} in the Irwell Valley District App.\n\n"
-                        . "We have used your existing District Microsoft 365 address:\n{$personalEmail}\n\n"
-                        . "No new District email account has been requested because this already appears to be a District account.\n\n"
-                        . "Please use the Microsoft sign-in button to access the District Dashboard and District Calendar.\n\n"
-                        . "Sign in with Microsoft:\n{$ssoUrl}\n\n"
-                        . "Dashboard:\n{$dashboardUrl}\n\n"
-                        . "District Calendar:\n{$calendarUrl}\n\n"
+                        . "Welcome to Irwell Valley Scout District. Your Group Lead Volunteer has added you to {$selectedGroup['group_name']}.\n\n"
+                        . "\n"
+                        . "YOUR ACCOUNT\n\n"
+                        . "We have linked your existing District Microsoft 365 address:\n{$personalEmail}\n\n"
+                        . "No new account has been created because you already have a District email.\n\n"
+                        . "\n"
+                        . "HOW TO SIGN IN\n\n"
+                        . "Go to the link below and click \"Sign in with Microsoft\". Use your District email address and password.\n\n"
+                        . "{$ssoUrl}\n\n"
+                        . "\n"
+                        . "WHAT YOU CAN ACCESS\n\n"
+                        . "Once signed in you will have access to:\n\n"
+                        . "- The District Dashboard\n"
+                        . "- The District Directory\n"
+                        . "- The District Calendar\n"
+                        . "- Your Scout email and OneDrive\n\n"
+                        . "\n"
+                        . "NEED HELP?\n\n"
+                        . "If you have trouble signing in, ask your Group Lead Volunteer.\n\n"
+                        . "\n"
                         . "Irwell Valley Scout District",
                         'district_account_existing'
                     );
@@ -313,15 +334,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $personId,
                         $personalEmail,
                         $fullName,
-                        'Your Irwell Valley District Microsoft 365 account request',
+                        'Your Irwell Valley District account is being set up',
                         "Hello {$firstName},\n\n"
-                        . "Your Group Lead Volunteer has requested a District Microsoft 365 account for you.\n\n"
-                        . "Requested address: {$requestedDistrictEmail}\n\n"
-                        . "Most volunteers should use a District Microsoft 365 account because it gives access to the District Dashboard, Directory, District Calendar, Scout email and other District services.\n\n"
-                        . "Once the account is created, use the Microsoft sign-in button to access the District Dashboard and District Calendar.\n\n"
-                        . "Sign in with Microsoft:\n{$ssoUrl}\n\n"
-                        . "Dashboard:\n{$dashboardUrl}\n\n"
-                        . "District Calendar:\n{$calendarUrl}\n\n"
+                        . "Welcome to Irwell Valley Scout District. Your Group Lead Volunteer has requested a District Microsoft 365 account for you.\n\n"
+                        . "\n"
+                        . "YOUR NEW ACCOUNT\n\n"
+                        . "Your District email address will be:\n{$requestedDistrictEmail}\n\n"
+                        . "The account is usually created within a few minutes. You will receive a separate email with your temporary password once it is ready.\n\n"
+                        . "\n"
+                        . "WHAT HAPPENS NEXT\n\n"
+                        . "1. Your account is created automatically.\n"
+                        . "2. You receive your temporary password by email.\n"
+                        . "3. You sign in and set a new password.\n"
+                        . "4. You can then access all District services.\n\n"
+                        . "\n"
+                        . "WHAT YOU WILL BE ABLE TO ACCESS\n\n"
+                        . "Once your account is ready and you sign in, you will have access to:\n\n"
+                        . "- The District Dashboard\n"
+                        . "- The District Directory\n"
+                        . "- The District Calendar\n"
+                        . "- Your Scout email and OneDrive\n\n"
+                        . "\n"
+                        . "HOW TO SIGN IN (once your account is ready)\n\n"
+                        . "Go to the link below and click \"Sign in with Microsoft\". Use your new District email address and password.\n\n"
+                        . "{$ssoUrl}\n\n"
+                        . "\n"
                         . "Irwell Valley Scout District",
                         'district_account_requested'
                     );

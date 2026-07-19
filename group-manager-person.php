@@ -358,23 +358,27 @@ include __DIR__ . '/app/group-manager-nav.php';
 
         <aside class="lt-panel-grey">
             <h2 class="lt-section-title">Access instructions</h2>
-            <p>Use these when someone cannot find their original email.</p>
+            <p>Use these to resend access instructions if someone cannot find their original email.</p>
 
-            <form method="post" class="mb-2">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="send_microsoft_instructions">
-                <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-                <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
-                <button class="btn btn-secondary lt-btn btn-block" type="submit">Send Microsoft instructions</button>
-            </form>
-
-            <form method="post" onsubmit="return confirm('Send calendar-link access instructions to this person?');">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="send_calendar_link">
-                <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-                <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
-                <button class="btn btn-secondary lt-btn btn-block" type="submit">Send calendar link</button>
-            </form>
+            <?php if ((int) ($person['has_microsoft_account'] ?? 0) > 0 || $accessLabel === 'Microsoft SSO' || $accessLabel === 'Account requested'): ?>
+                <form method="post" class="mb-2">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="send_microsoft_instructions">
+                    <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                    <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                    <button class="btn btn-secondary lt-btn btn-block" type="submit">Resend Microsoft sign-in instructions</button>
+                </form>
+                <p class="gm-muted" style="font-size:.85rem;">Sends an email explaining how to sign in with their District Microsoft 365 account.</p>
+            <?php else: ?>
+                <form method="post" class="mb-2">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="send_calendar_link">
+                    <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                    <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                    <button class="btn btn-secondary lt-btn btn-block" type="submit">Resend calendar link</button>
+                </form>
+                <p class="gm-muted" style="font-size:.85rem;">Sends a new personal calendar link to this person.</p>
+            <?php endif; ?>
         </aside>
     </div>
 
