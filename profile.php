@@ -22,35 +22,6 @@ $error = null;
 $success = null;
 $personId = (int) $user['id'];
 
-$roleOptions = array_values(array_filter(
-    portal_role_options(),
-    static function (string $role): bool {
-        $normalised = strtolower(trim($role));
-
-        if ($normalised === '') {
-            return false;
-        }
-
-        if ($normalised === 'other') {
-            return false;
-        }
-
-        if (str_contains($normalised, 'permit holder')) {
-            return false;
-        }
-
-        if (str_contains($normalised, 'nights away')) {
-            return false;
-        }
-
-        if (str_contains($normalised, 'skill instructor') || str_contains($normalised, 'skills instructor')) {
-            return false;
-        }
-
-        return true;
-    }
-));
-
 $accreditationOptions = portal_accreditation_options();
 $allowedAccreditations = portal_flatten_options($accreditationOptions);
 
@@ -211,7 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_validate();
     $fullName = trim((string) ($_POST['full_name'] ?? ''));
     $phone = trim((string) ($_POST['phone'] ?? ''));
-    $roleTitle = trim((string) ($_POST['role_title'] ?? ''));
+    $roleTitle = trim((string) ($profile['role_title'] ?? ''));
     $aboutMe = trim((string) ($_POST['about_me'] ?? ''));
     $sharePhone = isset($_POST['share_phone']) ? 1 : 0;
     $visibleInDirectory = 1;
@@ -236,8 +207,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($fullName === '') {
         $error = 'Enter your name.';
-    } elseif ($roleTitle === '' || !in_array($roleTitle, $roleOptions, true)) {
-        $error = 'Choose your main role.';
     } elseif (!$hasActiveGroup && !$groupIds) {
         $error = 'Choose your Group.';
     } elseif (!$hasActiveGroup && $groupIds) {
@@ -865,14 +834,14 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
 
                     <div class="form-group">
                         <label for="role_title">Main role</label>
-                        <select class="form-control" id="role_title" name="role_title" required>
-                            <option value="">Choose your role</option>
-                            <?php foreach ($roleOptions as $roleOption): ?>
-                                <option value="<?= e($roleOption) ?>" <?= $formRoleTitle === $roleOption ? 'selected' : '' ?>>
-                                    <?= e($roleOption) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <input
+                            class="form-control"
+                            type="text"
+                            id="role_title"
+                            value="<?= e($formRoleTitle !== '' ? $formRoleTitle : 'Not set') ?>"
+                            disabled
+                        >
+                        <small class="form-text text-muted">Your role is managed by your Group Admin or District leader.</small>
                     </div>
 
                     <label class="lt-check mb-3">
