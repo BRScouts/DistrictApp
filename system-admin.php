@@ -328,72 +328,18 @@ include __DIR__ . '/header.php';
         background: #f7f5fb;
         border: 2px solid #e5e5e5;
     }
-
-    .sa-gdpr-panel {
-        background: #fff;
-        border: 2px solid #e5e5e5;
-        border-left: 5px solid #1d1d1b;
-        padding: 1rem 1.25rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .sa-gdpr-inner {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1.5rem;
-        flex-wrap: wrap;
-    }
-
-    .sa-gdpr-title {
-        margin: 0 0 .25rem;
-        font-size: 1rem;
-        color: #1d1d1b;
-    }
-
-    .sa-gdpr-desc {
-        margin: 0;
-        font-size: .85rem;
-        color: #555;
-    }
-
-    .sa-gdpr-form {
-        display: flex;
-        gap: .5rem;
-        align-items: center;
-        flex-shrink: 0;
-    }
-
-    .sa-gdpr-form input {
-        width: 140px;
-    }
 </style>
 
 <nav class="sa-service-bar" aria-label="System Admin navigation">
     <div class="sa-service-bar-inner">
         <a class="sa-nav-link" href="/system-admin.php" <?= $saNavCurrent === 'audit-log' ? 'aria-current="page"' : '' ?>>Audit Log</a>
         <a class="sa-nav-link" href="/system-admin-cron.php" <?= $saNavCurrent === 'cron' ? 'aria-current="page"' : '' ?>>Cron Jobs</a>
+        <a class="sa-nav-link" href="/system-admin-gdpr.php" <?= $saNavCurrent === 'gdpr' ? 'aria-current="page"' : '' ?>>GDPR Reports</a>
         <a class="sa-nav-link" href="/system-admin-permissions.php" <?= $saNavCurrent === 'permissions' ? 'aria-current="page"' : '' ?>>Permissions</a>
     </div>
 </nav>
 
 <main class="lt-main">
-
-    <div class="sa-gdpr-panel">
-        <div class="sa-gdpr-inner">
-            <div>
-                <h3 class="sa-gdpr-title">GDPR Audit Report</h3>
-                <p class="sa-gdpr-desc">Generate a full audit history report for a person. Includes all data held, actions taken, and activity log. Outputs as a downloadable PDF.</p>
-            </div>
-            <form method="get" action="/system-admin-gdpr-report.php" class="sa-gdpr-form" target="_blank">
-                <div class="form-group mb-0">
-                    <label for="sa-gdpr-person" class="sr-only">Person ID</label>
-                    <input class="form-control" type="number" id="sa-gdpr-person" name="person_id" placeholder="Person ID" required min="1">
-                </div>
-                <button class="btn btn-primary lt-btn" type="submit">Generate Report</button>
-            </form>
-        </div>
-    </div>
 
     <div class="sa-stats">
         <div class="sa-stat">

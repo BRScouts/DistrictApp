@@ -289,6 +289,7 @@ include __DIR__ . '/header.php';
     <div class="sa-service-bar-inner">
         <a class="sa-nav-link" href="/system-admin.php">Audit Log</a>
         <a class="sa-nav-link" href="/system-admin-cron.php" aria-current="page">Cron Jobs</a>
+        <a class="sa-nav-link" href="/system-admin-gdpr.php">GDPR Reports</a>
         <a class="sa-nav-link" href="/system-admin-permissions.php">Permissions</a>
     </div>
 </nav>

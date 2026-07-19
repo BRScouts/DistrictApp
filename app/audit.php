@@ -74,6 +74,7 @@ const AUDIT_CRON_LEAVERS_RUN         = 'cron.leavers_run';
 const AUDIT_CRON_PROVISION_RUN       = 'cron.provision_m365_run';
 const AUDIT_CRON_REMINDERS_RUN       = 'cron.reminders_cleanse_run';
 const AUDIT_CRON_SYNC_PROFILES_RUN   = 'cron.sync_m365_profiles_run';
+const AUDIT_CRON_SEND_EMAIL_RUN      = 'cron.send_email_queue_run';
 
 // GDPR
 const AUDIT_ADMIN_GDPR_REPORT        = 'admin.gdpr_report_generated';
@@ -158,6 +159,7 @@ function audit_event_types(): array
         AUDIT_CRON_PROVISION_RUN       => ['cron', 'M365 provisioning cron completed', AUDIT_SEVERITY_INFO],
         AUDIT_CRON_REMINDERS_RUN       => ['cron', 'Reminders and cleanse cron completed', AUDIT_SEVERITY_INFO],
         AUDIT_CRON_SYNC_PROFILES_RUN   => ['cron', 'M365 profile sync cron completed', AUDIT_SEVERITY_INFO],
+        AUDIT_CRON_SEND_EMAIL_RUN      => ['cron', 'Send email queue cron completed', AUDIT_SEVERITY_INFO],
 
         // GDPR
         AUDIT_ADMIN_GDPR_REPORT        => ['admin', 'GDPR audit report generated', AUDIT_SEVERITY_WARNING],

@@ -19,6 +19,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../app/bootstrap.php';
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/cron-guard.php';
 
 $autoload = __DIR__ . '/../vendor/autoload.php';
 
@@ -530,8 +531,26 @@ try {
     }
 
     echo "Done. Sent: {$sent}. Failed: {$failed}." . PHP_EOL;
+
+    // Unified audit log entry for this cron run
+    if ($sent > 0 || $failed > 0) {
+        audit_log(AUDIT_CRON_SEND_EMAIL_RUN, null, null, null, [
+            'status' => $failed > 0 ? 'completed_with_errors' : 'success',
+            'emails_sent' => $sent,
+            'emails_failed' => $failed,
+            'batch_size' => count($rows),
+        ]);
+    }
+
     exit($failed > 0 ? 1 : 0);
 } catch (Throwable $e) {
     fwrite(STDERR, 'Email queue fatal error: ' . $e->getMessage() . PHP_EOL);
+
+    // Audit the failure
+    audit_log(AUDIT_CRON_SEND_EMAIL_RUN, null, null, null, [
+        'status' => 'failed',
+        'error' => substr($e->getMessage(), 0, 255),
+    ]);
+
     exit(1);
 }
