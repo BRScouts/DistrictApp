@@ -90,6 +90,7 @@ $createdPersonId = 0;
 $posted = [];
 $districtEmailSuggestion = null;
 $graphChecked = false;
+$duplicateWarnings = [];
 $actorPersonId = (int) $user['id'];
 $roleOptions = gm_membership_role_options($selectedGroupId);
 
@@ -196,7 +197,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if (!$errors) {
-                $existingPerson = gm_find_person_by_email($personalEmail);
+                // Duplicate person detection: check by name and email.
+                $confirmedDuplicate = isset($_POST['confirm_duplicate']) && $_POST['confirm_duplicate'] === '1';
+                $potentialDuplicates = [];
+
+                if (!$confirmedDuplicate) {
+                    $potentialDuplicates = gm_find_potential_duplicates($fullName, $personalEmail, $selectedGroupId);
+                }
+
+                if (!$confirmedDuplicate && count($potentialDuplicates) > 0) {
+                    // Show warning — don't create the person yet.
+                    $duplicateWarnings = [];
+                    foreach ($potentialDuplicates as $dup) {
+                        $dupGroups = $dup['groups_list'] ?: 'No active group';
+                        $dupStatus = $dup['person_status'] === 'active' ? 'active' : 'inactive';
+                        $duplicateWarnings[] = e($dup['full_name']) . ' (' . e($dup['primary_email'] ?? 'no email') . ') — ' . e($dupGroups) . ' [' . $dupStatus . ']';
+                    }
+                    $errors[] = 'A person with a similar name or email already exists in another group. If this is a different person, tick the confirmation below and submit again.';
+                } else {
+                    $existingPerson = gm_find_person_by_email($personalEmail);
 
                 if (!$existingPerson && !$useCalendarLinkOnly && $requestedDistrictEmail !== '' && $requestedDistrictEmail !== $personalEmail) {
                     $existingPerson = gm_find_person_by_email($requestedDistrictEmail);
@@ -391,6 +410,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $posted = [];
+                } // end else (no duplicates or confirmed)
             }
         }
     } catch (Throwable $e) {
@@ -612,6 +632,18 @@ include __DIR__ . '/app/group-manager-nav.php';
         </div>
     <?php endif; ?>
 
+    <?php if (!empty($duplicateWarnings)): ?>
+        <div class="alert alert-warning">
+            <strong>Possible duplicate detected:</strong>
+            <ul class="mb-2 mt-2">
+                <?php foreach ($duplicateWarnings as $warning): ?>
+                    <li><?= $warning ?></li>
+                <?php endforeach; ?>
+            </ul>
+            <p class="mb-0">If you are sure this is a different person, tick the box below and submit again.</p>
+        </div>
+    <?php endif; ?>
+
     <?php if ($success): ?>
         <div class="alert alert-success">
             <?= e($success) ?>
@@ -818,6 +850,15 @@ include __DIR__ . '/app/group-manager-nav.php';
                         <label for="notes">Notes</label>
                         <textarea class="form-control" id="notes" name="notes" rows="3"><?= e($posted['notes'] ?? '') ?></textarea>
                     </div>
+
+                    <?php if (!empty($duplicateWarnings)): ?>
+                        <div class="form-group mt-3" style="background:#fff3cd;border:2px solid #ffc107;padding:.75rem;border-radius:4px;">
+                            <label class="lt-check mb-0">
+                                <input type="checkbox" name="confirm_duplicate" value="1" required>
+                                <span><strong>I confirm this is not a duplicate.</strong> I have checked and this is a different person to the match shown above.</span>
+                            </label>
+                        </div>
+                    <?php endif; ?>
 
                     <button class="btn btn-primary lt-btn" type="submit" onclick="document.getElementById('gm-action').value='add_person';">
                         Add person and start access setup

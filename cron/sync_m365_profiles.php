@@ -589,17 +589,12 @@ function sync_fetch_people_to_sync(): array
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // De-duplicate: keep only the first (highest priority) membership per person.
-    // The SQL ORDER BY FIELD(...) ensures the "primary" role is selected when a
-    // person has multiple group memberships. Priority order:
-    //   1. Group Lead Volunteer (most senior)
-    //   2. Section Leader
-    //   3. Assistant Section Leader
-    //   4. Section Assistant
-    //   5. Trustee
-    //   6. District Volunteer
-    //   7. Other
-    // This means if someone is a GLV in one group and a Section Leader in another,
-    // their M365 profile will reflect the GLV role and that group as department.
+    // The SQL ORDER BY ensures the best membership is selected:
+    //   1. is_primary = 1 (explicitly set by district admin, if column exists)
+    //   2. Role priority via FIELD():
+    //      GLV > Section Leader > ASL > Section Assistant > Trustee > District Volunteer > Other
+    // This means if a district admin has set a primary, that wins. Otherwise,
+    // the highest-ranking role is used for M365 job title and department.
     $people = [];
     foreach ($rows as $row) {
         $personId = (int) $row['person_id'];

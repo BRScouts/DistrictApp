@@ -1390,3 +1390,93 @@ function gm_set_primary_membership(int $personId, int $groupId, int $actorPerson
         'group_id' => $groupId,
     ]);
 }
+
+/**
+ * Search for potential duplicate people by name or email.
+ *
+ * Returns matching people from any group with their group memberships,
+ * so the user can be warned before creating a duplicate.
+ */
+function gm_find_potential_duplicates(string $fullName, string $email, int $excludeGroupId = 0): array
+{
+    $pdo = db();
+    $duplicates = [];
+
+    $fullName = trim($fullName);
+    $email = strtolower(trim($email));
+
+    if ($fullName === '' && $email === '') {
+        return [];
+    }
+
+    $conditions = [];
+    $params = [];
+
+    // Match by email (exact, case-insensitive).
+    if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $conditions[] = "LOWER(p.primary_email) = :email";
+        $params['email'] = $email;
+    }
+
+    // Match by full name (exact, case-insensitive).
+    if ($fullName !== '') {
+        $conditions[] = "LOWER(p.full_name) = LOWER(:full_name)";
+        $params['full_name'] = $fullName;
+    }
+
+    if (!$conditions) {
+        return [];
+    }
+
+    $whereSql = '(' . implode(' OR ', $conditions) . ')';
+
+    $excludeJoin = '';
+    if ($excludeGroupId > 0) {
+        // Exclude people who are already active in the target group.
+        $excludeJoin = "
+            LEFT JOIN group_memberships excl_gm
+                ON excl_gm.person_id = p.id
+                AND excl_gm.group_id = :exclude_group_id
+                AND excl_gm.status = 'active'
+        ";
+        $params['exclude_group_id'] = $excludeGroupId;
+    }
+
+    $sql = "
+        SELECT
+            p.id AS person_id,
+            p.full_name,
+            p.primary_email,
+            p.status AS person_status,
+            GROUP_CONCAT(DISTINCT g.group_name ORDER BY g.group_name SEPARATOR ', ') AS groups_list
+        FROM people p
+        LEFT JOIN group_memberships gm
+            ON gm.person_id = p.id
+            AND gm.status = 'active'
+        LEFT JOIN groups g
+            ON g.id = gm.group_id
+            AND g.is_active = 1
+        {$excludeJoin}
+        WHERE {$whereSql}
+    ";
+
+    if ($excludeGroupId > 0) {
+        $sql .= " AND excl_gm.id IS NULL";
+    }
+
+    $sql .= "
+        GROUP BY p.id, p.full_name, p.primary_email, p.status
+        ORDER BY p.full_name ASC
+        LIMIT 10
+    ";
+
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $duplicates = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        // Non-fatal: duplicate check should not block adding.
+    }
+
+    return $duplicates;
+}
