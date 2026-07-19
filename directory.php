@@ -360,8 +360,12 @@ foreach ($people as $person) {
     $initials = strtoupper(substr(trim((string) ($person['full_name'] ?? 'U')), 0, 1));
 
     // If no stored photo but they have a Microsoft account, use the proxy endpoint
+    // (skip if we already know they have no photo cached in Graph)
     if ($photoUrl === '' && (int) ($person['has_microsoft_account'] ?? 0) === 1) {
-        $photoUrl = '/auth/directory-photo.php?id=' . (int) $person['id'];
+        $noneMarker = __DIR__ . '/storage/profile-photos/' . (int) $person['id'] . '.jpg.none';
+        if (!is_file($noneMarker)) {
+            $photoUrl = '/auth/directory-photo.php?id=' . (int) $person['id'];
+        }
     }
 
     $directoryPeople[] = [
