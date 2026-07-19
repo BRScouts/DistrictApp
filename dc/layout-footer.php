@@ -261,6 +261,7 @@
                 <a href="/index.php">Dashboard</a>
                 <a href="/profile.php">My profile</a>
                 <a href="/dc/">District Calendar</a>
+                <a href="/privacy-notice.php">Privacy Notice</a>
                 <a href="/logout.php">Sign out</a>
             </nav>
         </div>

@@ -405,4 +405,8 @@ require __DIR__ . '/layout.php';
     </aside>
 </div>
 
+<div style="max-width: 880px; margin: 1.5rem 0 0; text-align: center;">
+    <a href="/privacy-notice.php" style="font-size: .9rem; font-weight: 900; color: var(--iv-grey-700, #555);">Privacy Notice</a>
+</div>
+
 <?php require __DIR__ . '/layout-footer.php'; ?>
