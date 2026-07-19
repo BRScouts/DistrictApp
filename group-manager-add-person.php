@@ -91,6 +91,8 @@ $posted = [];
 $districtEmailSuggestion = null;
 $graphChecked = false;
 $duplicateWarnings = [];
+$linkSearchResults = [];
+$showLinkModal = false;
 $actorPersonId = (int) $user['id'];
 $roleOptions = gm_membership_role_options($selectedGroupId);
 
@@ -104,7 +106,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException('You do not have permission to manage that Group.');
         }
 
-        if ($action === 'suggest_email') {
+        if ($action === 'link_existing') {
+            // District Admin / System Admin only: link an existing person to this group.
+            if (!$isDistrictAdmin) {
+                throw new RuntimeException('Only District Administrators can link existing people.');
+            }
+
+            $searchTerm = trim((string) ($_POST['existing_search'] ?? ''));
+            $existingPersonId = (int) ($_POST['existing_person_id'] ?? 0);
+            $membershipRole = (string) ($_POST['membership_role'] ?? 'group_leadership_team_member');
+
+            if ($existingPersonId > 0) {
+                // They've selected a person — link them.
+                $stmt = $pdo->prepare("SELECT id, full_name, primary_email FROM people WHERE id = :id LIMIT 1");
+                $stmt->execute(['id' => $existingPersonId]);
+                $existingPerson = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$existingPerson) {
+                    throw new RuntimeException('Person not found.');
+                }
+
+                if (!array_key_exists($membershipRole, $roleOptions)) {
+                    throw new RuntimeException('Choose a valid role.');
+                }
+
+                $pdo->beginTransaction();
+                gm_upsert_membership($existingPersonId, $selectedGroupId, $membershipRole);
+                gm_upsert_directory_profile(
+                    $existingPersonId,
+                    gm_role_title_from_membership_role($membershipRole),
+                    1,
+                    0
+                );
+                gm_log_action($actorPersonId, 'existing_person_linked_to_group', 'person', $existingPersonId, [
+                    'group_id' => $selectedGroupId,
+                    'membership_role' => $membershipRole,
+                ]);
+                $pdo->commit();
+
+                $createdPersonId = $existingPersonId;
+                $success = e($existingPerson['full_name']) . ' has been added to ' . e($selectedGroup['group_name']) . ' as ' . e(gm_role_title_from_membership_role($membershipRole)) . '.';
+                $posted = [];
+            } elseif ($searchTerm !== '') {
+                // Search for matching people to show in the modal.
+                $linkSearchResults = [];
+                $stmt = $pdo->prepare("
+                    SELECT p.id, p.full_name, p.primary_email, p.status,
+                           GROUP_CONCAT(DISTINCT g.group_name ORDER BY g.group_name SEPARATOR ', ') AS groups_list
+                    FROM people p
+                    LEFT JOIN group_memberships gm ON gm.person_id = p.id AND gm.status = 'active'
+                    LEFT JOIN groups g ON g.id = gm.group_id AND g.is_active = 1
+                    WHERE (p.full_name LIKE :search OR p.primary_email LIKE :search)
+                    GROUP BY p.id, p.full_name, p.primary_email, p.status
+                    ORDER BY p.full_name ASC
+                    LIMIT 15
+                ");
+                $stmt->execute(['search' => '%' . $searchTerm . '%']);
+                $linkSearchResults = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $showLinkModal = true;
+            } else {
+                $errors[] = 'Enter a name or email to search for.';
+                $showLinkModal = true;
+            }
+        } elseif ($action === 'suggest_email') {
             $firstName = trim((string) ($_POST['first_name'] ?? ''));
             $lastName = trim((string) ($_POST['last_name'] ?? ''));
             $personalEmail = gm_add_normalise_email((string) ($_POST['personal_email'] ?? ''));
@@ -727,7 +791,16 @@ include __DIR__ . '/app/group-manager-nav.php';
 
     <div class="gm-grid gm-grid-2">
         <section class="lt-panel">
-            <h2 class="lt-section-title">Add a person to <?= e($selectedGroup['group_name']) ?></h2>
+            <?php if ($isDistrictAdmin): ?>
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
+                    <h2 class="lt-section-title" style="margin:0;">Add a person to <?= e($selectedGroup['group_name']) ?></h2>
+                    <button type="button" class="btn btn-secondary lt-btn btn-sm" onclick="document.getElementById('link-existing-modal').style.display='flex';">
+                        Add existing person
+                    </button>
+                </div>
+            <?php else: ?>
+                <h2 class="lt-section-title">Add a person to <?= e($selectedGroup['group_name']) ?></h2>
+            <?php endif; ?>
             <p class="lt-lede">
                 Add a volunteer to this Group. You can choose whether they need a District email account or just a calendar link.
             </p>
@@ -1174,6 +1247,61 @@ include __DIR__ . '/app/group-manager-nav.php';
     }
 }());
 </script>
+<?php endif; ?>
+
+<?php if ($isDistrictAdmin): ?>
+<!-- Link Existing Person Modal -->
+<div id="link-existing-modal" style="display:<?= $showLinkModal ? 'flex' : 'none' ?>;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:1rem;">
+    <div style="background:#fff;border-radius:8px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+        <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #e5e5e5;display:flex;align-items:center;justify-content:space-between;">
+            <h3 style="margin:0;font-size:1.1rem;">Add existing person to <?= e($selectedGroup['group_name']) ?></h3>
+            <button type="button" onclick="document.getElementById('link-existing-modal').style.display='none';" style="background:none;border:none;font-size:1.5rem;cursor:pointer;line-height:1;padding:0;">&times;</button>
+        </div>
+        <div style="padding:1.5rem;">
+            <form method="post">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="link_existing">
+                <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+
+                <div class="form-group">
+                    <label for="existing_search">Search by name or email</label>
+                    <div style="display:flex;gap:.5rem;">
+                        <input class="form-control" type="text" id="existing_search" name="existing_search" value="<?= e($_POST['existing_search'] ?? '') ?>" placeholder="e.g. John Smith or john@example.com" required>
+                        <button class="btn btn-primary lt-btn" type="submit">Search</button>
+                    </div>
+                </div>
+            </form>
+
+            <?php if ($showLinkModal && !empty($linkSearchResults)): ?>
+                <hr style="margin:1rem 0;">
+                <p style="font-weight:bold;margin-bottom:.5rem;"><?= count($linkSearchResults) ?> result(s) found:</p>
+                <?php foreach ($linkSearchResults as $result): ?>
+                    <form method="post" style="border:1px solid #e5e5e5;padding:.6rem;border-radius:4px;margin-bottom:.5rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="link_existing">
+                        <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                        <input type="hidden" name="existing_person_id" value="<?= (int) $result['id'] ?>">
+                        <div>
+                            <strong><?= e($result['full_name']) ?></strong><br>
+                            <small style="color:#555;"><?= e($result['primary_email'] ?? '') ?> &mdash; <?= e($result['groups_list'] ?: 'No active group') ?> [<?= e($result['status']) ?>]</small>
+                        </div>
+                        <div style="display:flex;gap:.4rem;align-items:center;">
+                            <select name="membership_role" class="form-control form-control-sm" style="width:auto;">
+                                <?php foreach ($roleOptions as $value => $label): ?>
+                                    <option value="<?= e($value) ?>"><?= e($label) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-primary">Add</button>
+                        </div>
+                    </form>
+                <?php endforeach; ?>
+            <?php elseif ($showLinkModal && isset($_POST['existing_search']) && trim($_POST['existing_search']) !== ''): ?>
+                <hr style="margin:1rem 0;">
+                <p class="text-muted">No people found matching that search.</p>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
 <?php endif; ?>
 
 <?php include __DIR__ . '/footer.php'; ?>
