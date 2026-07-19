@@ -455,6 +455,14 @@ $modules = [
         'image' => '/assets/img/db-20220915-00340-jpg.jpg',
         'visible' => $isDistrictAdmin,
     ],
+    [
+        'title' => 'System Admin',
+        'description' => 'Manage system settings, audit logs, cron jobs and platform-wide configuration.',
+        'url' => '/system-admin.php',
+        'status' => 'available',
+        'image' => '/assets/img/cubs-crate-stacking-jpg.jpg',
+        'visible' => $isSystemAdmin,
+    ],
 ];
 
 $modules = array_values(array_filter(

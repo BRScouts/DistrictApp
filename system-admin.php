@@ -212,24 +212,79 @@ include __DIR__ . '/header.php';
         font-weight: 700;
         border: 0;
         background: 0;
-        padding: 0;
-        text-decoration: underline;
+        padding: .15rem .4rem;
+        text-decoration: none;
+        border: 1px solid #4d0b93;
     }
 
-    .sa-details-content {
+    .sa-details-toggle:hover {
+        background: #4d0b93;
+        color: #fff;
+    }
+
+    .sa-details-row {
         display: none;
-        margin-top: .5rem;
-        padding: .5rem;
-        background: #f5f5f5;
-        font-size: .78rem;
-        font-family: monospace;
-        word-break: break-all;
-        max-height: 200px;
-        overflow-y: auto;
     }
 
-    .sa-details-content.is-open {
-        display: block;
+    .sa-details-row.is-open {
+        display: table-row;
+    }
+
+    .sa-details-row td {
+        padding: 0 !important;
+        border-bottom: 2px solid #4d0b93 !important;
+    }
+
+    .sa-details-panel {
+        background: #f9f7fc;
+        border-top: 1px solid #e5e5e5;
+        padding: .85rem 1rem;
+    }
+
+    .sa-details-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: .5rem .75rem;
+    }
+
+    .sa-detail-item {
+        display: flex;
+        flex-direction: column;
+        gap: .1rem;
+    }
+
+    .sa-detail-key {
+        font-size: .72rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .02em;
+        color: #4d0b93;
+    }
+
+    .sa-detail-value {
+        font-size: .85rem;
+        color: #1d1d1b;
+        word-break: break-word;
+    }
+
+    .sa-detail-value-long {
+        grid-column: 1 / -1;
+    }
+
+    .sa-row-clickable {
+        cursor: pointer;
+    }
+
+    .sa-row-clickable:hover td {
+        background: #f3eef9;
+    }
+
+    .sa-has-details td:first-child {
+        border-left: 3px solid transparent;
+    }
+
+    .sa-has-details:hover td:first-child {
+        border-left-color: #4d0b93;
     }
 
     .sa-pagination {
@@ -407,7 +462,7 @@ include __DIR__ . '/header.php';
                         <th>Target</th>
                         <th>Group</th>
                         <th>IP</th>
-                        <th>Details</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -419,8 +474,11 @@ include __DIR__ . '/header.php';
                         $label = audit_event_label($eventCode);
                         $details = (string) ($row['details_json'] ?? '');
                         $rowId = (int) ($row['id'] ?? 0);
+                        $hasDetails = ($details && $details !== 'null' && $details !== '{}');
+                        $parsedDetails = $hasDetails ? json_decode($details, true) : null;
+                        if (!is_array($parsedDetails)) { $parsedDetails = null; $hasDetails = false; }
                     ?>
-                    <tr>
+                    <tr class="<?= $hasDetails ? 'sa-row-clickable sa-has-details' : '' ?>" <?= $hasDetails ? 'data-details-row="sa-drow-' . $rowId . '"' : '' ?>>
                         <td>
                             <?= e(date('d M Y', strtotime((string) $row['created_at']))) ?><br>
                             <span class="sa-muted"><?= e(date('H:i:s', strtotime((string) $row['created_at']))) ?></span>
@@ -449,14 +507,32 @@ include __DIR__ . '/header.php';
                         <td><?= !empty($row['group_name']) ? e($row['group_name']) : '<span class="sa-muted">—</span>' ?></td>
                         <td><span class="sa-muted"><?= e((string) ($row['ip_address'] ?? '')) ?></span></td>
                         <td>
-                            <?php if ($details && $details !== 'null'): ?>
-                                <button type="button" class="sa-details-toggle" data-target="sa-details-<?= $rowId ?>">View</button>
-                                <div class="sa-details-content" id="sa-details-<?= $rowId ?>"><?= e($details) ?></div>
-                            <?php else: ?>
-                                <span class="sa-muted">—</span>
+                            <?php if ($hasDetails): ?>
+                                <button type="button" class="sa-details-toggle" data-target="sa-drow-<?= $rowId ?>">Details</button>
                             <?php endif; ?>
                         </td>
                     </tr>
+                    <?php if ($hasDetails): ?>
+                        <tr class="sa-details-row" id="sa-drow-<?= $rowId ?>">
+                            <td colspan="8">
+                                <div class="sa-details-panel">
+                                    <div class="sa-details-grid">
+                                        <?php foreach ($parsedDetails as $dKey => $dVal): ?>
+                                            <?php if ($dVal === null || $dVal === '') continue; ?>
+                                            <?php
+                                                $displayVal = is_scalar($dVal) ? (string) $dVal : json_encode($dVal, JSON_PRETTY_PRINT);
+                                                $isLong = strlen($displayVal) > 60;
+                                            ?>
+                                            <div class="sa-detail-item <?= $isLong ? 'sa-detail-value-long' : '' ?>">
+                                                <span class="sa-detail-key"><?= e(ucwords(str_replace('_', ' ', (string) $dKey))) ?></span>
+                                                <span class="sa-detail-value"><?= e($displayVal) ?></span>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endif; ?>
                 <?php endforeach; ?>
                 </tbody>
             </table>
@@ -507,14 +583,33 @@ include __DIR__ . '/header.php';
 
 <script>
 (function () {
+    // Toggle details row via button click
     document.querySelectorAll('.sa-details-toggle').forEach(function (button) {
-        button.addEventListener('click', function () {
+        button.addEventListener('click', function (e) {
+            e.stopPropagation();
             var targetId = button.getAttribute('data-target');
-            var content = document.getElementById(targetId);
+            var row = document.getElementById(targetId);
 
-            if (content) {
-                content.classList.toggle('is-open');
-                button.textContent = content.classList.contains('is-open') ? 'Hide' : 'View';
+            if (row) {
+                var isOpen = row.classList.toggle('is-open');
+                button.textContent = isOpen ? 'Hide' : 'Details';
+            }
+        });
+    });
+
+    // Toggle details row via clicking anywhere on the main row
+    document.querySelectorAll('.sa-row-clickable').forEach(function (row) {
+        row.addEventListener('click', function (e) {
+            // Don't toggle if clicking a link
+            if (e.target.closest('a') || e.target.closest('button')) return;
+
+            var targetId = row.getAttribute('data-details-row');
+            var detailsRow = document.getElementById(targetId);
+            var button = row.querySelector('.sa-details-toggle');
+
+            if (detailsRow) {
+                var isOpen = detailsRow.classList.toggle('is-open');
+                if (button) button.textContent = isOpen ? 'Hide' : 'Details';
             }
         });
     });
