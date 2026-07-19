@@ -404,7 +404,7 @@ include __DIR__ . '/header.php';
                 <div class="sap-panel">
                     <h3>Person Details</h3>
                     <form method="post">
-                        <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                        <input type="hidden" name="_csrf_token" value="<?= e(csrf_token()) ?>">
                         <input type="hidden" name="person_id" value="<?= (int) $person['id'] ?>">
                         <input type="hidden" name="action" value="update_details">
 
@@ -450,7 +450,7 @@ include __DIR__ . '/header.php';
                     <div class="sap-actions">
                         <?php if ($person['status'] === 'active'): ?>
                             <form method="post" onsubmit="return confirm('Deactivate this person? All their group memberships will be set to inactive.');">
-                                <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                                <input type="hidden" name="_csrf_token" value="<?= e(csrf_token()) ?>">
                                 <input type="hidden" name="person_id" value="<?= (int) $person['id'] ?>">
                                 <input type="hidden" name="action" value="set_status">
                                 <input type="hidden" name="new_status" value="inactive">
@@ -458,7 +458,7 @@ include __DIR__ . '/header.php';
                             </form>
                         <?php else: ?>
                             <form method="post">
-                                <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                                <input type="hidden" name="_csrf_token" value="<?= e(csrf_token()) ?>">
                                 <input type="hidden" name="person_id" value="<?= (int) $person['id'] ?>">
                                 <input type="hidden" name="action" value="set_status">
                                 <input type="hidden" name="new_status" value="active">
@@ -484,7 +484,7 @@ include __DIR__ . '/header.php';
                                     <td class="sap-muted"><?= e(ucwords(str_replace('_', ' ', (string) ($gm['membership_role'] ?? 'member')))) ?></td>
                                     <td>
                                         <form method="post" style="display:inline;">
-                                            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                                            <input type="hidden" name="_csrf_token" value="<?= e(csrf_token()) ?>">
                                             <input type="hidden" name="person_id" value="<?= (int) $person['id'] ?>">
                                             <input type="hidden" name="action" value="update_access_level">
                                             <input type="hidden" name="group_id" value="<?= (int) $gm['group_id'] ?>">
