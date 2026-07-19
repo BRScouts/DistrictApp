@@ -1027,6 +1027,73 @@ function gm_create_unique_invite(int $actorPersonId, int $personId, int $groupId
     return gm_absolute_url('/dc/');
 }
 
+/**
+ * Convert a structured plain-text email body into well-spaced HTML.
+ *
+ * Double newlines become paragraph breaks. Lines that are entirely
+ * uppercase (section headings like "HOW TO SIGN IN") become bold.
+ * URLs on their own line become clickable links. Bullet lines
+ * starting with "- " are converted to a list.
+ */
+function gm_plain_text_to_html(string $text): string
+{
+    $text = str_replace("\r\n", "\n", $text);
+    $text = trim($text);
+
+    // Split into paragraphs on double (or more) newlines.
+    $paragraphs = preg_split('/\n{2,}/', $text);
+    $html = '';
+
+    foreach ($paragraphs as $para) {
+        $para = trim($para);
+
+        if ($para === '') {
+            continue;
+        }
+
+        // Check if this paragraph is a section heading (all uppercase, no punctuation suggesting a sentence).
+        if (preg_match('/^[A-Z][A-Z0-9 \-?!\']+$/', $para) && strlen($para) <= 80) {
+            $html .= '<p style="margin-top:24px;margin-bottom:4px;font-weight:bold;font-size:14px;color:#333;">'
+                . htmlspecialchars($para, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                . '</p>';
+            continue;
+        }
+
+        // Check if this paragraph is a bullet list (all lines start with "- ").
+        $lines = explode("\n", $para);
+        $allBullets = true;
+        foreach ($lines as $line) {
+            if (!str_starts_with(trim($line), '- ')) {
+                $allBullets = false;
+                break;
+            }
+        }
+
+        if ($allBullets && count($lines) > 1) {
+            $html .= '<ul style="margin:8px 0 8px 16px;padding:0;">';
+            foreach ($lines as $line) {
+                $item = htmlspecialchars(ltrim(trim($line), '- '), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                $html .= '<li style="margin-bottom:4px;">' . $item . '</li>';
+            }
+            $html .= '</ul>';
+            continue;
+        }
+
+        // Regular paragraph — convert single newlines to <br>, linkify URLs.
+        $escaped = htmlspecialchars($para, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $escaped = preg_replace(
+            '/(https?:\/\/[^\s<]+)/',
+            '<a href="$1" style="color:#4d0b93;font-weight:bold;">$1</a>',
+            $escaped
+        );
+        $escaped = str_replace("\n", '<br>', $escaped);
+
+        $html .= '<p style="margin:12px 0;">' . $escaped . '</p>';
+    }
+
+    return $html;
+}
+
 function gm_queue_email_and_log(
     int $personId,
     string $toEmail,
@@ -1041,7 +1108,7 @@ function gm_queue_email_and_log(
         return;
     }
 
-    $bodyHtml = '<p>' . str_replace("\n", '<br>', htmlspecialchars($body, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) . '</p>';
+    $bodyHtml = gm_plain_text_to_html($body);
     $preview = strip_tags($body);
     $preview = function_exists('mb_substr') ? mb_substr($preview, 0, 800) : substr($preview, 0, 800);
 

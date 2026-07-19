@@ -277,81 +277,51 @@ include __DIR__ . '/app/group-manager-nav.php';
 ?>
 
 <style>
-    .gm-grid {
-        display: grid;
+    .gmp-header {
+        display: flex;
+        align-items: center;
         gap: 1rem;
-    }
-
-    @media (min-width: 992px) {
-        .gm-grid-2 {
-            grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
-        }
-    }
-
-    .gm-badge {
-        display: inline-block;
-        padding: .2rem .45rem;
-        font-weight: 900;
-        font-size: .78rem;
-    }
-
-    .gm-badge-sso {
-        background: #e7f1ff;
-        color: #004085;
-    }
-
-    .gm-badge-pending {
-        background: #fff3cd;
-        color: #664d03;
-    }
-
-    .gm-badge-link {
-        background: #f8d7da;
-        color: #842029;
-    }
-
-    .gm-badge-active {
-        background: #d1e7dd;
-        color: #0f5132;
-    }
-
-    .gm-badge-inactive {
-        background: #f8d7da;
-        color: #842029;
-    }
-
-    .gm-muted {
-        color: #555;
-    }
-
-    .gm-stat-list {
-        display: grid;
-        gap: .75rem;
-    }
-
-    .gm-stat-item {
-        border: 2px solid #e5e5e5;
+        padding: 1.25rem;
         background: #fff;
-        padding: .75rem;
+        border: 2px solid #e5e5e5;
+        margin-bottom: 1.5rem;
     }
-
-    .gm-stat-item strong {
-        display: block;
-        color: var(--iv-purple);
-        font-size: 1.5rem;
-        line-height: 1;
+    .gmp-avatar {
+        width: 56px; height: 56px; border-radius: 50%;
+        background: #4d0b93; color: #fff;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.4rem; font-weight: 900; flex-shrink: 0;
     }
-
-    .gm-link-box {
-        display: grid;
-        gap: .5rem;
-    }
-
-    @media (min-width: 768px) {
-        .gm-link-box {
-            grid-template-columns: minmax(0, 1fr) auto;
-        }
-    }
+    .gmp-header-info h2 { margin: 0 0 .2rem; font-size: 1.25rem; font-weight: 900; color: #1d1d1b; }
+    .gmp-header-meta { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; font-size: .88rem; color: #555; }
+    .gmp-layout { display: grid; gap: 1.5rem; }
+    @media (min-width: 992px) { .gmp-layout { grid-template-columns: minmax(0, 2fr) 340px; align-items: start; } }
+    .gmp-main { display: grid; gap: 1.5rem; }
+    .gmp-sidebar { display: grid; gap: 1.5rem; }
+    @media (min-width: 992px) { .gmp-sidebar { position: sticky; top: 1rem; } }
+    .gmp-card { background: #fff; border: 2px solid #e5e5e5; padding: 1.25rem; }
+    .gmp-card-grey { background: #f7f5fb; border-color: #e5e5e5; }
+    .gmp-card-title { margin: 0 0 .75rem; font-size: 1rem; font-weight: 900; color: #4d0b93; padding-bottom: .4rem; border-bottom: 2px solid #f0ecf5; }
+    .gmp-badge { display: inline-block; padding: .15rem .4rem; font-weight: 900; font-size: .72rem; text-transform: uppercase; letter-spacing: .02em; }
+    .gmp-badge-active { background: #d1e7dd; color: #0f5132; }
+    .gmp-badge-inactive { background: #f8d7da; color: #842029; }
+    .gmp-badge-sso { background: #e7f1ff; color: #004085; }
+    .gmp-badge-pending { background: #fff3cd; color: #664d03; }
+    .gmp-badge-link { background: #f8d7da; color: #842029; }
+    .gmp-badge-reviewer { background: #e8e0f3; color: #4d0b93; }
+    .gmp-badge-primary { background: #f0ecf5; color: #4d0b93; }
+    .gmp-stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin-top: .75rem; }
+    .gmp-stat { text-align: center; padding: .5rem; border: 1px solid #e5e5e5; background: #fff; }
+    .gmp-stat strong { display: block; font-size: 1.3rem; color: #4d0b93; line-height: 1.2; }
+    .gmp-stat span { font-size: .75rem; color: #555; }
+    .gmp-role-item { border: 1px solid #e5e5e5; padding: .75rem; margin-bottom: .5rem; background: #fff; }
+    .gmp-role-item-primary { border-left: 4px solid #4d0b93; }
+    .gmp-role-label { font-weight: 900; font-size: .9rem; margin-bottom: .3rem; }
+    .gmp-muted { color: #555; font-size: .85rem; }
+    .gmp-link-box { display: grid; gap: .5rem; }
+    @media (min-width: 576px) { .gmp-link-box { grid-template-columns: minmax(0, 1fr) auto; } }
+    .gmp-danger-zone { border: 2px solid #f8d7da; background: #fff; padding: 1.25rem; }
+    .gmp-danger-zone .gmp-card-title { color: #842029; border-bottom-color: #f8d7da; }
 </style>
 
 <main class="lt-main">
@@ -374,151 +344,130 @@ include __DIR__ . '/app/group-manager-nav.php';
     <?php if ($createdInviteUrl): ?>
         <div class="alert alert-info">
             <strong>Access link:</strong>
-            <div class="gm-link-box mt-2">
+            <div class="gmp-link-box mt-2">
                 <input class="form-control" type="text" value="<?= e($createdInviteUrl) ?>" readonly>
                 <button class="btn btn-secondary lt-btn gm-copy" type="button" data-copy="<?= e($createdInviteUrl) ?>">Copy</button>
             </div>
         </div>
     <?php endif; ?>
 
-    <div class="gm-grid gm-grid-2">
-        <section class="lt-panel">
-            <h2 class="lt-section-title">Details</h2>
+    <?php
+        $personCurrentAccessLevel = (string) ($person['access_level'] ?? 'member');
+        $isCurrentlyGroupReviewer = $personCurrentAccessLevel === 'group_reviewer';
+        $hasHigherAccess = in_array($personCurrentAccessLevel, ['district_reviewer', 'district_admin', 'system_admin'], true);
+        $initials = implode('', array_map(fn($w) => mb_strtoupper(mb_substr($w, 0, 1)), array_slice(explode(' ', trim((string) $person['full_name'])), 0, 2)));
+    ?>
 
-            <form method="post">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="update_details">
-                <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-                <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
-
-                <div class="form-group">
-                    <label for="full_name">Name</label>
-                    <input class="form-control" type="text" id="full_name" name="full_name" value="<?= e($person['full_name']) ?>" required>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group col-md-8">
-                        <label for="primary_email">Email</label>
-                        <input class="form-control" type="email" id="primary_email" name="primary_email" value="<?= e($person['primary_email']) ?>" required>
-                    </div>
-
-                    <div class="form-group col-md-4">
-                        <label for="phone">Phone</label>
-                        <input class="form-control" type="text" id="phone" name="phone" value="<?= e($person['phone'] ?? '') ?>">
-                    </div>
-                </div>
-
-                <label class="lt-check">
-                    <input type="checkbox" name="visible_in_directory" value="1" <?= (int) ($person['visible_in_directory'] ?? 0) === 1 ? 'checked' : '' ?>>
-                    <span>Show this person in the District Directory</span>
-                </label>
-
-                <label class="lt-check mt-2">
-                    <input type="checkbox" name="share_phone" value="1" <?= (int) ($person['share_phone'] ?? 0) === 1 ? 'checked' : '' ?>>
-                    <span>Show their phone number in the Directory</span>
-                </label>
-
-                <button class="btn btn-primary lt-btn mt-3" type="submit">Save details</button>
-            </form>
-        </section>
-
-        <aside class="lt-panel-grey">
-            <h2 class="lt-section-title">Status</h2>
-
-            <p>
-                Group status:
+    <!-- Person header -->
+    <div class="gmp-header">
+        <div class="gmp-avatar"><?= e($initials) ?></div>
+        <div class="gmp-header-info">
+            <h2><?= e($person['full_name']) ?></h2>
+            <div class="gmp-header-meta">
+                <span><?= e(gm_role_title_from_membership_role((string) $person['membership_role'])) ?></span>
+                <span>·</span>
                 <?= (string) $person['membership_status'] === 'active'
-                    ? '<span class="gm-badge gm-badge-active">Active</span>'
-                    : '<span class="gm-badge gm-badge-inactive">Inactive</span>' ?>
-            </p>
-
-            <p>
-                Access:
-                <span class="gm-badge <?= e($accessClass) ?>"><?= e($accessLabel) ?></span>
-            </p>
-
-            <div class="gm-stat-list mt-3">
-                <div class="gm-stat-item">
-                    <strong><?= (int) $person['total_events'] ?></strong>
-                    <span>linked calendar events</span>
-                </div>
-                <div class="gm-stat-item">
-                    <strong><?= (int) $person['in_review_events'] ?></strong>
-                    <span>events in review</span>
-                </div>
-                <div class="gm-stat-item">
-                    <strong><?= (int) $person['approved_events'] ?></strong>
-                    <span>approved events</span>
-                </div>
+                    ? '<span class="gmp-badge gmp-badge-active">Active</span>'
+                    : '<span class="gmp-badge gmp-badge-inactive">Inactive</span>' ?>
+                <span class="gmp-badge <?= e(match($accessLabel) { 'Microsoft SSO' => 'gmp-badge-sso', 'Account requested' => 'gmp-badge-pending', default => 'gmp-badge-link' }) ?>"><?= e($accessLabel) ?></span>
+                <?php if ($isCurrentlyGroupReviewer): ?>
+                    <span class="gmp-badge gmp-badge-reviewer">Reviewer</span>
+                <?php endif; ?>
+                <?php if ($hasHigherAccess): ?>
+                    <span class="gmp-badge gmp-badge-reviewer"><?= e(ucwords(str_replace('_', ' ', $personCurrentAccessLevel))) ?></span>
+                <?php endif; ?>
             </div>
-        </aside>
+        </div>
     </div>
 
-    <div class="gm-grid gm-grid-2 mt-4">
-        <section class="lt-panel">
-            <?php
-                // Fetch ALL active memberships for this person across all groups.
-                $stmtAllMemberships = $pdo->prepare("
-                    SELECT
-                        gm.group_id,
-                        gm.membership_role,
-                        gm.status AS membership_status,
-                        gm.is_primary,
-                        g.group_name
-                    FROM group_memberships gm
-                    INNER JOIN groups g ON g.id = gm.group_id
-                    WHERE gm.person_id = :person_id
-                      AND gm.status = 'active'
-                    ORDER BY gm.is_primary DESC, g.group_name ASC
-                ");
-                $stmtAllMemberships->execute(['person_id' => $personId]);
-                $allMemberships = $stmtAllMemberships->fetchAll(PDO::FETCH_ASSOC);
-            ?>
+    <!-- Main layout -->
+    <div class="gmp-layout">
+        <div class="gmp-main">
 
-            <?php if (count($allMemberships) > 1 || $isDistrictAdmin): ?>
-                <h2 class="lt-section-title">All roles</h2>
+            <!-- Details -->
+            <div class="gmp-card">
+                <h3 class="gmp-card-title">Details</h3>
+                <form method="post">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="update_details">
+                    <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                    <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                    <div class="form-group">
+                        <label for="full_name">Name</label>
+                        <input class="form-control" type="text" id="full_name" name="full_name" value="<?= e($person['full_name']) ?>" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-7">
+                            <label for="primary_email">Email</label>
+                            <input class="form-control" type="email" id="primary_email" name="primary_email" value="<?= e($person['primary_email']) ?>" required>
+                        </div>
+                        <div class="form-group col-md-5">
+                            <label for="phone">Phone</label>
+                            <input class="form-control" type="text" id="phone" name="phone" value="<?= e($person['phone'] ?? '') ?>">
+                        </div>
+                    </div>
+                    <label class="lt-check">
+                        <input type="checkbox" name="visible_in_directory" value="1" <?= (int) ($person['visible_in_directory'] ?? 0) === 1 ? 'checked' : '' ?>>
+                        <span>Show in District Directory</span>
+                    </label>
+                    <label class="lt-check mt-2">
+                        <input type="checkbox" name="share_phone" value="1" <?= (int) ($person['share_phone'] ?? 0) === 1 ? 'checked' : '' ?>>
+                        <span>Show phone in Directory</span>
+                    </label>
+                    <button class="btn btn-primary lt-btn mt-3" type="submit">Save details</button>
+                </form>
+            </div>
 
-                <?php if (count($allMemberships) === 0): ?>
-                    <p class="gm-muted">No active memberships found.</p>
-                <?php else: ?>
+            <!-- Roles -->
+            <div class="gmp-card">
+                <?php
+                    $stmtAllMemberships = $pdo->prepare("
+                        SELECT gm.group_id, gm.membership_role, gm.access_level, gm.status AS membership_status, gm.is_primary, g.group_name
+                        FROM group_memberships gm
+                        INNER JOIN groups g ON g.id = gm.group_id
+                        WHERE gm.person_id = :person_id AND gm.status = 'active'
+                        ORDER BY gm.is_primary DESC, g.group_name ASC
+                    ");
+                    $stmtAllMemberships->execute(['person_id' => $personId]);
+                    $allMemberships = $stmtAllMemberships->fetchAll(PDO::FETCH_ASSOC);
+                ?>
+
+                <?php if (count($allMemberships) > 1 || $isDistrictAdmin): ?>
+                    <h3 class="gmp-card-title">Roles across Groups</h3>
+
                     <?php foreach ($allMemberships as $membership):
                         $mGroupId = (int) $membership['group_id'];
                         $mGroupName = (string) $membership['group_name'];
                         $mRole = (string) $membership['membership_role'];
+                        $mAccessLevel = (string) ($membership['access_level'] ?? 'member');
                         $mIsPrimary = (int) ($membership['is_primary'] ?? 0) === 1;
                         $mRoleOptions = gm_membership_role_options($mGroupId);
-                        // Can edit if district admin, or if this is a group they manage.
                         $canEditThisRole = $isDistrictAdmin || gm_group_is_manageable($mGroupId, $manageableGroups);
                     ?>
-                        <?php if ($canEditThisRole): ?>
-                            <div class="mb-3" style="border:1px solid #e5e5e5;padding:.75rem;border-radius:4px;<?= $mIsPrimary ? 'border-left:4px solid #4d0b93;' : '' ?>">
+                        <div class="gmp-role-item <?= $mIsPrimary ? 'gmp-role-item-primary' : '' ?>">
+                            <div class="gmp-role-label">
+                                <?= e($mGroupName) ?>
+                                <?php if ($mIsPrimary): ?><span class="gmp-badge gmp-badge-primary">Primary</span><?php endif; ?>
+                                <?php if ($mAccessLevel === 'group_reviewer'): ?><span class="gmp-badge gmp-badge-reviewer">Reviewer</span><?php endif; ?>
+                            </div>
+                            <?php if ($canEditThisRole): ?>
                                 <form method="post">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="update_role">
                                     <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
                                     <input type="hidden" name="target_group_id" value="<?= (int) $mGroupId ?>">
                                     <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
-
                                     <div class="form-group mb-2">
-                                        <label class="mb-1" style="font-weight:bold;">
-                                            <?= e($mGroupName) ?>
-                                            <?php if ($mIsPrimary): ?>
-                                                <span class="gm-badge gm-badge-active" style="font-size:.7rem;vertical-align:middle;">Primary</span>
-                                            <?php endif; ?>
-                                        </label>
                                         <select class="form-control form-control-sm" name="membership_role" required>
                                             <?php foreach ($mRoleOptions as $value => $label): ?>
-                                                <option value="<?= e($value) ?>" <?= $mRole === $value ? 'selected' : '' ?>>
-                                                    <?= e($label) ?>
-                                                </option>
+                                                <option value="<?= e($value) ?>" <?= $mRole === $value ? 'selected' : '' ?>><?= e($label) ?></option>
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
-
                                     <button class="btn btn-sm btn-primary lt-btn" type="submit">Save</button>
                                 </form>
                                 <?php if ($isDistrictAdmin && !$mIsPrimary): ?>
-                                    <form method="post" style="display:inline-block;margin:.5rem 0 0 0;" onsubmit="return confirm('Set this as the primary role for this person?');">
+                                    <form method="post" style="display:inline-block;margin-top:.4rem;" onsubmit="return confirm('Set this as the primary role?');">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="set_primary">
                                         <input type="hidden" name="group_id" value="<?= (int) $mGroupId ?>">
@@ -526,181 +475,155 @@ include __DIR__ . '/app/group-manager-nav.php';
                                         <button class="btn btn-sm btn-outline-secondary lt-btn" type="submit">Set as primary</button>
                                     </form>
                                 <?php endif; ?>
-                            </div>
-                        <?php else: ?>
-                            <div class="mb-3" style="border:1px solid #e5e5e5;padding:.75rem;border-radius:4px;background:#f9f9f9;<?= $mIsPrimary ? 'border-left:4px solid #4d0b93;' : '' ?>">
-                                <label class="mb-1" style="font-weight:bold;">
-                                    <?= e($mGroupName) ?>
-                                    <?php if ($mIsPrimary): ?>
-                                        <span class="gm-badge gm-badge-active" style="font-size:.7rem;vertical-align:middle;">Primary</span>
-                                    <?php endif; ?>
-                                </label>
-                                <p class="mb-0"><?= e(gm_role_title_from_membership_role($mRole)) ?></p>
-                            </div>
-                        <?php endif; ?>
+                            <?php else: ?>
+                                <p class="mb-0 gmp-muted"><?= e(gm_role_title_from_membership_role($mRole)) ?></p>
+                            <?php endif; ?>
+                        </div>
                     <?php endforeach; ?>
+
+                    <?php if ($isDistrictAdmin): ?>
+                        <p class="gmp-muted mt-2" style="font-size:.8rem;">
+                            The <span class="gmp-badge gmp-badge-primary">Primary</span> role determines Microsoft 365 job title and department.
+                        </p>
+                    <?php endif; ?>
+
+                <?php else: ?>
+                    <h3 class="gmp-card-title">Role in this Group</h3>
+                    <form method="post">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="update_role">
+                        <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                        <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                        <div class="form-group">
+                            <label for="membership_role">Role</label>
+                            <select class="form-control" id="membership_role" name="membership_role" required>
+                                <?php foreach ($roleOptions as $value => $label): ?>
+                                    <option value="<?= e($value) ?>" <?= (string) $person['membership_role'] === $value ? 'selected' : '' ?>><?= e($label) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <p class="gmp-muted">Group Lead Volunteer gives this person Group Admin access. Other roles have standard member access.</p>
+                        <button class="btn btn-primary lt-btn" type="submit">Update role</button>
+                    </form>
                 <?php endif; ?>
+            </div>
 
-            <?php else: ?>
-                <h2 class="lt-section-title">Role in this Group</h2>
-
-                <form method="post">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="update_role">
-                    <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-                    <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
-
-                    <div class="form-group">
-                        <label for="membership_role">Role</label>
-                        <select class="form-control" id="membership_role" name="membership_role" required>
-                            <?php foreach ($roleOptions as $value => $label): ?>
-                                <option value="<?= e($value) ?>" <?= (string) $person['membership_role'] === $value ? 'selected' : '' ?>>
-                                    <?= e($label) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
-                    <p class="gm-muted">
-                        Group Lead Volunteer gives this person Group Admin access for this Group. Other roles are normal member access.
+            <!-- Event review permission (district admin only) -->
+            <?php if ($isDistrictAdmin && (string) $person['membership_status'] === 'active'): ?>
+            <div class="gmp-card">
+                <h3 class="gmp-card-title">Event review permission</h3>
+                <?php if ($hasHigherAccess): ?>
+                    <p class="gmp-muted">
+                        This person has <strong><?= e(str_replace('_', ' ', $personCurrentAccessLevel)) ?></strong> access
+                        and can already review events across the entire District.
                     </p>
-
-                    <button class="btn btn-primary lt-btn" type="submit">Update role</button>
-                </form>
+                <?php else: ?>
+                    <p class="gmp-muted">Allow this person to review and approve calendar events for <strong><?= e($selectedGroup['group_name']) ?></strong>.</p>
+                    <form method="post">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="set_group_reviewer">
+                        <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                        <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                        <label class="lt-check">
+                            <input type="checkbox" name="is_group_reviewer" value="1" <?= $isCurrentlyGroupReviewer ? 'checked' : '' ?>>
+                            <span>Can review and approve events for this Group</span>
+                        </label>
+                        <button class="btn btn-primary lt-btn mt-3" type="submit">Save</button>
+                    </form>
+                    <?php if ($isCurrentlyGroupReviewer): ?>
+                        <p class="gmp-muted mt-2" style="font-size:.82rem;">This person receives email notifications when events are submitted for this Group.</p>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
             <?php endif; ?>
-        </section>
 
-        <aside class="lt-panel-grey">
-            <h2 class="lt-section-title">Access instructions</h2>
-            <p>Use these to resend access instructions if someone cannot find their original email.</p>
+        </div>
 
-            <?php if ((int) ($person['has_microsoft_account'] ?? 0) > 0 || $accessLabel === 'Microsoft SSO'): ?>
-                <form method="post" class="mb-2">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="send_microsoft_instructions">
-                    <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-                    <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
-                    <button class="btn btn-secondary lt-btn btn-block" type="submit">Resend Microsoft sign-in instructions</button>
-                </form>
-                <p class="gm-muted" style="font-size:.85rem;">Sends an email explaining how to sign in with their District Microsoft 365 account.</p>
-            <?php elseif ($accessLabel === 'Account requested'): ?>
-                <div class="alert alert-info mb-2" style="font-size:.85rem;">
-                    <strong>Microsoft 365 account requested.</strong><br>
-                    This will be set up within 5 minutes. Login details will be sent to their personal email.
+        <!-- Sidebar -->
+        <div class="gmp-sidebar">
+
+            <!-- Stats -->
+            <div class="gmp-card gmp-card-grey">
+                <h3 class="gmp-card-title">Activity</h3>
+                <div class="gmp-stat-row">
+                    <div class="gmp-stat"><strong><?= (int) $person['total_events'] ?></strong><span>Events</span></div>
+                    <div class="gmp-stat"><strong><?= (int) $person['in_review_events'] ?></strong><span>In review</span></div>
+                    <div class="gmp-stat"><strong><?= (int) $person['approved_events'] ?></strong><span>Approved</span></div>
                 </div>
-                <form method="post" class="mb-2">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="send_calendar_link">
-                    <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-                    <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
-                    <button class="btn btn-secondary lt-btn btn-block" type="submit">Send calendar link in the meantime</button>
-                </form>
-            <?php else: ?>
-                <form method="post" class="mb-3" onsubmit="return confirm('Request a Microsoft 365 account for this person? Their login details will be sent to their personal email (<?= e($person['primary_email']) ?>). Make sure this email is correct before proceeding.');">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="request_m365_account">
-                    <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-                    <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
-                    <button class="btn btn-primary lt-btn btn-block" type="submit">Request Microsoft 365 account</button>
-                </form>
-                <p class="gm-muted" style="font-size:.85rem;">
-                    This will create a District Microsoft 365 account for this person within 5 minutes.
-                    Their username and temporary password will be emailed to <strong><?= e($person['primary_email']) ?></strong> — make sure this is correct in their profile above.
-                </p>
+            </div>
 
-                <hr style="margin:1rem 0;">
+            <!-- Access & instructions -->
+            <div class="gmp-card">
+                <h3 class="gmp-card-title">Access &amp; instructions</h3>
+                <?php if ((int) ($person['has_microsoft_account'] ?? 0) > 0 || $accessLabel === 'Microsoft SSO'): ?>
+                    <p class="gmp-muted">This person signs in with Microsoft 365.</p>
+                    <form method="post" class="mb-2">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="send_microsoft_instructions">
+                        <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                        <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                        <button class="btn btn-secondary lt-btn btn-block" type="submit">Resend sign-in instructions</button>
+                    </form>
+                <?php elseif ($accessLabel === 'Account requested'): ?>
+                    <div class="alert alert-info mb-2" style="font-size:.85rem;">
+                        <strong>Microsoft 365 account requested.</strong><br>This will be set up within 5 minutes.
+                    </div>
+                    <form method="post" class="mb-2">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="send_calendar_link">
+                        <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                        <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                        <button class="btn btn-secondary lt-btn btn-block" type="submit">Send calendar link meanwhile</button>
+                    </form>
+                <?php else: ?>
+                    <form method="post" class="mb-3" onsubmit="return confirm('Request a Microsoft 365 account? Login details will be sent to <?= e($person['primary_email']) ?>.');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="request_m365_account">
+                        <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                        <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                        <button class="btn btn-primary lt-btn btn-block" type="submit">Request Microsoft 365 account</button>
+                    </form>
+                    <p class="gmp-muted" style="font-size:.82rem;">Credentials sent to <strong><?= e($person['primary_email']) ?></strong>.</p>
+                    <hr style="margin:.75rem 0;">
+                    <form method="post" class="mb-2">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="send_calendar_link">
+                        <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                        <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                        <button class="btn btn-secondary lt-btn btn-block" type="submit">Send calendar link only</button>
+                    </form>
+                    <p class="gmp-muted" style="font-size:.82rem;">For people who only need calendar access.</p>
+                <?php endif; ?>
+            </div>
 
-                <form method="post" class="mb-2">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="send_calendar_link">
-                    <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-                    <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
-                    <button class="btn btn-secondary lt-btn btn-block" type="submit">Send calendar link only</button>
-                </form>
-                <p class="gm-muted" style="font-size:.85rem;">If this person only needs calendar access and does not need a Microsoft 365 account.</p>
-            <?php endif; ?>
-        </aside>
+            <!-- Membership / remove -->
+            <div class="gmp-danger-zone">
+                <h3 class="gmp-card-title">Membership</h3>
+                <?php if ((string) $person['membership_status'] === 'active'): ?>
+                    <p class="gmp-muted">Making someone inactive removes them from Group lists. Their history is preserved.</p>
+                    <form method="post" onsubmit="return confirm('Make this person inactive for this Group?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="set_status">
+                        <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                        <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                        <input type="hidden" name="new_status" value="inactive">
+                        <button class="btn btn-outline-danger lt-btn btn-block" type="submit">Make inactive</button>
+                    </form>
+                <?php else: ?>
+                    <p class="gmp-muted">Reactivating adds this person back to Group lists.</p>
+                    <form method="post">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="set_status">
+                        <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                        <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                        <input type="hidden" name="new_status" value="active">
+                        <button class="btn btn-primary lt-btn btn-block" type="submit">Reactivate</button>
+                    </form>
+                <?php endif; ?>
+            </div>
+
+        </div>
     </div>
-
-    <?php if ($isDistrictAdmin && count($allMemberships ?? []) > 0): ?>
-    <p class="gm-muted mt-2" style="font-size:.85rem;">
-        The <span class="gm-badge gm-badge-active" style="font-size:.65rem;">Primary</span> role determines this person's Microsoft 365 job title and department.
-    </p>
-    <?php endif; ?>
-
-    <section class="lt-panel mt-4">
-        <h2 class="lt-section-title">Remove or reactivate</h2>
-
-        <?php if ((string) $person['membership_status'] === 'active'): ?>
-            <p class="gm-muted">
-                This makes the person inactive for <?= e($selectedGroup['group_name']) ?>. It does not delete their history or previous calendar events.
-            </p>
-
-            <form method="post" onsubmit="return confirm('Make this person inactive for this Group?');">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="set_status">
-                <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-                <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
-                <input type="hidden" name="new_status" value="inactive">
-                <button class="btn btn-outline-danger lt-btn" type="submit">Make inactive</button>
-            </form>
-        <?php else: ?>
-            <p class="gm-muted">
-                Reactivating adds this person back to normal Group lists and leader selectors.
-            </p>
-
-            <form method="post">
-                <input type="hidden" name="action" value="set_status">
-                <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-                <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
-                <input type="hidden" name="new_status" value="active">
-                <button class="btn btn-primary lt-btn" type="submit">Reactivate person</button>
-            </form>
-        <?php endif; ?>
-    </section>
-
-    <?php if ($isDistrictAdmin && (string) $person['membership_status'] === 'active'): ?>
-    <?php
-        $personCurrentAccessLevel = (string) ($person['access_level'] ?? 'member');
-        $isCurrentlyGroupReviewer = $personCurrentAccessLevel === 'group_reviewer';
-        $hasHigherAccess = in_array($personCurrentAccessLevel, ['district_reviewer', 'district_admin', 'system_admin'], true);
-    ?>
-    <section class="lt-panel mt-4">
-        <h2 class="lt-section-title">Event review permission</h2>
-
-        <?php if ($hasHigherAccess): ?>
-            <p class="gm-muted">
-                This person has <strong><?= e(str_replace('_', ' ', $personCurrentAccessLevel)) ?></strong> access
-                and can already review events across the entire District. No group-level permission is needed.
-            </p>
-        <?php else: ?>
-            <p class="gm-muted">
-                Allow this person to review and approve calendar events submitted for <strong><?= e($selectedGroup['group_name']) ?></strong>.
-                They will be able to approve, reject, or request changes to events for this Group only.
-            </p>
-
-            <form method="post">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="set_group_reviewer">
-                <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-                <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
-
-                <label class="lt-check">
-                    <input type="checkbox" name="is_group_reviewer" value="1" <?= $isCurrentlyGroupReviewer ? 'checked' : '' ?>>
-                    <span>Can review and approve events for this Group</span>
-                </label>
-
-                <button class="btn btn-primary lt-btn mt-3" type="submit">Save review permission</button>
-            </form>
-
-            <?php if ($isCurrentlyGroupReviewer): ?>
-                <p class="gm-muted mt-2" style="font-size:.85rem;">
-                    This person will receive email notifications when events are submitted for review in this Group.
-                </p>
-            <?php endif; ?>
-        <?php endif; ?>
-    </section>
-    <?php endif; ?>
 </main>
 
 <script>
@@ -708,18 +631,11 @@ include __DIR__ . '/app/group-manager-nav.php';
     document.querySelectorAll('.gm-copy').forEach(function (button) {
         button.addEventListener('click', function () {
             var value = button.getAttribute('data-copy') || '';
-
-            if (!value) {
-                return;
-            }
-
+            if (!value) return;
             navigator.clipboard.writeText(value).then(function () {
                 var original = button.textContent;
                 button.textContent = 'Copied';
-
-                window.setTimeout(function () {
-                    button.textContent = original;
-                }, 1500);
+                window.setTimeout(function () { button.textContent = original; }, 1500);
             });
         });
     });
