@@ -9,6 +9,7 @@ require_once __DIR__ . '/db-bridge.php';
 require_once __DIR__ . '/options.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/microsoft.php';
+require_once __DIR__ . '/csrf.php';
 define('WORDPRESS_PATH', '/home/brscouts/irvalscouts.org.uk');
 define('WORDPRESS_SITE_URL', 'https://irvalscouts.org.uk');
 

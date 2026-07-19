@@ -146,11 +146,23 @@ include __DIR__ . '/header.php';
 ?>
 
 <style>
-    .gm-subnav {
-        display: flex;
-        flex-wrap: wrap;
-        gap: .75rem;
-        margin-bottom: 1rem;
+    .gm-back-link {
+        display: inline-block;
+        margin-bottom: 1.25rem;
+        font-weight: 900;
+        font-size: .95rem;
+        color: var(--iv-grey-700);
+        text-decoration: none;
+    }
+
+    .gm-back-link::before {
+        content: "\2190";
+        margin-right: .4rem;
+    }
+
+    .gm-back-link:hover {
+        color: var(--iv-black);
+        text-decoration: underline;
     }
 
     .gm-grid {
@@ -231,11 +243,7 @@ include __DIR__ . '/header.php';
 </style>
 
 <main class="lt-main">
-    <div class="gm-subnav">
-        <a class="btn btn-secondary lt-btn" href="/group-manager.php?group_id=<?= (int) $selectedGroupId ?>">Back to people</a>
-        <a class="btn btn-secondary lt-btn" href="/group-manager-add-person.php?group_id=<?= (int) $selectedGroupId ?>">Add person</a>
-        <a class="btn btn-secondary lt-btn" href="/group-manager-inactive.php?group_id=<?= (int) $selectedGroupId ?>">Inactive people</a>
-    </div>
+    <a class="gm-back-link" href="/group-manager.php?group_id=<?= (int) $selectedGroupId ?>">Back to Group Manager</a>
 
     <?php if ($errors): ?>
         <div class="alert alert-danger">

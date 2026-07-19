@@ -13,9 +13,9 @@ if (user_needs_group_onboarding()) {
 $user = current_user();
 $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
 $pageTitle = 'Home | ' . $appName;
-$heroTitle = 'Leader Tool';
-$heroText = 'Open District tools, update your profile and manage the tasks connected to your Group.';
-$breadcrumb = '<a href="/index.php">Home</a>';
+$heroTitle = null;
+$heroText = null;
+$breadcrumb = null;
 
 $personId = (int) $user['id'];
 $memberships = user_group_memberships($personId);
@@ -464,202 +464,252 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
 <?php include __DIR__ . '/header.php'; ?>
 
 <style>
-    /* Dashboard-specific compact header/hero. Keeps other pages unchanged. */
-    .lt-header-inner {
-        min-height: 72px;
-        padding-top: .55rem;
-        padding-bottom: .55rem;
+    /* ===== DASHBOARD HERO BANNER ===== */
+    .lt-dash-hero {
+        position: relative;
+        background: var(--iv-purple);
+        color: #fff;
+        overflow: hidden;
     }
 
-    .lt-brand img {
-        height: 52px;
-        max-width: 220px;
+    .lt-dash-hero-img {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
     }
 
-    .lt-hero-inner {
-        padding-top: 1rem;
-        padding-bottom: 1rem;
+    .lt-dash-hero-img img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: .35;
     }
 
-    .lt-hero h1 {
+    .lt-dash-hero-inner {
+        position: relative;
+        z-index: 1;
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 2.5rem 1rem 2rem;
+    }
+
+    .lt-dash-hero h1 {
         font-size: 2rem;
-        margin-bottom: .25rem;
+        font-weight: 900;
+        letter-spacing: -.03em;
+        line-height: 1.1;
+        margin: 0 0 .35rem;
     }
 
-    .lt-hero p {
-        font-size: .98rem;
-        max-width: 720px;
+    .lt-dash-hero p {
+        font-size: 1rem;
+        font-weight: 700;
+        opacity: .9;
+        margin: 0;
+        max-width: 600px;
     }
 
-    .lt-breadcrumb-inner {
-        padding-top: .45rem;
-        padding-bottom: .45rem;
+    /* ===== QUICK NAV ===== */
+    .lt-dash-nav {
+        margin-top: 1.25rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
     }
 
-    .lt-main {
-        padding-top: 1.25rem;
+    .lt-dash-nav a {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        padding: .5rem .9rem;
+        background: rgba(255,255,255,.15);
+        border: 2px solid rgba(255,255,255,.5);
+        color: #fff;
+        font-weight: 900;
+        font-size: .88rem;
+        text-decoration: none;
+        transition: background .15s, border-color .15s;
     }
 
-    @media (min-width: 992px) {
-        .lt-header-inner {
-            min-height: 78px;
+    .lt-dash-nav a:hover,
+    .lt-dash-nav a:focus {
+        background: rgba(255,255,255,.28);
+        border-color: #fff;
+        text-decoration: none;
+        color: #fff;
+    }
+
+    .lt-dash-nav a:focus {
+        outline: 3px solid var(--iv-yellow);
+        outline-offset: 2px;
+    }
+
+    @media (min-width: 768px) {
+        .lt-dash-hero-inner {
+            padding: 3.5rem 1rem 2.5rem;
         }
 
-        .lt-brand img {
-            height: 58px;
-            max-width: 250px;
+        .lt-dash-hero h1 {
+            font-size: 2.75rem;
         }
 
-        .lt-hero h1 {
-            font-size: 2.35rem;
+        .lt-dash-hero p {
+            font-size: 1.1rem;
         }
     }
 
     @media (max-width: 575.98px) {
-        .lt-header-inner {
-            min-height: 64px;
+        .lt-dash-hero-inner {
+            padding: 1.75rem 1rem 1.5rem;
         }
 
-        .lt-brand img {
-            height: 44px;
-            max-width: 160px;
+        .lt-dash-hero h1 {
+            font-size: 1.65rem;
         }
 
-        .lt-hero-inner {
-            padding-top: .85rem;
-            padding-bottom: .85rem;
-        }
-
-        .lt-hero h1 {
-            font-size: 1.75rem;
+        .lt-dash-nav a {
+            padding: .4rem .7rem;
+            font-size: .82rem;
         }
     }
 
-    .lt-task-card {
+    /* ===== MAIN CONTENT ===== */
+    .lt-main {
+        padding-top: 1.75rem;
+    }
+
+    /* ===== GROUPS STRIP ===== */
+    .lt-groups-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .6rem;
+        margin-bottom: 2rem;
+        padding: 1rem;
+        background: var(--iv-grey-100);
+        border: 1px solid var(--iv-grey-300);
+        border-left: .4rem solid var(--iv-purple);
+    }
+
+    .lt-groups-strip-label {
+        font-weight: 900;
+        color: var(--iv-purple);
+        margin-right: .5rem;
+        white-space: nowrap;
+    }
+
+    .lt-groups-strip-item {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        padding: .25rem .6rem;
+        background: #fff;
+        border: 1px solid var(--iv-grey-300);
+        font-weight: 800;
+        font-size: .88rem;
+    }
+
+    .lt-groups-strip-item .lt-group-role-tag {
+        color: var(--iv-grey-700);
+        font-weight: 700;
+    }
+
+    /* ===== MODULE CARDS (CLEANER GRID) ===== */
+    .lt-modules-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    @media (min-width: 576px) {
+        .lt-modules-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (min-width: 992px) {
+        .lt-modules-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+
+    .lt-mod-card {
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+        border: 1px solid var(--iv-grey-300);
         overflow: hidden;
+        transition: border-color .15s, box-shadow .15s;
     }
 
-    .lt-task-card-image {
-        height: 130px;
-        margin: -1.25rem -1.25rem 1rem;
-        background: #f3f2f1;
-        border-bottom: 1px solid #e6e6e6;
+    .lt-mod-card:hover {
+        border-color: var(--iv-purple);
+        box-shadow: 0 4px 16px rgba(77, 0, 153, .08);
+    }
+
+    .lt-mod-card-img {
+        height: 120px;
+        background: var(--iv-grey-100);
         overflow: hidden;
+        flex-shrink: 0;
     }
 
-    .lt-task-card-image img {
+    .lt-mod-card-img img {
         display: block;
         width: 100%;
         height: 100%;
         object-fit: cover;
     }
 
-    .lt-task-card-image img[style*="display: none"] + .lt-task-card-image-fallback {
+    .lt-mod-card-body {
+        padding: 1rem;
         display: flex;
+        flex-direction: column;
+        flex: 1;
     }
 
-    .lt-task-card-image-fallback {
-        display: none;
-        width: 100%;
-        height: 100%;
-        align-items: center;
-        justify-content: center;
-        background: #f7f5fb;
-        color: #4d0b93;
-        font-size: 2rem;
+    .lt-mod-card-body h3 {
+        font-size: 1.1rem;
         font-weight: 900;
-    }
-
-    .lt-dashboard-top {
-        align-items: stretch;
-    }
-
-    .lt-welcome-panel {
-        height: 100%;
-        display: flex;
-        align-items: center;
-    }
-
-    .lt-welcome-panel .lt-page-title {
-        margin-bottom: 0;
-    }
-
-    .lt-groups-panel {
-        height: 100%;
-        border-left: .45rem solid var(--iv-purple);
-    }
-
-    .lt-groups-heading {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        gap: .75rem;
-        margin-bottom: .75rem;
-    }
-
-    .lt-groups-heading h3 {
-        margin-bottom: 0;
-    }
-
-    .lt-groups-count {
-        color: var(--iv-purple);
-        font-weight: 900;
-        white-space: nowrap;
-    }
-
-    .lt-group-list {
-        display: grid;
-        gap: .75rem;
-    }
-
-    .lt-group-item {
-        background: #fff;
-        border: 2px solid #e5e5e5;
-        padding: .75rem;
-    }
-
-    .lt-group-name {
-        display: block;
-        color: var(--iv-black);
-        font-size: 1rem;
-        font-weight: 900;
+        margin: 0 0 .4rem;
         line-height: 1.2;
-        margin-bottom: .25rem;
     }
 
-    .lt-group-role {
+    .lt-mod-card-body p {
+        font-size: .9rem;
+        color: var(--iv-grey-700);
+        font-weight: 700;
+        margin: 0 0 .75rem;
+        flex: 1;
+    }
+
+    .lt-mod-card-action {
+        font-weight: 900;
+        color: var(--iv-blue);
+        font-size: .9rem;
+    }
+
+    .lt-mod-card-badge {
+        display: inline-block;
+        margin-bottom: .5rem;
+        padding: .2rem .5rem;
+        background: var(--iv-grey-100);
+        border: 1px solid var(--iv-grey-300);
+        font-size: .75rem;
+        font-weight: 900;
+        color: var(--iv-grey-700);
+    }
+
+    .lt-card-link {
         display: block;
-        color: #333;
-        font-weight: 800;
-        line-height: 1.25;
+        color: inherit;
+        text-decoration: none;
+        height: 100%;
     }
 
-    .lt-group-meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: .35rem;
-        margin-top: .55rem;
-    }
-
-    .lt-group-badge {
-        display: inline-block;
-        padding: .2rem .45rem;
-        background: #e7f1ff;
-        color: #084298;
-        font-size: .78rem;
-        font-weight: 900;
-    }
-
-    .lt-group-link {
-        display: inline-block;
-        margin-top: .6rem;
-        font-weight: 900;
-    }
-
-    .lt-no-groups {
-        background: #fff;
-        border: 2px solid #e5e5e5;
-        padding: .75rem;
+    .lt-card-link:hover {
+        color: inherit;
+        text-decoration: none;
     }
 
     .lt-card-button {
@@ -671,6 +721,7 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
         text-align: left;
         color: inherit;
         cursor: pointer;
+        height: 100%;
     }
 
     .lt-card-button:hover,
@@ -679,10 +730,44 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
     }
 
     .lt-card-button:focus {
-        outline: 4px solid #ffdd00;
+        outline: 4px solid var(--iv-yellow);
         outline-offset: 4px;
     }
 
+    /* ===== EXTERNAL LINKS ===== */
+    .lt-ext-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        margin-top: .5rem;
+    }
+
+    @media (min-width: 576px) {
+        .lt-ext-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    .lt-ext-card {
+        padding: 1.25rem;
+        border: 1px solid var(--iv-grey-300);
+        background: #fff;
+    }
+
+    .lt-ext-card h3 {
+        font-size: 1.05rem;
+        font-weight: 900;
+        margin: 0 0 .4rem;
+    }
+
+    .lt-ext-card p {
+        font-size: .9rem;
+        color: var(--iv-grey-700);
+        font-weight: 700;
+        margin: 0 0 .6rem;
+    }
+
+    /* ===== SHARED MAILBOX MODAL ===== */
     .lt-shared-mailbox-modal[hidden] {
         display: none;
     }
@@ -819,10 +904,6 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
     }
 
     @media (max-width: 575.98px) {
-        .lt-task-card-image {
-            height: 115px;
-        }
-
         .lt-shared-mailbox-actions .btn,
         .lt-shared-mailbox-form .btn {
             width: 100%;
@@ -830,127 +911,104 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
     }
 </style>
 
-<main class="lt-main">
-    <div class="row mb-4 lt-dashboard-top">
-        <div class="col-lg-8">
-            <div class="lt-welcome-panel">
-                <h2 class="lt-page-title">Welcome, <?= e($user['preferred_name'] ?: $user['full_name'] ?: $user['email']) ?></h2>
-            </div>
-        </div>
-
-        <div class="col-lg-4 mt-3 mt-lg-0">
-            <div class="lt-panel-grey lt-groups-panel">
-                <div class="lt-groups-heading">
-                    <h3 class="h5 font-weight-bold">
-                        <?= count($groupCards) === 1 ? 'Your Group' : 'Your Groups' ?>
-                    </h3>
-
-                    <?php if ($groupCards): ?>
-                        <span class="lt-groups-count"><?= count($groupCards) ?></span>
-                    <?php endif; ?>
-                </div>
-
-                <?php if ($groupCards): ?>
-                    <div class="lt-group-list">
-                        <?php foreach ($groupCards as $group): ?>
-                            <div class="lt-group-item">
-                                <span class="lt-group-name"><?= e($group['group_name']) ?></span>
-                                <span class="lt-group-role"><?= e(implode(', ', $group['roles'] ?: ['Member'])) ?></span>
-
-                                <?php if ($group['access_levels']): ?>
-                                    <div class="lt-group-meta">
-                                        <?php foreach ($group['access_levels'] as $accessLevel): ?>
-                                            <span class="lt-group-badge">
-                                                <?= e(home_access_level_label((string) $accessLevel)) ?>
-                                            </span>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
-
-                                <?php if ($group['can_manage']): ?>
-                                    <a class="lt-group-link" href="/group-manager.php<?= (int) $group['group_id'] > 0 ? '?group_id=' . (int) $group['group_id'] : '' ?>">
-                                        Manage Group
-                                    </a>
-                                <?php endif; ?>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php else: ?>
-                    <div class="lt-no-groups">
-                        <p class="mb-0">No Groups linked yet.</p>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
+<section class="lt-dash-hero" aria-label="Dashboard welcome">
+    <div class="lt-dash-hero-img" aria-hidden="true">
+        <img src="/assets/img/cub-high-ropes-1-jpg.jpg" alt="" loading="eager">
     </div>
+    <div class="lt-dash-hero-inner">
+        <h1>Welcome, <?= e($user['preferred_name'] ?: $user['full_name'] ?: $user['email']) ?></h1>
+        <p>Your District tools, communications and Group management in one place.</p>
+
+        <nav class="lt-dash-nav" aria-label="Quick links">
+            <a href="/profile.php">My Profile</a>
+            <a href="/dc/">District Calendar</a>
+            <a href="/directory.php">Directory</a>
+            <?php if ($isGroupAdmin): ?>
+                <a href="/group-manager.php">Group Admin</a>
+            <?php endif; ?>
+            <?php if ($isDistrictAdmin): ?>
+                <a href="/district-admin.php">District Admin</a>
+            <?php endif; ?>
+            <a href="https://outlook.cloud.microsoft/" target="_blank" rel="noopener noreferrer">Email / OneDrive</a>
+        </nav>
+    </div>
+</section>
+
+<main class="lt-main">
+    <?php if ($groupCards): ?>
+        <div class="lt-groups-strip" aria-label="Your Groups">
+            <span class="lt-groups-strip-label"><?= count($groupCards) === 1 ? 'Your Group:' : 'Your Groups:' ?></span>
+            <?php foreach ($groupCards as $group): ?>
+                <span class="lt-groups-strip-item">
+                    <?= e($group['group_name']) ?>
+                    <span class="lt-group-role-tag">(<?= e(implode(', ', $group['roles'] ?: ['Member'])) ?>)</span>
+                </span>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 
     <section aria-labelledby="tasks-heading">
         <h2 id="tasks-heading" class="lt-section-title">Things you can do</h2>
-        <div class="row">
+
+        <div class="lt-modules-grid">
             <?php foreach ($modules as $module): ?>
                 <?php $isSharedMailboxTile = (($module['type'] ?? '') === 'shared_mailbox'); ?>
 
-                <div class="col-md-6 col-xl-3 mb-4">
-                    <?php if ($isSharedMailboxTile): ?>
-                        <button type="button" class="lt-card-button" id="open-shared-mailbox-tile">
-                    <?php elseif ($module['status'] === 'available'): ?>
-                        <a href="<?= e($module['url']) ?>" class="lt-card-link">
-                    <?php endif; ?>
+                <?php if ($isSharedMailboxTile): ?>
+                    <button type="button" class="lt-card-button" id="open-shared-mailbox-tile">
+                <?php elseif ($module['status'] === 'available'): ?>
+                    <a href="<?= e($module['url']) ?>" class="lt-card-link">
+                <?php endif; ?>
 
-                        <article class="lt-task-card">
-                            <div class="lt-task-card-image">
-                                <img
-                                    src="<?= e($module['image']) ?>"
-                                    alt=""
-                                    loading="lazy"
-                                    onerror="this.style.display='none';"
-                                >
-                                <div class="lt-task-card-image-fallback" aria-hidden="true">
-                                    <?= e(strtoupper(substr((string) $module['title'], 0, 1))) ?>
-                                </div>
-                            </div>
+                    <article class="lt-mod-card">
+                        <div class="lt-mod-card-img">
+                            <img
+                                src="<?= e($module['image']) ?>"
+                                alt=""
+                                loading="lazy"
+                                onerror="this.style.display='none';"
+                            >
+                        </div>
 
+                        <div class="lt-mod-card-body">
                             <?php if ($module['status'] !== 'available'): ?>
-                                <span class="lt-badge mb-3">Soon</span>
+                                <span class="lt-mod-card-badge">Coming soon</span>
                             <?php endif; ?>
 
                             <h3><?= e($module['title']) ?></h3>
                             <p><?= e($module['description']) ?></p>
-                            <span class="lt-action-link">
+                            <span class="lt-mod-card-action">
                                 <?php if ($isSharedMailboxTile): ?>
                                     Open
                                 <?php else: ?>
                                     <?= $module['status'] === 'available' ? 'Open' : 'Not available yet' ?>
                                 <?php endif; ?>
+                                &rarr;
                             </span>
-                        </article>
+                        </div>
+                    </article>
 
-                    <?php if ($isSharedMailboxTile): ?>
-                        </button>
-                    <?php elseif ($module['status'] === 'available'): ?>
-                        </a>
-                    <?php endif; ?>
-                </div>
+                <?php if ($isSharedMailboxTile): ?>
+                    </button>
+                <?php elseif ($module['status'] === 'available'): ?>
+                    </a>
+                <?php endif; ?>
             <?php endforeach; ?>
         </div>
     </section>
 
     <section class="mt-4" aria-labelledby="external-heading">
         <h2 id="external-heading" class="lt-section-title">Useful external links</h2>
-        <div class="row">
-            <div class="col-md-6 mb-3">
-                <div class="lt-panel">
-                    <h3 class="h5 font-weight-bold">My Scout Membership</h3>
-                    <p>Open your Scouts membership record, learning and personal details.</p>
-                    <a href="https://membership.scouts.org.uk" target="_blank" rel="noopener noreferrer">Open My Scout Membership</a>
-                </div>
+        <div class="lt-ext-grid">
+            <div class="lt-ext-card">
+                <h3>My Scout Membership</h3>
+                <p>Open your Scouts membership record, learning and personal details.</p>
+                <a href="https://membership.scouts.org.uk" target="_blank" rel="noopener noreferrer">Open My Scout Membership &rarr;</a>
             </div>
-            <div class="col-md-6 mb-3">
-                <div class="lt-panel">
-                    <h3 class="h5 font-weight-bold">Online Scout Manager</h3>
-                    <p>Open OSM for programme planning, section administration and parent communications.</p>
-                    <a href="https://www.onlinescoutmanager.co.uk/login.php" target="_blank" rel="noopener noreferrer">Open Online Scout Manager</a>
-                </div>
+            <div class="lt-ext-card">
+                <h3>Online Scout Manager</h3>
+                <p>Open OSM for programme planning, section administration and parent communications.</p>
+                <a href="https://www.onlinescoutmanager.co.uk/login.php" target="_blank" rel="noopener noreferrer">Open Online Scout Manager &rarr;</a>
             </div>
         </div>
     </section>

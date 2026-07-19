@@ -409,11 +409,23 @@ include __DIR__ . '/header.php';
         }
     }
 
-    .gm-subnav {
-        display: flex;
-        flex-wrap: wrap;
-        gap: .75rem;
-        margin-bottom: 1rem;
+    .gm-back-link {
+        display: inline-block;
+        margin-bottom: 1.25rem;
+        font-weight: 900;
+        font-size: .95rem;
+        color: var(--iv-grey-700);
+        text-decoration: none;
+    }
+
+    .gm-back-link::before {
+        content: "\2190";
+        margin-right: .4rem;
+    }
+
+    .gm-back-link:hover {
+        color: var(--iv-black);
+        text-decoration: underline;
     }
 
     .gm-flow-step {
@@ -528,11 +540,7 @@ include __DIR__ . '/header.php';
 </style>
 
 <main class="lt-main">
-    <div class="gm-subnav">
-        <a class="btn btn-secondary lt-btn" href="/group-manager.php?group_id=<?= (int) $selectedGroupId ?>">Back to Group Manager</a>
-        <a class="btn btn-secondary lt-btn" href="/group-manager-inactive.php?group_id=<?= (int) $selectedGroupId ?>">Inactive people</a>
-        <a class="btn btn-secondary lt-btn" href="/group-manager-access.php?group_id=<?= (int) $selectedGroupId ?>">Calendar access</a>
-    </div>
+    <a class="gm-back-link" href="/group-manager.php?group_id=<?= (int) $selectedGroupId ?>">Back to Group Manager</a>
 
     <?php if ($errors): ?>
         <div class="alert alert-danger">
@@ -571,7 +579,7 @@ include __DIR__ . '/header.php';
         <section class="lt-panel">
             <h2 class="lt-section-title">Add a person to <?= e($selectedGroup['group_name']) ?></h2>
             <p class="lt-lede">
-                Most volunteers should use a District Microsoft 365 account. Calendar-link-only access is available for people who do not want, or cannot use, a District email account.
+                Add a volunteer to this Group. You can choose whether they need a District email account or just a calendar link.
             </p>
 
             <form method="post" id="gm-add-person-form">
@@ -612,53 +620,67 @@ include __DIR__ . '/header.php';
 
                 <div class="gm-flow-step">
                     <span class="gm-step-kicker">Step 2</span>
-                    <h3 class="h5 font-weight-bold">Choose access route</h3>
+                    <h3 class="h5 font-weight-bold">District email and access</h3>
 
-                    <div class="gm-route-grid">
-                        <label class="gm-route-card">
-                            <input
-                                type="radio"
-                                name="access_route"
-                                value="microsoft"
-                                <?= $selectedAccessRoute === 'microsoft' ? 'checked' : '' ?>
-                                data-access-route
-                            >
-                            <strong>District Microsoft 365 account</strong>
-                            <span>
-                                Recommended. Gives Microsoft sign-in, District Dashboard, Directory, Calendar, Scout email and other District services.
-                            </span>
-                        </label>
+                    <p class="gm-muted mb-3">
+                        Does this person need a District Microsoft 365 account? This is optional. Not all leaders need one.
+                    </p>
 
-                        <label class="gm-route-card">
-                            <input
-                                type="radio"
-                                name="access_route"
-                                value="calendar_link_only"
-                                <?= $selectedAccessRoute === 'calendar_link_only' ? 'checked' : '' ?>
-                                data-access-route
-                            >
-                            <strong>Calendar link only</strong>
-                            <span>
-                                For people who do not want a District email. They will only receive a Calendar link and will not be able to sign in to other features.
-                            </span>
-                        </label>
-                    </div>
+                    <fieldset>
+                        <legend class="sr-only">Choose how this person will access District services</legend>
 
+                        <div class="gm-route-grid">
+                            <label class="gm-route-card">
+                                <input
+                                    type="radio"
+                                    name="access_route"
+                                    value="microsoft"
+                                    <?= $selectedAccessRoute === 'microsoft' ? 'checked' : '' ?>
+                                    data-access-route
+                                >
+                                <strong>Yes, set up a District email</strong>
+                                <span>
+                                    They will get an @<?= e($districtEmailDomain) ?> address, Microsoft sign-in, and access to the Dashboard, Directory, Calendar, and Scout email.
+                                </span>
+                            </label>
+
+                            <label class="gm-route-card">
+                                <input
+                                    type="radio"
+                                    name="access_route"
+                                    value="calendar_link_only"
+                                    <?= $selectedAccessRoute === 'calendar_link_only' ? 'checked' : '' ?>
+                                    data-access-route
+                                >
+                                <strong>No, calendar link only</strong>
+                                <span>
+                                    They will receive a link to view the District Calendar. They will not get an email address or be able to sign in.
+                                </span>
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <!-- Shown when "Yes, set up a District email" is selected -->
                     <div id="district-email-block" class="gm-access-panel gm-good-panel">
-                        <h4>District Microsoft 365 account</h4>
 
+                        <!-- State A: Their personal email IS already a district email -->
                         <div id="existing-district-email-block" style="display:none;">
+                            <h4>Already has a District email</h4>
                             <p class="mb-1">
-                                Existing District email detected:
+                                The email address you entered is already an @<?= e($districtEmailDomain) ?> account:
                             </p>
                             <p class="gm-suggested-email" id="existing-district-email-preview"></p>
                             <p class="mb-0 gm-muted">
-                                No new account request will be created. The person will be sent Microsoft sign-in instructions.
+                                We will link this existing account. No new account will be created and they will receive sign-in instructions at this address.
                             </p>
                         </div>
 
+                        <!-- State B: New district email will be created -->
                         <div id="suggested-district-email-block">
-                            <p class="mb-1">Suggested District email:</p>
+                            <h4>New District email</h4>
+                            <p class="mb-1">
+                                A new @<?= e($districtEmailDomain) ?> account will be requested for this person:
+                            </p>
                             <p class="gm-suggested-email" id="gm-email-preview">
                                 <?= e($districtEmailSuggestion ?: 'Enter first and last name to generate an address') ?>
                             </p>
@@ -669,16 +691,31 @@ include __DIR__ . '/header.php';
                                 Check availability
                             </button>
 
-                            <p class="gm-muted mt-2 mb-0">
-                                We'll create a job for the account to be created, please note that this could take upto 5 mins and the member will recieve thier password to sign in.
-                            </p>
+                            <div class="gm-email-explainer">
+                                <p><strong>What happens:</strong></p>
+                                <ol>
+                                    <li>An account request is queued for processing.</li>
+                                    <li>The account is usually created within 5 minutes.</li>
+                                    <li>They receive their username and temporary password by email.</li>
+                                    <li>They sign in and set a new password.</li>
+                                </ol>
+                            </div>
                         </div>
                     </div>
 
+                    <!-- Shown when "No, calendar link only" is selected -->
                     <div id="personal-link-block" class="gm-access-panel gm-warning-panel" style="display:none;">
-                        <h4>Calendar-link-only access</h4>
-                        <p class="mb-0">
-                            The person will receive a unique Calendar link after saving. They will not be able to use Microsoft sign-in, the Dashboard, Directory, Scout email, OneDrive or other signed-in features.
+                        <h4>Calendar link only</h4>
+                        <p>
+                            This person will receive a unique link to view the District Calendar. They will not be able to:
+                        </p>
+                        <ul class="mb-0">
+                            <li>Sign in with Microsoft</li>
+                            <li>Access the Dashboard or Directory</li>
+                            <li>Use Scout email, OneDrive, or other District services</li>
+                        </ul>
+                        <p class="gm-muted mt-2 mb-0">
+                            You can set up a District email for them later from their profile if needed.
                         </p>
                     </div>
                 </div>
@@ -729,22 +766,29 @@ include __DIR__ . '/header.php';
             <h2 class="lt-section-title">What happens next</h2>
 
             <ol class="pl-3 font-weight-bold">
-                <li>The person is created or found by email.</li>
-                <li>They are linked to <?= e($selectedGroup['group_name']) ?>.</li>
-                <li>Their Directory profile is updated.</li>
-                <li>The right access email is queued.</li>
+                <li>The person is created or linked by email.</li>
+                <li>They are added to <?= e($selectedGroup['group_name']) ?>.</li>
+                <li>Their Directory profile is set up.</li>
+                <li>They receive an email with their access details.</li>
             </ol>
 
             <hr>
 
-            <h3 class="h5 font-weight-bold">Microsoft 365 route</h3>
+            <h3 class="h5 font-weight-bold">When to use a District email</h3>
             <p>
-                Use this for most volunteers. It gives proper Microsoft sign-in and access to District tools.
+                Section Leaders, Group Lead Volunteers, and anyone who needs to sign in to the Dashboard, submit events, or use Scout email.
             </p>
 
-            <h3 class="h5 font-weight-bold">Calendar-link-only route</h3>
+            <h3 class="h5 font-weight-bold">When to use calendar link only</h3>
+            <p>
+                Occasional helpers, new volunteers still completing their appointment, or anyone who prefers not to have a District account.
+            </p>
+
+            <hr>
+
+            <h3 class="h5 font-weight-bold">Already has a District email?</h3>
             <p class="mb-0">
-                Use this only where the person does not want a District email. They receive a Calendar link only.
+                If you enter their existing @<?= e($districtEmailDomain) ?> address as their current email, we will automatically link it. No duplicate account will be created.
             </p>
         </aside>
     </div>

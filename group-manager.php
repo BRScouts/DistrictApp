@@ -78,64 +78,102 @@ include __DIR__ . '/header.php';
 ?>
 
 <style>
-    .gm-switch-panel {
-        margin-bottom: 1rem;
+    .gm-group-selector {
+        margin-bottom: 2rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid var(--iv-grey-300);
     }
 
-    .gm-actions {
-        display: grid;
-        gap: .75rem;
-        margin-bottom: 1rem;
-    }
-
-    @media (min-width: 768px) {
-        .gm-actions {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-        }
-    }
-
-    .gm-action-card {
+    .gm-group-selector label {
         display: block;
-        background: #fff;
-        border: 2px solid var(--iv-purple);
-        padding: 1rem;
-        text-decoration: none;
-        color: var(--iv-purple);
         font-weight: 900;
-        min-height: 105px;
+        margin-bottom: .5rem;
     }
 
-    .gm-action-card:hover {
-        color: var(--iv-purple-dark);
+    .gm-selector-row {
+        display: flex;
+        gap: .75rem;
+        align-items: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .gm-selector-row select {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .gm-task-list {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 2.5rem;
+    }
+
+    .gm-task-list li {
+        border-top: 1px solid var(--iv-grey-300);
+        padding: 1rem 0;
+    }
+
+    .gm-task-list li:last-child {
+        border-bottom: 1px solid var(--iv-grey-300);
+    }
+
+    .gm-task-list a {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
         text-decoration: none;
-        border-color: var(--iv-purple-dark);
-    }
-
-    .gm-action-card span {
-        display: block;
-        color: #333;
-        font-weight: 400;
-        margin-top: .35rem;
-    }
-
-    .gm-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
         gap: 1rem;
-        margin-bottom: 1rem;
     }
 
-    .gm-stat {
-        background: #fff;
-        border: 2px solid #e5e5e5;
-        padding: 1rem;
+    .gm-task-list a:hover .gm-task-name,
+    .gm-task-list a:focus .gm-task-name {
+        text-decoration: underline;
     }
 
-    .gm-stat strong {
+    .gm-task-name {
+        font-weight: 900;
+        font-size: 1.1rem;
+        color: var(--iv-blue);
+    }
+
+    .gm-task-hint {
         display: block;
-        font-size: 2rem;
+        margin-top: .25rem;
+        font-size: .92rem;
+        font-weight: 700;
+        color: var(--iv-grey-700);
+    }
+
+    .gm-task-count {
+        font-size: .88rem;
+        font-weight: 900;
+        color: var(--iv-grey-700);
+        white-space: nowrap;
+    }
+
+    .gm-summary-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2.5rem;
+        padding: 1.25rem;
+        background: var(--iv-grey-100);
+        border-left: 4px solid var(--iv-purple);
+    }
+
+    .gm-summary-item strong {
+        display: block;
+        font-size: 1.75rem;
         line-height: 1;
         color: var(--iv-purple);
+    }
+
+    .gm-summary-item span {
+        display: block;
+        font-size: .88rem;
+        font-weight: 700;
+        color: var(--iv-grey-700);
+        margin-top: .2rem;
     }
 
     .gm-table-wrap {
@@ -144,11 +182,18 @@ include __DIR__ . '/header.php';
 
     .gm-table th {
         white-space: nowrap;
+        background: var(--iv-grey-100);
+        font-weight: 900;
+        border-bottom: 2px solid var(--iv-grey-700);
+    }
+
+    .gm-table td {
+        vertical-align: middle;
     }
 
     .gm-badge {
         display: inline-block;
-        padding: .2rem .45rem;
+        padding: .2rem .5rem;
         font-weight: 900;
         font-size: .78rem;
     }
@@ -169,108 +214,140 @@ include __DIR__ . '/header.php';
     }
 
     .gm-muted {
-        color: #555;
+        color: var(--iv-grey-700);
     }
 
-    .gm-row-actions {
+    .gm-person-link {
+        font-weight: 900;
+        text-decoration: none;
+        color: var(--iv-blue);
+    }
+
+    .gm-person-link:hover {
+        text-decoration: underline;
+    }
+
+    .gm-search-form {
         display: flex;
+        gap: .75rem;
         flex-wrap: wrap;
-        gap: .4rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .gm-search-form input[type="search"] {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .gm-inactive-notice {
+        margin-top: 2rem;
+        padding: 1rem 1.25rem;
+        border-left: 4px solid var(--iv-grey-700);
+        background: var(--iv-grey-100);
+    }
+
+    .gm-inactive-notice p {
+        margin: 0 0 .5rem;
+    }
+
+    .gm-inactive-notice p:last-child {
+        margin-bottom: 0;
     }
 </style>
 
 <main class="lt-main">
     <?php if (count($manageableGroups) > 1): ?>
-        <form class="lt-panel gm-switch-panel" method="get">
-            <div class="form-row align-items-end">
-                <div class="form-group col-md-8 mb-md-0">
-                    <label for="group_id"><strong>Managing Group</strong></label>
-                    <select class="form-control" id="group_id" name="group_id">
-                        <?php foreach ($manageableGroups as $group): ?>
-                            <option value="<?= (int) $group['id'] ?>" <?= (int) $group['id'] === $selectedGroupId ? 'selected' : '' ?>>
-                                <?= e($group['group_name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group col-md-4 mb-0">
-                    <button class="btn btn-primary lt-btn btn-block" type="submit">Change Group</button>
-                </div>
+        <form class="gm-group-selector" method="get" aria-label="Select a Group to manage">
+            <label for="group_id">Managing</label>
+            <div class="gm-selector-row">
+                <select class="form-control" id="group_id" name="group_id">
+                    <?php foreach ($manageableGroups as $group): ?>
+                        <option value="<?= (int) $group['id'] ?>" <?= (int) $group['id'] === $selectedGroupId ? 'selected' : '' ?>>
+                            <?= e($group['group_name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <button class="btn btn-primary lt-btn" type="submit">Switch Group</button>
             </div>
         </form>
     <?php endif; ?>
 
-    <div class="gm-actions" aria-label="Group Manager actions">
-        <a class="gm-action-card" href="/group-manager-add-person.php?group_id=<?= (int) $selectedGroupId ?>">
-            Add person
-            <span>Create or link a leader and start their access setup.</span>
-        </a>
+    <nav aria-label="Group Manager tasks">
+        <ul class="gm-task-list">
+            <li>
+                <a href="/group-manager-add-person.php?group_id=<?= (int) $selectedGroupId ?>">
+                    <div>
+                        <span class="gm-task-name">Add a person</span>
+                        <span class="gm-task-hint">Add a new volunteer and set up their District access.</span>
+                    </div>
+                </a>
+            </li>
+            <li>
+                <a href="/group-manager-inactive.php?group_id=<?= (int) $selectedGroupId ?>">
+                    <div>
+                        <span class="gm-task-name">Inactive people</span>
+                        <span class="gm-task-hint">Review or reactivate people who have been removed.</span>
+                    </div>
+                    <?php if ($inactivePeople): ?>
+                        <span class="gm-task-count"><?= count($inactivePeople) ?></span>
+                    <?php endif; ?>
+                </a>
+            </li>
+            <li>
+                <a href="/group-manager-access.php?group_id=<?= (int) $selectedGroupId ?>">
+                    <div>
+                        <span class="gm-task-name">Calendar access links</span>
+                        <span class="gm-task-hint">Manage fallback calendar links for this Group.</span>
+                    </div>
+                    <?php if ($groupLinks): ?>
+                        <span class="gm-task-count"><?= count($groupLinks) ?> active</span>
+                    <?php endif; ?>
+                </a>
+            </li>
+            <li>
+                <a href="/group-manager-website.php?group_id=<?= (int) $selectedGroupId ?>">
+                    <div>
+                        <span class="gm-task-name">Group details</span>
+                        <span class="gm-task-hint">Update public website, meeting place, and contact information.</span>
+                    </div>
+                </a>
+            </li>
+        </ul>
+    </nav>
 
-        <a class="gm-action-card" href="/group-manager-inactive.php?group_id=<?= (int) $selectedGroupId ?>">
-            Inactive people
-            <span>Reactivate someone or check who has been removed.</span>
-        </a>
-
-        <a class="gm-action-card" href="/group-manager-access.php?group_id=<?= (int) $selectedGroupId ?>">
-            Calendar access
-            <span>Copy, rotate, or disable this Group’s calendar link.</span>
-        </a>
-
-        <a class="gm-action-card" href="/group-manager-website.php?group_id=<?= (int) $selectedGroupId ?>">
-            Group details
-            <span>Manage public website, meeting, and contact details.</span>
-        </a>
-    </div>
-
-    <div class="gm-stats">
-        <div class="gm-stat">
+    <div class="gm-summary-row" aria-label="Group summary">
+        <div class="gm-summary-item">
             <strong><?= count($leaders) ?></strong>
-            <span>active people</span>
+            <span>Active people</span>
         </div>
-
-        <div class="gm-stat">
+        <div class="gm-summary-item">
             <strong><?= $leadersWithSso ?></strong>
-            <span>signed in with Microsoft</span>
+            <span>Using Microsoft sign-in</span>
         </div>
-
-        <div class="gm-stat">
-            <strong><?= $leadersWithoutSso ?></strong>
-            <span>without Microsoft SSO</span>
-        </div>
-
-        <div class="gm-stat">
-            <strong><?= count($groupLinks) ?></strong>
-            <span>active calendar links</span>
-        </div>
-
-        <div class="gm-stat">
+        <div class="gm-summary-item">
             <strong><?= $pendingAccountRequests ?></strong>
-            <span>account requests pending</span>
+            <span>Pending account requests</span>
         </div>
-
-        <div class="gm-stat">
+        <div class="gm-summary-item">
             <strong><?= (int) $totalEvents ?></strong>
-            <span>linked calendar events</span>
+            <span>Calendar events</span>
         </div>
     </div>
 
-    <section class="lt-panel">
+    <section>
         <h2 class="lt-section-title">People in <?= e($selectedGroup['group_name']) ?></h2>
         <p class="lt-lede">
-            Use this page for quick checks. Open a person to edit their details, role, access instructions, or status.
+            Select a person to manage their details, role, or access.
         </p>
 
-        <form method="get" class="form-row align-items-end mb-3">
+        <form method="get" class="gm-search-form" aria-label="Search people">
             <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-
-            <div class="form-group col-md-8">
-                <label for="search">Search people</label>
-                <input class="form-control" type="search" id="search" name="search" value="<?= e($search) ?>" placeholder="Name, email, or phone">
-            </div>
-
-            <div class="form-group col-md-4">
-                <button class="btn btn-secondary lt-btn btn-block" type="submit">Search</button>
-            </div>
+            <label for="search" class="sr-only">Search people</label>
+            <input class="form-control" type="search" id="search" name="search" value="<?= e($search) ?>" placeholder="Search by name, email, or phone">
+            <button class="btn btn-secondary lt-btn" type="submit">Search</button>
+            <?php if ($search !== ''): ?>
+                <a class="btn btn-secondary lt-btn" href="/group-manager.php?group_id=<?= (int) $selectedGroupId ?>">Clear</a>
+            <?php endif; ?>
         </form>
 
         <?php if ($leaders): ?>
@@ -283,7 +360,6 @@ include __DIR__ . '/header.php';
                             <th>Access</th>
                             <th>Events</th>
                             <th>Latest event</th>
-                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -298,46 +374,36 @@ include __DIR__ . '/header.php';
                         ?>
                         <tr>
                             <td>
-                                <strong><?= e($leader['full_name']) ?></strong><br>
+                                <a class="gm-person-link" href="/group-manager-person.php?group_id=<?= (int) $selectedGroupId ?>&person_id=<?= (int) $leader['person_id'] ?>">
+                                    <?= e($leader['full_name']) ?>
+                                </a><br>
                                 <span class="gm-muted"><?= e($leader['primary_email']) ?></span>
                             </td>
                             <td><?= e(gm_role_title_from_membership_role((string) $leader['membership_role'])) ?></td>
                             <td><span class="gm-badge <?= e($accessClass) ?>"><?= e($accessLabel) ?></span></td>
-                            <td>
-                                <?= (int) $leader['total_events'] ?> total<br>
-                                <span class="gm-muted"><?= (int) $leader['in_review_events'] ?> in review</span>
-                            </td>
+                            <td><?= (int) $leader['total_events'] ?></td>
                             <td><?= $leader['latest_event_at'] ? e(date('d M Y', strtotime((string) $leader['latest_event_at']))) : '—' ?></td>
-                            <td>
-                                <div class="gm-row-actions">
-                                    <a class="btn btn-sm btn-primary" href="/group-manager-person.php?group_id=<?= (int) $selectedGroupId ?>&person_id=<?= (int) $leader['person_id'] ?>">Manage</a>
-                                </div>
-                            </td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
         <?php else: ?>
-            <div class="alert alert-info mb-0">
-                No active people match this view.
+            <p>
                 <?php if ($search !== ''): ?>
-                    <a href="/group-manager.php?group_id=<?= (int) $selectedGroupId ?>">Clear search</a>.
+                    No people match your search. <a href="/group-manager.php?group_id=<?= (int) $selectedGroupId ?>">Clear search</a>.
                 <?php else: ?>
-                    <a href="/group-manager-add-person.php?group_id=<?= (int) $selectedGroupId ?>">Add the first person</a>.
+                    No active people in this Group yet. <a href="/group-manager-add-person.php?group_id=<?= (int) $selectedGroupId ?>">Add the first person</a>.
                 <?php endif; ?>
-            </div>
+            </p>
         <?php endif; ?>
     </section>
 
-    <?php if ($inactivePeople): ?>
-        <section class="lt-panel-grey mt-4">
-            <h2 class="lt-section-title">Inactive people</h2>
-            <p class="mb-3">
-                <?= count($inactivePeople) ?> inactive <?= count($inactivePeople) === 1 ? 'person is' : 'people are' ?> linked to this Group.
-            </p>
-            <a class="btn btn-secondary lt-btn" href="/group-manager-inactive.php?group_id=<?= (int) $selectedGroupId ?>">Review inactive people</a>
-        </section>
+    <?php if ($inactivePeople && !$search): ?>
+        <div class="gm-inactive-notice">
+            <p><strong><?= count($inactivePeople) ?> inactive <?= count($inactivePeople) === 1 ? 'person' : 'people' ?></strong> linked to this Group.</p>
+            <p><a href="/group-manager-inactive.php?group_id=<?= (int) $selectedGroupId ?>">Review inactive people</a></p>
+        </div>
     <?php endif; ?>
 </main>
 
