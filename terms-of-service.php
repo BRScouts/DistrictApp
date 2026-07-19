@@ -154,7 +154,7 @@ if ($isLoggedIn) {
     <h2>2. Platform ownership</h2>
     <p>
         The Platform is owned, developed and maintained by <strong>CK Enterprises Group Ltd</strong>
-        (Company No. pending / registered in England and Wales). CK Enterprises retains all intellectual
+        (Company No. 11632973 / registered in England and Wales). CK Enterprises retains all intellectual
         property rights in the Platform&rsquo;s source code, design, branding (where applicable) and
         technical infrastructure.
     </p>
