@@ -252,6 +252,25 @@ function gm_selected_group_id(array $manageableGroups): int
         return $requestedGroupId;
     }
 
+    // Default to the user's primary group if it's in the manageable list.
+    $user = current_user();
+    if ($user) {
+        $stmt = db()->prepare("
+            SELECT group_id
+            FROM group_memberships
+            WHERE person_id = :person_id
+              AND status = 'active'
+              AND is_primary = 1
+            LIMIT 1
+        ");
+        $stmt->execute(['person_id' => (int) $user['id']]);
+        $primaryGroupId = (int) $stmt->fetchColumn();
+
+        if ($primaryGroupId > 0 && gm_group_is_manageable($primaryGroupId, $manageableGroups)) {
+            return $primaryGroupId;
+        }
+    }
+
     return (int) ($manageableGroups[0]['id'] ?? 0);
 }
 
@@ -450,6 +469,7 @@ function gm_fetch_person_for_group(int $groupId, int $personId): ?array
              )
         WHERE gm.group_id = :group_id
           AND gm.person_id = :person_id
+          AND gm.status = 'active'
         GROUP BY
             p.id,
             p.full_name,

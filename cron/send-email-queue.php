@@ -139,6 +139,72 @@ function mailq_plain_text_from_html(string $html): string
     return preg_replace("/\n{3,}/", "\n\n", $text) ?? $text;
 }
 
+/**
+ * Convert a structured plain-text email body into well-spaced HTML.
+ *
+ * Double newlines become paragraph breaks. Lines that are entirely
+ * uppercase (section headings) become bold. URLs become clickable links.
+ * Bullet lines starting with "- " are converted to a list.
+ */
+function mailq_plain_text_to_html(string $text): string
+{
+    $text = str_replace("\r\n", "\n", $text);
+    $text = trim($text);
+
+    // Split into paragraphs on double (or more) newlines.
+    $paragraphs = preg_split('/\n{2,}/', $text);
+    $html = '';
+
+    foreach ($paragraphs as $para) {
+        $para = trim($para);
+
+        if ($para === '') {
+            continue;
+        }
+
+        // Section heading: all uppercase, short line.
+        if (preg_match('/^[A-Z][A-Z0-9 \-?!\']+$/', $para) && strlen($para) <= 80) {
+            $html .= '<p style="margin-top:24px;margin-bottom:4px;font-weight:bold;font-size:14px;color:#333;">'
+                . mailq_escape($para)
+                . '</p>';
+            continue;
+        }
+
+        // Bullet list: all lines start with "- ".
+        $lines = explode("\n", $para);
+        $allBullets = true;
+        foreach ($lines as $line) {
+            if (!str_starts_with(trim($line), '- ')) {
+                $allBullets = false;
+                break;
+            }
+        }
+
+        if ($allBullets && count($lines) > 1) {
+            $html .= '<ul style="margin:8px 0 8px 16px;padding:0;">';
+            foreach ($lines as $line) {
+                $item = mailq_escape(ltrim(trim($line), '- '));
+                $html .= '<li style="margin-bottom:4px;">' . $item . '</li>';
+            }
+            $html .= '</ul>';
+            continue;
+        }
+
+        // Regular paragraph — convert single newlines to <br>, linkify URLs.
+        $escaped = mailq_escape($para);
+        $escaped = preg_replace(
+            '/(https?:\/\/[^\s<]+)/',
+            '<a href="$1" style="color:#4d0b93;font-weight:bold;">$1</a>',
+            $escaped
+        );
+        $escaped = str_replace("\n", '<br>', $escaped);
+
+        $html .= '<p style="margin:12px 0;">' . $escaped . '</p>';
+    }
+
+    return $html;
+}
+
 function mailq_escape(?string $value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -478,8 +544,28 @@ function mailq_send_row(Client $client, string $token, array $row): void
         throw new RuntimeException('Missing email subject.');
     }
 
+    // If body_html is empty, is raw plain text (no HTML tags), or is the old
+    // single-paragraph format (one <p> wrapping the entire body with <br> line breaks),
+    // convert the plain text body into well-formatted HTML.
+    $needsConversion = false;
+
     if ($bodyHtml === '') {
-        $bodyHtml = $body;
+        $needsConversion = true;
+    } elseif (strip_tags($bodyHtml) === $bodyHtml) {
+        // No HTML tags at all — raw plain text.
+        $needsConversion = true;
+    } elseif (
+        preg_match('/^<p>.*<\/p>$/s', trim($bodyHtml))
+        && substr_count($bodyHtml, '<p') === 1
+    ) {
+        // Old format: single <p> wrapping everything with <br> tags.
+        $needsConversion = true;
+    }
+
+    if ($needsConversion) {
+        // Use the plain text body as the source for conversion.
+        $source = $body !== '' ? $body : strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $bodyHtml));
+        $bodyHtml = mailq_plain_text_to_html($source);
     }
 
     if (trim($bodyHtml) === '') {

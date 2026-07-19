@@ -36,10 +36,15 @@ $selectedGroupId = gm_selected_group_id($manageableGroups);
 $selectedGroup = gm_fetch_group($selectedGroupId);
 $personId = (int) ($_GET['person_id'] ?? $_POST['person_id'] ?? 0);
 
-if (!$selectedGroup || $personId < 1) {
+// If no person_id (e.g. user switched group from this page), redirect to the group list.
+if ($personId < 1) {
+    redirect('/group-manager.php?group_id=' . $selectedGroupId);
+}
+
+if (!$selectedGroup) {
     http_response_code(404);
     include __DIR__ . '/header.php';
-    echo '<main class="lt-main"><div class="alert alert-danger">Person or Group not found.</div></main>';
+    echo '<main class="lt-main"><div class="alert alert-danger">Group not found.</div></main>';
     include __DIR__ . '/footer.php';
     exit;
 }
