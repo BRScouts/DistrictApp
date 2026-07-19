@@ -386,6 +386,10 @@ function gm_fetch_people(int $groupId, string $membershipStatus = 'active', stri
         $params['search'] = '%' . $search . '%';
     }
 
+    $canReviewCol = gm_column_exists('group_memberships', 'can_review_events')
+        ? 'COALESCE(gm.can_review_events, 0) AS can_review_events,'
+        : '0 AS can_review_events,';
+
     $stmt = db()->prepare("
         SELECT
             p.id AS person_id,
@@ -397,6 +401,7 @@ function gm_fetch_people(int $groupId, string $membershipStatus = 'active', stri
             gm.membership_role,
             gm.access_level,
             gm.status AS membership_status,
+            {$canReviewCol}
             dp.role_title,
             dp.visible_in_directory,
             dp.share_phone,

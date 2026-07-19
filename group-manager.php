@@ -206,7 +206,7 @@ include __DIR__ . '/app/group-manager-nav.php';
                         </td>
                         <td>
                             <?= e(gm_role_title_from_membership_role((string) $leader['membership_role'])) ?>
-                            <?php if (($leader['access_level'] ?? '') === 'group_reviewer'): ?>
+                            <?php if ((int) ($leader['can_review_events'] ?? 0) === 1): ?>
                                 <br><span class="gm-badge gm-badge-reviewer">Reviewer</span>
                             <?php endif; ?>
                         </td>
