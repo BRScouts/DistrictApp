@@ -156,12 +156,12 @@ $profileUrl = '/profile.php';
             --dc-scouts-teal: #00a794;
             --dc-scouts-blue: #006ddf;
             --dc-focus: #ffdd00;
-            --dc-ink: #101820;
-            --dc-muted: #4b5563;
-            --dc-border: #d8dde3;
+            --dc-ink: #1d2939;
+            --dc-muted: #64748b;
+            --dc-border: #e2e8f0;
             --dc-panel: #ffffff;
-            --dc-canvas: #f5f6f8;
-            --dc-radius: 0;
+            --dc-canvas: #f8fafc;
+            --dc-radius: 0.375rem;
             --dc-width: 1120px;
         }
 
@@ -179,21 +179,21 @@ $profileUrl = '/profile.php';
 
         a {
             color: var(--dc-scouts-purple-dark);
-            text-decoration-thickness: 2px;
+            text-decoration-thickness: 1px;
             text-underline-offset: 0.16em;
         }
 
         a:hover {
             color: var(--dc-scouts-purple-deep);
-            text-decoration-thickness: 3px;
+            text-decoration-thickness: 2px;
         }
 
         a:focus,
         button:focus,
         [tabindex]:focus {
             outline: 3px solid var(--dc-focus);
-            outline-offset: 3px;
-            box-shadow: 0 0 0 5px #000000;
+            outline-offset: 2px;
+            box-shadow: none;
         }
 
         .dc-shell-width {
@@ -203,12 +203,12 @@ $profileUrl = '/profile.php';
 
         /*
          * Top return/access bar
-         * Clear, official, and service-oriented.
+         * Slim, understated service bar.
          */
         .dc-return-bar {
-            background: var(--dc-scouts-purple);
+            background: var(--dc-scouts-purple-dark);
             color: #ffffff;
-            border-bottom: 4px solid #000000;
+            border-bottom: none;
         }
 
         .dc-return-bar-inner {
@@ -218,8 +218,8 @@ $profileUrl = '/profile.php';
             align-items: center;
             justify-content: space-between;
             gap: 1rem;
-            min-height: 56px;
-            padding: 0.4rem 0;
+            min-height: 48px;
+            padding: 0.35rem 0;
         }
 
         .dc-return-link {
@@ -227,10 +227,11 @@ $profileUrl = '/profile.php';
             align-items: center;
             gap: 0.35rem;
             color: #ffffff;
-            font-weight: 900;
+            font-weight: 700;
+            font-size: 0.9rem;
             line-height: 1.15;
             text-decoration: underline;
-            text-decoration-thickness: 2px;
+            text-decoration-thickness: 1px;
             text-underline-offset: 0.18em;
         }
 
@@ -276,7 +277,7 @@ $profileUrl = '/profile.php';
             display: block;
             max-width: 280px;
             overflow: hidden;
-            font-weight: 900;
+            font-weight: 700;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
@@ -287,8 +288,8 @@ $profileUrl = '/profile.php';
             overflow: hidden;
             margin-top: 0.08rem;
             font-size: 0.875rem;
-            font-weight: 800;
-            opacity: 0.98;
+            font-weight: 600;
+            opacity: 0.92;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
@@ -299,18 +300,18 @@ $profileUrl = '/profile.php';
             overflow: hidden;
             margin-top: 0.08rem;
             font-size: 0.78rem;
-            font-weight: 700;
-            opacity: 0.92;
+            font-weight: 600;
+            opacity: 0.85;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
 
         .dc-profile-photo,
         .dc-profile-fallback {
-            width: 44px;
-            height: 44px;
+            width: 38px;
+            height: 38px;
             flex: 0 0 auto;
-            border: 2px solid #ffffff;
+            border: 2px solid rgba(255, 255, 255, 0.7);
             border-radius: 50%;
         }
 
@@ -323,20 +324,23 @@ $profileUrl = '/profile.php';
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: #000000;
+            background: rgba(255, 255, 255, 0.15);
             color: #ffffff;
-            font-weight: 900;
+            font-weight: 700;
+            font-size: 0.9rem;
         }
 
         .dc-group-link-badge {
             display: inline-grid;
             grid-template-columns: 1fr;
             max-width: 280px;
-            padding: 0.45rem 0.65rem;
-            background: var(--dc-scouts-blue);
+            padding: 0.4rem 0.6rem;
+            background: rgba(255, 255, 255, 0.12);
             color: #ffffff;
-            border: 2px solid #ffffff;
-            font-weight: 900;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: var(--dc-radius);
+            font-weight: 700;
+            font-size: 0.9rem;
             line-height: 1.1;
         }
 
@@ -350,8 +354,8 @@ $profileUrl = '/profile.php';
         .dc-group-link-badge small {
             display: none;
             margin-top: 0.12rem;
-            font-weight: 800;
-            opacity: 0.95;
+            font-weight: 600;
+            opacity: 0.85;
         }
 
         /*
@@ -402,8 +406,8 @@ $profileUrl = '/profile.php';
         .lt-brand-title {
             display: block;
             color: var(--dc-ink);
-            font-size: 1.15rem;
-            font-weight: 900;
+            font-size: 1.1rem;
+            font-weight: 800;
             line-height: 1.05;
             letter-spacing: -0.02em;
         }
@@ -412,28 +416,28 @@ $profileUrl = '/profile.php';
             display: block;
             margin-top: 0.12rem;
             color: var(--dc-muted);
-            font-size: 0.9rem;
-            font-weight: 800;
+            font-size: 0.85rem;
+            font-weight: 600;
             line-height: 1.15;
         }
 
         .lt-menu-toggle {
             display: none;
             appearance: none;
-            border: 2px solid var(--dc-ink);
+            border: 1px solid var(--dc-border);
             border-radius: var(--dc-radius);
             background: #ffffff;
             color: var(--dc-ink);
             cursor: pointer;
             font: inherit;
-            font-weight: 900;
+            font-weight: 700;
             line-height: 1;
-            padding: 0.7rem 0.9rem;
+            padding: 0.6rem 0.85rem;
         }
 
         .lt-menu-toggle:hover {
-            background: var(--dc-ink);
-            color: #ffffff;
+            background: var(--dc-canvas);
+            border-color: var(--dc-muted);
         }
 
         .lt-nav,
@@ -451,18 +455,18 @@ $profileUrl = '/profile.php';
             align-items: center;
             min-height: 44px;
             padding: 0.55rem 0.75rem;
-            border-bottom: 4px solid transparent;
+            border-bottom: 3px solid transparent;
             color: var(--dc-ink);
-            font-size: 0.95rem;
-            font-weight: 900;
+            font-size: 0.92rem;
+            font-weight: 700;
             line-height: 1.1;
             text-decoration: none;
         }
 
         .lt-nav a:hover,
         .dc-nav a:hover {
-            background: #f0e7fb;
-            color: var(--dc-scouts-purple-deep);
+            background: #f8f5fc;
+            color: var(--dc-scouts-purple-dark);
             border-bottom-color: var(--dc-scouts-purple);
             text-decoration: none;
         }
@@ -471,35 +475,34 @@ $profileUrl = '/profile.php';
         .dc-nav a.active,
         .lt-nav a[aria-current="page"],
         .dc-nav a[aria-current="page"] {
-            background: var(--dc-scouts-purple);
-            color: #ffffff;
-            border-bottom-color: #000000;
+            color: var(--dc-scouts-purple-dark);
+            border-bottom-color: var(--dc-scouts-purple);
+            font-weight: 800;
         }
 
         .lt-nav a.active:hover,
         .dc-nav a.active:hover,
         .lt-nav a[aria-current="page"]:hover,
         .dc-nav a[aria-current="page"]:hover {
-            background: var(--dc-scouts-purple-dark);
-            color: #ffffff;
+            background: #f8f5fc;
+            color: var(--dc-scouts-purple-dark);
         }
 
         /*
          * Hero
-         * Bold, clear and content-first rather than decorative.
+         * Clean and clear, not overpowering.
          */
         .lt-hero,
         .dc-hero {
-            background:
-                linear-gradient(90deg, var(--dc-scouts-purple-deep), var(--dc-scouts-purple));
+            background: var(--dc-scouts-purple-dark);
             color: #ffffff;
-            border-bottom: 6px solid var(--dc-scouts-teal);
+            border-bottom: 3px solid var(--dc-scouts-teal);
         }
 
         .lt-hero-inner {
             width: min(var(--dc-width), calc(100% - 2rem));
             margin: 0 auto;
-            padding: 2.25rem 0 2rem;
+            padding: 1.75rem 0 1.5rem;
         }
 
         .lt-hero h1,
@@ -507,20 +510,20 @@ $profileUrl = '/profile.php';
             max-width: 820px;
             margin: 0;
             color: #ffffff;
-            font-size: clamp(2rem, 5vw, 3.75rem);
-            font-weight: 900;
-            line-height: 0.98;
-            letter-spacing: -0.045em;
+            font-size: clamp(1.6rem, 4vw, 2.5rem);
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -0.03em;
         }
 
         .lt-hero p,
         .dc-hero p {
             max-width: 720px;
-            margin: 1rem 0 0;
-            color: #ffffff;
-            font-size: clamp(1.05rem, 2vw, 1.25rem);
-            font-weight: 700;
-            line-height: 1.4;
+            margin: 0.75rem 0 0;
+            color: rgba(255, 255, 255, 0.88);
+            font-size: clamp(0.95rem, 1.8vw, 1.1rem);
+            font-weight: 500;
+            line-height: 1.5;
         }
 
         /*
@@ -534,23 +537,23 @@ $profileUrl = '/profile.php';
         .lt-breadcrumb-inner {
             width: min(var(--dc-width), calc(100% - 2rem));
             margin: 0 auto;
-            padding: 0.85rem 0;
+            padding: 0.75rem 0;
             color: var(--dc-muted);
-            font-size: 0.95rem;
-            font-weight: 800;
+            font-size: 0.88rem;
+            font-weight: 600;
             line-height: 1.3;
         }
 
         .lt-breadcrumb-inner a {
             color: var(--dc-scouts-purple-dark);
-            font-weight: 900;
+            font-weight: 700;
         }
 
         .lt-breadcrumb-inner span[aria-hidden="true"] {
             display: inline-block;
-            margin: 0 0.45rem;
+            margin: 0 0.4rem;
             color: var(--dc-muted);
-            font-weight: 900;
+            font-weight: 400;
         }
 
         /*
@@ -565,38 +568,38 @@ $profileUrl = '/profile.php';
 
         /*
          * Useful defaults for content rendered inside the layout.
-         * These are deliberately conservative so they should not break existing pages.
          */
         .dc-main h2,
         .dc-main h3 {
             color: var(--dc-ink);
-            font-weight: 900;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.015em;
         }
 
         .dc-main h2 {
             margin-top: 0;
-            font-size: clamp(1.6rem, 3vw, 2.25rem);
-            line-height: 1.05;
+            font-size: clamp(1.4rem, 2.5vw, 1.85rem);
+            font-weight: 800;
+            line-height: 1.15;
         }
 
         .dc-main h3 {
-            font-size: 1.3rem;
-            line-height: 1.15;
+            font-size: 1.15rem;
+            font-weight: 700;
+            line-height: 1.2;
         }
 
         .dc-main p,
         .dc-main li {
             color: var(--dc-ink);
-            font-size: 1rem;
-            line-height: 1.55;
+            font-size: 0.95rem;
+            line-height: 1.6;
         }
 
         .dc-main .btn,
         .dc-main button,
         .dc-main input[type="submit"] {
             border-radius: var(--dc-radius);
-            font-weight: 900;
+            font-weight: 700;
         }
 
         .dc-main table {
@@ -606,14 +609,17 @@ $profileUrl = '/profile.php';
         }
 
         .dc-main th {
-            background: var(--dc-ink);
-            color: #ffffff;
-            font-weight: 900;
+            background: var(--dc-canvas);
+            color: var(--dc-ink);
+            font-weight: 700;
+            font-size: 0.88rem;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
         }
 
         .dc-main th,
         .dc-main td {
-            padding: 0.85rem;
+            padding: 0.75rem;
             border: 1px solid var(--dc-border);
             text-align: left;
             vertical-align: top;
@@ -662,10 +668,6 @@ $profileUrl = '/profile.php';
                 border-top: 1px solid var(--dc-border);
             }
 
-            /*
-             * If your existing JS toggles a class, this still leaves the nav usable.
-             * If it toggles hidden/display elsewhere, these styles will not block it.
-             */
             .lt-nav a,
             .dc-nav a {
                 flex: 1 1 auto;
@@ -683,18 +685,18 @@ $profileUrl = '/profile.php';
             }
 
             .dc-return-bar-inner {
-                min-height: 54px;
+                min-height: 44px;
                 gap: 0.75rem;
             }
 
             .dc-return-link {
-                font-size: 0.95rem;
+                font-size: 0.88rem;
             }
 
             .dc-profile-photo,
             .dc-profile-fallback {
-                width: 38px;
-                height: 38px;
+                width: 34px;
+                height: 34px;
             }
 
             .dc-user-name,
@@ -705,12 +707,12 @@ $profileUrl = '/profile.php';
 
             .dc-group-link-badge {
                 max-width: 190px;
-                font-size: 0.875rem;
+                font-size: 0.82rem;
             }
 
             .lt-brand img {
-                width: 44px;
-                max-height: 44px;
+                width: 40px;
+                max-height: 40px;
             }
 
             .lt-brand-title {
@@ -718,11 +720,11 @@ $profileUrl = '/profile.php';
             }
 
             .lt-brand-subtitle {
-                font-size: 0.82rem;
+                font-size: 0.8rem;
             }
 
             .lt-hero-inner {
-                padding: 1.75rem 0 1.6rem;
+                padding: 1.25rem 0 1.15rem;
             }
 
             .lt-main,
@@ -734,24 +736,27 @@ $profileUrl = '/profile.php';
             .dc-nav {
                 display: grid;
                 grid-template-columns: 1fr;
-                gap: 0.35rem;
+                gap: 0.25rem;
             }
 
             .lt-nav a,
             .dc-nav a {
                 width: 100%;
-                min-height: 46px;
-                border: 2px solid var(--dc-border);
-                border-left: 6px solid var(--dc-scouts-purple);
+                min-height: 44px;
+                border: 1px solid var(--dc-border);
+                border-left: 3px solid var(--dc-scouts-purple);
+                border-bottom-width: 0;
                 background: #ffffff;
+                border-radius: var(--dc-radius);
             }
 
             .lt-nav a.active,
             .dc-nav a.active,
             .lt-nav a[aria-current="page"],
             .dc-nav a[aria-current="page"] {
-                border-color: #000000;
-                border-left-color: #000000;
+                background: #f8f5fc;
+                border-left-color: var(--dc-scouts-purple);
+                border-color: var(--dc-scouts-purple);
             }
         }
 

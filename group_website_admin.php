@@ -1303,6 +1303,58 @@ include __DIR__ . '/header.php';
         gap: 1rem;
     }
 
+    .gwa-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0;
+        border-bottom: 3px solid var(--iv-purple);
+        margin-bottom: 1.5rem;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .gwa-tab {
+        display: inline-block;
+        padding: .75rem 1.25rem;
+        font-weight: 900;
+        font-size: .92rem;
+        color: var(--iv-grey-700);
+        text-decoration: none;
+        border: 2px solid transparent;
+        border-bottom: none;
+        background: transparent;
+        cursor: pointer;
+        white-space: nowrap;
+        margin-bottom: -3px;
+    }
+
+    .gwa-tab:hover {
+        color: var(--iv-purple);
+        background: var(--iv-grey-100);
+    }
+
+    .gwa-tab[aria-selected="true"] {
+        color: var(--iv-purple);
+        background: #fff;
+        border-color: var(--iv-purple);
+        border-bottom: 3px solid #fff;
+    }
+
+    .gwa-tab-panel {
+        display: none;
+    }
+
+    .gwa-tab-panel[aria-hidden="false"] {
+        display: block;
+    }
+
+    @media (max-width: 640px) {
+        .gwa-tab {
+            padding: .6rem .85rem;
+            font-size: .84rem;
+        }
+    }
+
     @media (min-width: 992px) {
         .gwa-grid-2 {
             grid-template-columns: minmax(0, 1fr) minmax(360px, .75fr);
@@ -1619,6 +1671,17 @@ include __DIR__ . '/header.php';
             <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
             <input type="hidden" name="website_post_id" value="<?= (int) $websitePostId ?>">
 
+            <nav class="gwa-tabs" role="tablist" aria-label="Website editor sections">
+                <button type="button" class="gwa-tab" role="tab" aria-selected="true" aria-controls="tab-details" id="tab-btn-details">Details</button>
+                <button type="button" class="gwa-tab" role="tab" aria-selected="false" aria-controls="tab-location" id="tab-btn-location">Location</button>
+                <button type="button" class="gwa-tab" role="tab" aria-selected="false" aria-controls="tab-contact" id="tab-btn-contact">Contact</button>
+                <button type="button" class="gwa-tab" role="tab" aria-selected="false" aria-controls="tab-sections" id="tab-btn-sections">Sections</button>
+                <button type="button" class="gwa-tab" role="tab" aria-selected="false" aria-controls="tab-scarf" id="tab-btn-scarf">Scarf</button>
+                <button type="button" class="gwa-tab" role="tab" aria-selected="false" aria-controls="tab-history" id="tab-btn-history">History</button>
+            </nav>
+
+            <div class="gwa-tab-panel" id="tab-details" role="tabpanel" aria-hidden="false" aria-labelledby="tab-btn-details">
+
             <section class="lt-card">
                 <h2 class="lt-section-title">Website page</h2>
 
@@ -1684,6 +1747,10 @@ include __DIR__ . '/header.php';
                     </div>
                 </div>
             </section>
+
+            </div><!-- end tab-details -->
+
+            <div class="gwa-tab-panel" id="tab-location" role="tabpanel" aria-hidden="true" aria-labelledby="tab-btn-location">
 
             <section class="lt-card">
                 <h2 class="lt-section-title">Meeting place</h2>
@@ -1820,6 +1887,10 @@ include __DIR__ . '/header.php';
                 </div>
             </section>
 
+            </div><!-- end tab-location -->
+
+            <div class="gwa-tab-panel" id="tab-contact" role="tabpanel" aria-hidden="true" aria-labelledby="tab-btn-contact">
+
             <section class="lt-card">
                 <h2 class="lt-section-title">Contact details</h2>
 
@@ -1934,6 +2005,10 @@ include __DIR__ . '/header.php';
                 </div>
             </section>
 
+            </div><!-- end tab-contact -->
+
+            <div class="gwa-tab-panel" id="tab-sections" role="tabpanel" aria-hidden="true" aria-labelledby="tab-btn-sections">
+
             <section class="lt-card">
                 <h2 class="lt-section-title">Section meeting times</h2>
 
@@ -1954,6 +2029,10 @@ include __DIR__ . '/header.php';
                     Add section
                 </button>
             </section>
+
+            </div><!-- end tab-sections -->
+
+            <div class="gwa-tab-panel" id="tab-scarf" role="tabpanel" aria-hidden="true" aria-labelledby="tab-btn-scarf">
 
             <section class="lt-card">
                 <h2 class="lt-section-title">Group scarf / necker</h2>
@@ -2054,6 +2133,8 @@ include __DIR__ . '/header.php';
                 </div>
             </section>
 
+            </div><!-- end tab-scarf -->
+
             <section class="lt-card">
                 <button class="btn btn-primary lt-btn btn-lg" type="submit">
                     Save and publish website details
@@ -2070,6 +2151,10 @@ include __DIR__ . '/header.php';
                 A WordPress post ID is linked, but the post could not be found as a <code>wpsl_stores</code> post.
             </div>
         </section>
+    <?php endif; ?>
+
+    <?php if ($websitePost): ?>
+    <div class="gwa-tab-panel" id="tab-history" role="tabpanel" aria-hidden="true" aria-labelledby="tab-btn-history">
     <?php endif; ?>
 
     <section class="lt-card">
@@ -2119,6 +2204,10 @@ include __DIR__ . '/header.php';
             </div>
         <?php endif; ?>
     </section>
+
+    <?php if ($websitePost): ?>
+    </div><!-- end tab-history -->
+    <?php endif; ?>
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -2757,6 +2846,61 @@ include __DIR__ . '/header.php';
         readScarfFromInputs();
     }
 })();
+</script>
+
+<script>
+(function () {
+    var tabs = document.querySelectorAll('.gwa-tabs [role="tab"]');
+    var panels = document.querySelectorAll('.gwa-tab-panel');
+
+    if (!tabs.length || !panels.length) return;
+
+    function switchTab(targetId) {
+        tabs.forEach(function (tab) {
+            var selected = tab.getAttribute('aria-controls') === targetId;
+            tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+        });
+
+        panels.forEach(function (panel) {
+            var show = panel.id === targetId;
+            panel.setAttribute('aria-hidden', show ? 'false' : 'true');
+        });
+
+        // Invalidate Leaflet map size if switching to location tab
+        if (targetId === 'tab-location' && typeof L !== 'undefined') {
+            var mapEl = document.getElementById('gwa-map');
+            if (mapEl && mapEl._leaflet_id) {
+                setTimeout(function () {
+                    var mapInstance = Object.values(L).length ? null : null;
+                    // Use the global map reference created in the existing script
+                    document.querySelectorAll('.leaflet-container').forEach(function (el) {
+                        if (el._leaflet_id) {
+                            // Leaflet stores maps on elements; trigger resize
+                            var evt = new Event('resize');
+                            window.dispatchEvent(evt);
+                        }
+                    });
+                }, 100);
+            }
+        }
+
+        try { sessionStorage.setItem('gwa-active-tab', targetId); } catch (e) {}
+    }
+
+    tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            switchTab(this.getAttribute('aria-controls'));
+        });
+    });
+
+    // Restore last tab from session
+    try {
+        var saved = sessionStorage.getItem('gwa-active-tab');
+        if (saved && document.getElementById(saved)) {
+            switchTab(saved);
+        }
+    } catch (e) {}
+}());
 </script>
 
 <?php include __DIR__ . '/footer.php'; ?>

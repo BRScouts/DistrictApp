@@ -5,9 +5,9 @@
         .lt-footer {
           
             margin: 3rem 0 0;
-            background: #4d0b93;
+            background: #1e1b4b;
             color: #ffffff;
-            border-top: 8px solid #00a794;
+            border-top: none;
         }
 
         .lt-footer * {
@@ -17,30 +17,30 @@
         .lt-footer a {
             color: #ffffff;
             text-decoration: underline;
-            text-decoration-thickness: 2px;
+            text-decoration-thickness: 1px;
             text-underline-offset: 0.18em;
         }
 
         .lt-footer a:hover {
-            color: #ffdd00;
-            text-decoration-thickness: 3px;
+            color: #e2d9f3;
+            text-decoration-thickness: 2px;
         }
 
         .lt-footer a:focus {
-            color: #101820;
+            color: #1e1b4b;
             background: #ffdd00;
             outline: 3px solid #ffdd00;
             outline-offset: 0;
-            box-shadow: 0 0 0 5px #000000;
+            box-shadow: none;
             text-decoration: none;
         }
 
         .lt-footer-main {
             width: min(1120px, calc(100% - 2rem));
             margin: 0 auto;
-            padding: 2.5rem 0 2rem;
+            padding: 2rem 0 1.75rem;
             display: grid;
-            gap: 1.75rem;
+            gap: 1.5rem;
         }
 
         .lt-footer-brand {
@@ -62,55 +62,56 @@
         .lt-footer-logo {
             display: block;
             width: auto;
-            height: 64px;
-            max-width: 210px;
+            height: 52px;
+            max-width: 180px;
             object-fit: contain;
+            opacity: 0.9;
         }
 
         .lt-footer-title {
             margin: 0;
             color: #ffffff;
-            font-size: clamp(1.35rem, 3vw, 2rem);
-            font-weight: 900;
-            line-height: 1.05;
-            letter-spacing: -0.035em;
+            font-size: clamp(1.15rem, 2.5vw, 1.5rem);
+            font-weight: 700;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
         }
 
         .lt-footer-text {
-            margin: 0.45rem 0 0;
+            margin: 0.35rem 0 0;
             max-width: 680px;
-            color: rgba(255, 255, 255, 0.92);
-            font-size: 1rem;
-            font-weight: 700;
-            line-height: 1.45;
+            color: rgba(255, 255, 255, 0.75);
+            font-size: 0.9rem;
+            font-weight: 500;
+            line-height: 1.5;
         }
 
         .lt-footer-meta {
             display: grid;
-            gap: 1.25rem;
+            gap: 1rem;
             margin-top: 0.25rem;
-            padding-top: 1.25rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.28);
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
         }
 
         .lt-footer-meta-text {
-            color: rgba(255, 255, 255, 0.9);
-            font-size: 0.95rem;
-            font-weight: 800;
-            line-height: 1.45;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.88rem;
+            font-weight: 500;
+            line-height: 1.5;
         }
 
         .lt-footer-meta-text span {
             display: block;
-            margin-top: 0.15rem;
-            color: #ffffff;
-            font-weight: 900;
+            margin-top: 0.1rem;
+            color: rgba(255, 255, 255, 0.85);
+            font-weight: 600;
         }
 
         .lt-footer-links {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.6rem 1rem;
+            gap: 0.5rem 1rem;
             align-items: center;
         }
 
@@ -118,15 +119,16 @@
             display: inline-flex;
             align-items: center;
             min-height: 36px;
-            font-weight: 900;
+            font-weight: 600;
+            font-size: 0.88rem;
             line-height: 1.15;
         }
 
         .lt-footer-created {
             width: 100%;
-            background: #7413dc;
+            background: rgba(0, 0, 0, 0.2);
             color: #ffffff;
-            border-top: 1px solid rgba(255, 255, 255, 0.28);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .lt-footer-created-link {
@@ -137,42 +139,42 @@
 
         .lt-footer-created-link:hover {
             color: #ffffff;
-            background: #4d0b93;
+            background: rgba(255, 255, 255, 0.05);
             text-decoration: none;
         }
 
         .lt-footer-created-link:focus {
-            color: #101820;
+            color: #1e1b4b;
             background: #ffdd00;
             outline: 3px solid #ffdd00;
             outline-offset: -3px;
-            box-shadow: inset 0 0 0 3px #000000;
+            box-shadow: none;
         }
 
         .lt-footer-created-inner {
             width: min(1120px, calc(100% - 2rem));
             margin: 0 auto;
-            padding: 0.9rem 0;
+            padding: 0.75rem 0;
             color: inherit;
-            font-size: 0.9rem;
-            font-weight: 900;
+            font-size: 0.82rem;
+            font-weight: 600;
             line-height: 1.35;
             text-align: center;
             letter-spacing: 0.01em;
         }
 
         .lt-footer-created-inner span {
-            color: #ffdd00;
+            color: rgba(255, 255, 255, 0.7);
         }
 
         .lt-footer-created-link:focus .lt-footer-created-inner span {
-            color: #101820;
+            color: #1e1b4b;
         }
 
         @media (min-width: 768px) {
             .lt-footer-logo {
-                height: 72px;
-                max-width: 230px;
+                height: 56px;
+                max-width: 200px;
             }
 
             .lt-footer-meta {
@@ -197,23 +199,23 @@
             }
 
             .lt-footer-logo {
-                height: 54px;
-                max-width: 180px;
+                height: 44px;
+                max-width: 160px;
             }
 
             .lt-footer-links {
                 display: grid;
                 grid-template-columns: 1fr;
-                gap: 0.35rem;
+                gap: 0.25rem;
             }
 
             .lt-footer-links a {
                 width: 100%;
-                padding: 0.35rem 0;
+                padding: 0.3rem 0;
             }
 
             .lt-footer-created-inner {
-                font-size: 0.84rem;
+                font-size: 0.78rem;
                 text-align: left;
             }
         }

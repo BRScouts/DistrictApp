@@ -384,10 +384,9 @@ require __DIR__ . '/layout.php';
 
     .dc-calendar-sidebar {
         background: #ffffff;
-        border: 1px solid #d8dde3;
-        border-top: 8px solid #7413dc;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
         padding: 1.25rem;
-        box-shadow: 0 2px 0 rgba(16, 24, 32, 0.08);
     }
 
     @media (min-width: 1100px) {
@@ -399,11 +398,11 @@ require __DIR__ . '/layout.php';
 
     .dc-calendar-sidebar h2 {
         margin: 0 0 1rem;
-        color: #101820;
-        font-size: 1.5rem;
-        font-weight: 900;
-        line-height: 1.05;
-        letter-spacing: -0.025em;
+        color: var(--dc-ink, #1d2939);
+        font-size: 1.2rem;
+        font-weight: 700;
+        line-height: 1.15;
+        letter-spacing: -0.01em;
     }
 
     .dc-calendar-filter-form {
@@ -414,46 +413,47 @@ require __DIR__ . '/layout.php';
     .dc-calendar-filter-form label {
         display: block;
         margin-bottom: 0.35rem;
-        color: #101820;
-        font-weight: 900;
+        color: var(--dc-ink, #1d2939);
+        font-weight: 700;
+        font-size: 0.9rem;
     }
 
     .dc-calendar-filter-form .form-control {
-        min-height: 46px;
-        border: 2px solid #101820;
-        border-radius: 0;
-        color: #101820;
-        font-weight: 700;
+        min-height: 42px;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
+        color: var(--dc-ink, #1d2939);
+        font-weight: 500;
     }
 
     .dc-calendar-filter-form .form-control:focus {
         outline: 3px solid #ffdd00;
         outline-offset: 0;
-        box-shadow: 0 0 0 5px #000000;
-        border-color: #101820;
+        box-shadow: none;
+        border-color: var(--dc-scouts-purple, #7413dc);
     }
 
     .dc-calendar-sidebar-actions {
         display: grid;
-        gap: 0.65rem;
+        gap: 0.5rem;
         margin-top: 1.25rem;
     }
 
     .dc-calendar-sidebar-actions .lt-btn,
     .dc-calendar-filter-form .lt-btn {
-        min-height: 48px;
-        border-radius: 0;
-        font-weight: 900;
+        min-height: 42px;
+        border-radius: 0.375rem;
+        font-weight: 700;
     }
 
     .dc-filter-summary {
         margin: 1.25rem 0 0;
         padding-top: 1rem;
-        border-top: 1px solid #d8dde3;
-        color: #4b5563;
-        font-size: 0.98rem;
-        font-weight: 800;
-        line-height: 1.45;
+        border-top: 1px solid var(--dc-border, #e2e8f0);
+        color: var(--dc-muted, #64748b);
+        font-size: 0.88rem;
+        font-weight: 600;
+        line-height: 1.5;
     }
 
     .dc-calendar-main {
@@ -464,10 +464,10 @@ require __DIR__ . '/layout.php';
         display: grid;
         gap: 1rem;
         margin-bottom: 1.25rem;
-        padding: 1.25rem;
+        padding: 1rem 1.25rem;
         background: #ffffff;
-        border: 1px solid #d8dde3;
-        border-left: 8px solid #00a794;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
     }
 
     @media (min-width: 768px) {
@@ -480,51 +480,56 @@ require __DIR__ . '/layout.php';
 
     .dc-calendar-month-title {
         margin: 0;
-        color: #101820;
-        font-size: clamp(1.8rem, 3vw, 2.75rem);
-        font-weight: 900;
-        line-height: 1;
-        letter-spacing: -0.045em;
+        color: var(--dc-ink, #1d2939);
+        font-size: clamp(1.4rem, 2.5vw, 2rem);
+        font-weight: 800;
+        line-height: 1.1;
+        letter-spacing: -0.025em;
     }
 
     .dc-calendar-toolbar p {
-        margin-top: 0.45rem;
-        color: #4b5563;
-        font-weight: 800;
+        margin-top: 0.3rem;
+        color: var(--dc-muted, #64748b);
+        font-weight: 600;
+        font-size: 0.9rem;
     }
 
     .dc-calendar-month-nav {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.6rem;
+        gap: 0.5rem;
         align-items: center;
     }
 
     .dc-calendar-month-nav .lt-btn {
-        min-height: 44px;
-        border-radius: 0;
-        font-weight: 900;
+        min-height: 38px;
+        border-radius: 0.375rem;
+        font-weight: 700;
+        font-size: 0.88rem;
     }
 
     .dc-calendar-shell {
         background: #ffffff;
-        border: 1px solid #d8dde3;
-        box-shadow: 0 2px 0 rgba(16, 24, 32, 0.08);
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
         overflow: hidden;
     }
 
     .dc-calendar-weekdays {
         display: none;
         grid-template-columns: repeat(7, minmax(0, 1fr));
-        background: #4d0b93;
-        color: #ffffff;
-        font-weight: 900;
+        background: var(--dc-canvas, #f8fafc);
+        color: var(--dc-ink, #1d2939);
+        font-weight: 700;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
     }
 
     .dc-calendar-weekdays div {
-        padding: 0.9rem 0.85rem;
-        border-right: 1px solid rgba(255, 255, 255, 0.25);
-        font-size: 0.95rem;
+        padding: 0.7rem 0.65rem;
+        border-right: 1px solid var(--dc-border, #e2e8f0);
+        border-bottom: 1px solid var(--dc-border, #e2e8f0);
         line-height: 1.1;
     }
 
@@ -533,7 +538,7 @@ require __DIR__ . '/layout.php';
     }
 
     .dc-calendar-week {
-        border-top: 1px solid #d8dde3;
+        border-top: 1px solid var(--dc-border, #e2e8f0);
     }
 
     .dc-calendar-week:first-of-type {
@@ -548,21 +553,21 @@ require __DIR__ . '/layout.php';
     .dc-calendar-day {
         display: grid;
         align-content: start;
-        gap: 0.65rem;
-        min-height: 120px;
-        padding: 0.9rem;
+        gap: 0.5rem;
+        min-height: 110px;
+        padding: 0.75rem;
         background: #ffffff;
-        border-bottom: 1px solid #d8dde3;
+        border-bottom: 1px solid var(--dc-border, #e2e8f0);
     }
 
     .dc-calendar-day.is-outside-month {
-        background: #f5f6f8;
-        color: #4b5563;
+        background: var(--dc-canvas, #f8fafc);
+        color: var(--dc-muted, #64748b);
     }
 
     .dc-calendar-day.is-today {
-        box-shadow: inset 0 0 0 4px #ffdd00;
-        background: #fffdf0;
+        box-shadow: inset 0 0 0 2px var(--dc-scouts-teal, #00a794);
+        background: #f0fdf9;
     }
 
     .dc-calendar-day-heading {
@@ -573,16 +578,16 @@ require __DIR__ . '/layout.php';
     }
 
     .dc-calendar-day-heading strong {
-        color: #101820;
-        font-size: 1.2rem;
-        font-weight: 900;
+        color: var(--dc-ink, #1d2939);
+        font-size: 1rem;
+        font-weight: 700;
         line-height: 1;
     }
 
     .dc-calendar-day-heading span {
-        color: #4b5563;
-        font-size: 0.95rem;
-        font-weight: 800;
+        color: var(--dc-muted, #64748b);
+        font-size: 0.85rem;
+        font-weight: 600;
     }
 
     .dc-calendar-day-events {
@@ -595,11 +600,12 @@ require __DIR__ . '/layout.php';
         display: block;
         width: 100%;
         min-width: 0;
-        padding: 0.55rem 0.65rem;
-        background: #eee6ff;
+        padding: 0.45rem 0.55rem;
+        background: #f8f5fc;
         border: 0;
-        border-left: 7px solid #7413dc;
-        color: #101820;
+        border-left: 4px solid #7413dc;
+        border-radius: 0.25rem;
+        color: var(--dc-ink, #1d2939);
         cursor: pointer;
         line-height: 1.25;
         text-align: left;
@@ -608,25 +614,26 @@ require __DIR__ . '/layout.php';
 
     .dc-cal-event:hover,
     .dc-cal-event:focus {
-        color: #101820;
-        outline: 3px solid #ffdd00;
+        color: var(--dc-ink, #1d2939);
+        outline: 2px solid var(--dc-scouts-purple, #7413dc);
         outline-offset: 1px;
-        box-shadow: 0 0 0 4px #000000;
+        box-shadow: none;
         text-decoration: none;
+        background: #f0e7fb;
     }
 
     .dc-cal-event.is-locked {
-        background: #e8f1ff;
+        background: #eff6ff;
         border-left-color: #006ddf;
     }
 
     .dc-cal-event-title {
         display: block;
         overflow: hidden;
-        color: #101820;
-        font-size: 0.95rem;
-        font-weight: 900;
-        line-height: 1.2;
+        color: var(--dc-ink, #1d2939);
+        font-size: 0.85rem;
+        font-weight: 700;
+        line-height: 1.25;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
@@ -634,50 +641,51 @@ require __DIR__ . '/layout.php';
     .dc-cal-event-meta {
         display: block;
         overflow: hidden;
-        margin-top: 0.2rem;
-        color: #4b5563;
-        font-size: 0.84rem;
-        font-weight: 800;
+        margin-top: 0.15rem;
+        color: var(--dc-muted, #64748b);
+        font-size: 0.78rem;
+        font-weight: 600;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
     .dc-cal-event-status {
         display: inline-block;
-        margin-top: 0.35rem;
-        color: #101820;
-        font-size: 0.72rem;
-        font-weight: 900;
-        letter-spacing: 0.035em;
+        margin-top: 0.25rem;
+        color: var(--dc-muted, #64748b);
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
         line-height: 1.1;
         text-transform: uppercase;
     }
 
     .dc-cal-event-approved {
-        background: #e9f8f4;
+        background: #f0fdf9;
         border-left-color: #00a794;
     }
 
     .dc-cal-event-submitted,
     .dc-cal-event-under_review {
-        background: #fff8d6;
-        border-left-color: #ffdd00;
+        background: #fefce8;
+        border-left-color: #d4a300;
     }
 
     .dc-cal-event-changes_requested {
-        background: #fff1f0;
-        border-left-color: #d4351c;
+        background: #fef2f2;
+        border-left-color: #dc2626;
     }
 
     .dc-cal-event-draft {
-        background: #f5f6f8;
-        border-left-color: #6b7280;
+        background: var(--dc-canvas, #f8fafc);
+        border-left-color: #94a3b8;
     }
 
     .dc-cal-event-cancelled,
     .dc-cal-event-rejected {
-        background: #f7e5e3;
-        border-left-color: #d4351c;
+        background: #fef2f2;
+        border-left-color: #dc2626;
+        opacity: 0.7;
         text-decoration: line-through;
     }
 
@@ -685,9 +693,10 @@ require __DIR__ . '/layout.php';
         margin-bottom: 1.25rem;
         padding: 1.25rem;
         background: #ffffff;
-        border: 2px dashed #6b7280;
-        color: #101820;
-        font-weight: 800;
+        border: 1px dashed var(--dc-border, #e2e8f0);
+        border-radius: 0.375rem;
+        color: var(--dc-muted, #64748b);
+        font-weight: 600;
     }
 
     .dc-event-modal-backdrop {
@@ -696,7 +705,7 @@ require __DIR__ . '/layout.php';
         display: none;
         align-items: center;
         justify-content: center;
-        background: rgba(16, 24, 32, 0.72);
+        background: rgba(0, 0, 0, 0.4);
         padding: 1rem;
         z-index: 2000;
     }
@@ -706,12 +715,13 @@ require __DIR__ . '/layout.php';
     }
 
     .dc-event-modal {
-        width: min(720px, 100%);
+        width: min(680px, 100%);
         max-height: calc(100vh - 2rem);
         overflow-y: auto;
         background: #ffffff;
-        border: 2px solid #101820;
-        box-shadow: 0 20px 64px rgba(0, 0, 0, 0.35);
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.5rem;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), 0 4px 16px rgba(0, 0, 0, 0.08);
     }
 
     .dc-event-modal-header {
@@ -720,36 +730,37 @@ require __DIR__ . '/layout.php';
         gap: 1rem;
         align-items: flex-start;
         padding: 1.25rem;
-        background: #4d0b93;
+        background: var(--dc-scouts-purple-dark, #4d0b93);
         color: #ffffff;
-        border-bottom: 6px solid #00a794;
+        border-bottom: none;
+        border-radius: 0.5rem 0.5rem 0 0;
     }
 
     .dc-event-modal-header h2 {
         margin: 0;
         color: #ffffff;
-        font-size: clamp(1.4rem, 3vw, 2rem);
-        font-weight: 900;
-        line-height: 1.05;
-        letter-spacing: -0.025em;
+        font-size: clamp(1.2rem, 2.5vw, 1.5rem);
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.015em;
     }
 
     .dc-event-modal-close {
-        min-width: 44px;
-        min-height: 44px;
-        border: 2px solid #ffffff;
-        border-radius: 0;
+        min-width: 36px;
+        min-height: 36px;
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        border-radius: 0.375rem;
         background: transparent;
         color: #ffffff;
         cursor: pointer;
-        font-size: 1.7rem;
-        font-weight: 900;
+        font-size: 1.4rem;
+        font-weight: 400;
         line-height: 1;
     }
 
     .dc-event-modal-close:hover {
-        background: #ffffff;
-        color: #4d0b93;
+        background: rgba(255, 255, 255, 0.15);
+        color: #ffffff;
     }
 
     .dc-event-modal-body {
@@ -758,26 +769,27 @@ require __DIR__ . '/layout.php';
 
     .dc-event-modal-body dl {
         display: grid;
-        gap: 0.7rem;
+        gap: 0.6rem;
         margin: 0 0 1.25rem;
     }
 
     @media (min-width: 640px) {
         .dc-event-modal-body dl {
-            grid-template-columns: 150px minmax(0, 1fr);
+            grid-template-columns: 140px minmax(0, 1fr);
         }
     }
 
     .dc-event-modal-body dt {
-        color: #101820;
-        font-weight: 900;
+        color: var(--dc-muted, #64748b);
+        font-weight: 700;
+        font-size: 0.88rem;
     }
 
     .dc-event-modal-body dd {
         margin: 0;
-        color: #101820;
-        font-weight: 700;
-        line-height: 1.45;
+        color: var(--dc-ink, #1d2939);
+        font-weight: 500;
+        line-height: 1.5;
     }
 
     .dc-event-modal-risk-list {
@@ -795,7 +807,7 @@ require __DIR__ . '/layout.php';
         gap: 0.75rem;
         margin-top: 1.25rem;
         padding-top: 1rem;
-        border-top: 1px solid #d8dde3;
+        border-top: 1px solid var(--dc-border, #e2e8f0);
     }
 
     @media (min-width: 768px) {
@@ -808,9 +820,9 @@ require __DIR__ . '/layout.php';
         }
 
         .dc-calendar-day {
-            min-height: 168px;
-            padding: 0.7rem;
-            border-right: 1px solid #d8dde3;
+            min-height: 140px;
+            padding: 0.6rem;
+            border-right: 1px solid var(--dc-border, #e2e8f0);
             border-bottom: 0;
         }
 
@@ -827,9 +839,10 @@ require __DIR__ . '/layout.php';
         }
 
         .dc-cal-event {
-            padding: 0.45rem 0.5rem;
+            padding: 0.35rem 0.45rem;
             border-left: 0;
-            border-top: 6px solid #7413dc;
+            border-top: 3px solid #7413dc;
+            border-radius: 0.25rem;
             overflow: hidden;
         }
 
@@ -843,35 +856,35 @@ require __DIR__ . '/layout.php';
 
         .dc-cal-event-submitted,
         .dc-cal-event-under_review {
-            border-top-color: #ffdd00;
+            border-top-color: #d4a300;
         }
 
         .dc-cal-event-changes_requested,
         .dc-cal-event-cancelled,
         .dc-cal-event-rejected {
-            border-top-color: #d4351c;
+            border-top-color: #dc2626;
         }
 
         .dc-cal-event-draft {
-            border-top-color: #6b7280;
+            border-top-color: #94a3b8;
         }
 
         .dc-cal-event-title {
-            font-size: 0.88rem;
+            font-size: 0.8rem;
         }
 
         .dc-cal-event-meta {
-            font-size: 0.78rem;
+            font-size: 0.72rem;
         }
 
         .dc-cal-event-status {
-            font-size: 0.68rem;
+            font-size: 0.65rem;
         }
     }
 
     @media (min-width: 1300px) {
         .dc-calendar-day {
-            min-height: 190px;
+            min-height: 160px;
         }
     }
 
@@ -891,10 +904,10 @@ require __DIR__ . '/layout.php';
         }
 
         .dc-calendar-day {
-            margin-bottom: 0.85rem;
-            border: 1px solid #d8dde3;
-            border-left: 6px solid #7413dc;
-            box-shadow: 0 2px 0 rgba(16, 24, 32, 0.08);
+            margin-bottom: 0.65rem;
+            border: 1px solid var(--dc-border, #e2e8f0);
+            border-left: 3px solid var(--dc-scouts-purple, #7413dc);
+            border-radius: 0.375rem;
         }
 
         .dc-calendar-day.is-empty {
