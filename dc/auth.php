@@ -83,6 +83,7 @@ function dc_access_rank(string $accessLevel): int
         'system_admin' => 100,
         'district_admin' => 90,
         'district_reviewer' => 80,
+        'group_reviewer' => 70,
         'group_admin' => 60,
         'member' => 10,
         'group_link' => 1,
@@ -126,6 +127,69 @@ function dc_context_has_reviewer_access(array $ctx): bool
         || in_array('district_reviewer', $accessLevels, true)
         || in_array('district_admin', $accessLevels, true)
         || in_array('system_admin', $accessLevels, true);
+}
+
+/**
+ * Can this user review events for a specific group?
+ * District-level reviewers can review any group; group_reviewer can only review their own.
+ */
+function dc_context_has_group_reviewer_access(array $ctx, int $groupId): bool
+{
+    // District-level reviewers can review anything
+    if (dc_context_has_reviewer_access($ctx)) {
+        return true;
+    }
+
+    // Group-level: check if the user has group_reviewer on THIS specific group
+    foreach ($ctx['groups'] as $group) {
+        if ((int) ($group['group_id'] ?? $group['id'] ?? 0) === $groupId
+            && ($group['access_level'] ?? '') === 'group_reviewer') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Can this user access the reviewer section at all?
+ * True for district-level reviewers OR anyone with group_reviewer on at least one group.
+ */
+function dc_context_has_any_reviewer_access(array $ctx): bool
+{
+    if (dc_context_has_reviewer_access($ctx)) {
+        return true;
+    }
+
+    foreach ($ctx['groups'] as $group) {
+        if (($group['access_level'] ?? '') === 'group_reviewer') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Return group IDs this user is allowed to review events for.
+ * District-level reviewers get all groups; group_reviewer users get only their assigned groups.
+ */
+function dc_reviewable_group_ids(array $ctx): array
+{
+    // District-level reviewers can review all groups
+    if (dc_context_has_reviewer_access($ctx)) {
+        return $ctx['group_ids'];
+    }
+
+    $ids = [];
+
+    foreach ($ctx['groups'] as $group) {
+        if (($group['access_level'] ?? '') === 'group_reviewer') {
+            $ids[] = (int) ($group['group_id'] ?? $group['id'] ?? 0);
+        }
+    }
+
+    return array_values(array_unique(array_filter($ids)));
 }
 
 function dc_context_has_admin_access(array $ctx): bool
@@ -526,6 +590,8 @@ function dc_context(bool $redirectIfMissing = true): array
             || in_array('system_admin', $accessLevels, true)
             || in_array($highestAccessLevel, ['district_reviewer', 'district_admin', 'system_admin'], true);
 
+        $isGroupReviewer = in_array('group_reviewer', $accessLevels, true);
+
         $isAdmin = in_array('district_admin', $accessLevels, true)
             || in_array('system_admin', $accessLevels, true)
             || in_array($highestAccessLevel, ['district_admin', 'system_admin'], true);
@@ -560,6 +626,7 @@ function dc_context(bool $redirectIfMissing = true): array
             'highest_access_level' => $highestAccessLevel,
             'membership_role' => $membershipRoles[0] ?? '',
             'is_reviewer' => $isReviewer,
+            'is_group_reviewer' => $isGroupReviewer,
             'is_admin' => $isAdmin,
             'is_glv' => $isGlv,
             'is_signed_in' => true,
@@ -596,6 +663,7 @@ function dc_context(bool $redirectIfMissing = true): array
             'highest_access_level' => 'group_link',
             'membership_role' => 'group_link',
             'is_reviewer' => false,
+            'is_group_reviewer' => false,
             'is_admin' => false,
             'is_glv' => false,
             'is_signed_in' => false,
@@ -622,6 +690,7 @@ function dc_context(bool $redirectIfMissing = true): array
         'highest_access_level' => '',
         'membership_role' => '',
         'is_reviewer' => false,
+        'is_group_reviewer' => false,
         'is_admin' => false,
         'is_glv' => false,
         'is_signed_in' => false,
@@ -644,7 +713,7 @@ function dc_require_reviewer(): array
 {
     $ctx = dc_require_access();
 
-    if (!dc_context_has_reviewer_access($ctx)) {
+    if (!dc_context_has_any_reviewer_access($ctx)) {
         redirect('/dc/403.php');
     }
 
@@ -974,6 +1043,56 @@ function dc_queue_event_notifications(int $eventId, string $eventAction): void
         ");
 
         $stmt->execute(['group_id' => (int) $event['group_id']]);
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $recipients[strtolower((string) $row['primary_email'])] = [
+                'email' => (string) $row['primary_email'],
+                'name' => (string) $row['full_name'],
+            ];
+        }
+
+        /*
+         * Notify group_reviewer members for this event's group.
+         */
+        $stmt = db()->prepare("
+            SELECT
+                p.full_name,
+                p.primary_email
+            FROM group_memberships gm
+            JOIN people p
+              ON p.id = gm.person_id
+            WHERE gm.group_id = :group_id
+              AND gm.access_level = 'group_reviewer'
+              AND gm.status = 'active'
+              AND p.status = 'active'
+              AND p.primary_email IS NOT NULL
+        ");
+
+        $stmt->execute(['group_id' => (int) $event['group_id']]);
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $recipients[strtolower((string) $row['primary_email'])] = [
+                'email' => (string) $row['primary_email'],
+                'name' => (string) $row['full_name'],
+            ];
+        }
+
+        /*
+         * Notify district_reviewer and district_admin members (not system_admin).
+         * These are the people who can review events across the whole district.
+         */
+        $stmt = db()->query("
+            SELECT DISTINCT
+                p.full_name,
+                p.primary_email
+            FROM group_memberships gm
+            JOIN people p
+              ON p.id = gm.person_id
+            WHERE gm.access_level IN ('district_reviewer', 'district_admin')
+              AND gm.status = 'active'
+              AND p.status = 'active'
+              AND p.primary_email IS NOT NULL
+        ");
 
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $recipients[strtolower((string) $row['primary_email'])] = [

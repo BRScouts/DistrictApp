@@ -509,33 +509,53 @@ function m365_detail_table(array $rows): string
 
 function m365_onboarding_body(string $firstName, string $displayName, string $upn, string $temporaryPassword): string
 {
-    $ssoUrl = m365_app_url('/auth/microsoft-start.php');
-    $dashboardUrl = m365_app_url('/index.php');
-    $calendarUrl = m365_app_url('/dc/');
+    $appUrl = m365_app_url('/');
     $helloName = $firstName !== '' ? $firstName : $displayName;
 
     return "Hello {$helloName},\n\n"
         . "Welcome to Irwell Valley Scout District. Your District Microsoft 365 account is ready to use.\n\n"
-        . "Username:\n{$upn}\n\n"
-        . "Temporary password:\n{$temporaryPassword}\n\n"
+        . "\n"
+        . "YOUR ACCOUNT DETAILS\n\n"
+        . "Username: {$upn}\n\n"
+        . "Temporary password: {$temporaryPassword}\n\n"
         . "You will be asked to change this password when you first sign in.\n\n"
-        . "Sign in with Microsoft:\n{$ssoUrl}\n\n"
-        . "District Dashboard:\n{$dashboardUrl}\n\n"
-        . "District Calendar:\n{$calendarUrl}\n\n"
+        . "\n"
+        . "GETTING STARTED\n\n"
+        . "Open the District App and click \"Sign in with Microsoft\" to get started:\n\n"
+        . "{$appUrl}\n\n"
+        . "\n"
         . "Thank you for everything you do for Scouting.\n\n"
         . "Irwell Valley Scout District";
 }
 
 function m365_onboarding_html(string $firstName, string $displayName, string $upn, string $temporaryPassword): string
 {
-    $ssoUrl = m365_app_url('/auth/microsoft-start.php');
-    $dashboardUrl = m365_app_url('/index.php');
-    $calendarUrl = m365_app_url('/dc/');
+    $appUrl = m365_app_url('/');
     $helloName = $firstName !== '' ? $firstName : $displayName;
 
     $body = '
         <p style="margin-top:0;">Hello ' . m365_escape_html($helloName) . ',</p>
-        <p>Welcome to Irwell Valley Scout District — we’re pleased to let you know that your District Microsoft 365 account is ready to use.</p>
+
+        <p>Welcome to Irwell Valley Scout District &mdash; we\'re pleased to let you know that your District Microsoft 365 account is ready to use.</p>
+
+        <p>This account lets you sign in to the District App and access District Microsoft 365 services connected to your role, including District email where enabled.</p>
+
+        ' . m365_detail_table([
+            'Username' => m365_escape_html($upn),
+            'Temporary password' => '<span style="font-family:Consolas,Monaco,monospace;font-weight:bold;letter-spacing:.02em;">' . m365_escape_html($temporaryPassword) . '</span>',
+        ]) . '
+
+        <p><strong>You will be asked to change this password when you first sign in.</strong></p>
+
+        ' . m365_email_button($appUrl, 'Open the District App') . '
+
+        <p>Click the button above and sign in with your new Microsoft 365 username and password to get started.</p>
+
+        <p style="margin-top:24px;">Thank you for everything you do for Scouting.</p>
+    ';
+
+    return m365_email_shell('Welcome — your Microsoft 365 account is ready', 'Your Irwell Valley District Microsoft 365 account is ready to use.', $body);
+} — we’re pleased to let you know that your District Microsoft 365 account is ready to use.</p>
         <p>This account lets you sign in to the District App and access District Microsoft 365 services connected to your role, including District email where enabled.</p>
         ' . m365_detail_table([
             'Username' => m365_escape_html($upn),

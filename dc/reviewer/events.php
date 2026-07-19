@@ -31,6 +31,26 @@ $where = [
     'ce.status = :status',
 ];
 
+/*
+ * Group-level reviewers can only see events for their reviewable groups.
+ * District-level reviewers see everything.
+ */
+$isDistrictReviewer = dc_context_has_reviewer_access($ctx);
+$reviewableGroupIds = dc_reviewable_group_ids($ctx);
+
+if (!$isDistrictReviewer) {
+    if (!$reviewableGroupIds) {
+        redirect('/dc/403.php');
+    }
+
+    $where[] = 'ce.group_id IN (' . implode(',', array_map('intval', $reviewableGroupIds)) . ')';
+
+    // If they picked a group_id that isn't in their reviewable list, ignore it
+    if ($groupId > 0 && !in_array($groupId, $reviewableGroupIds, true)) {
+        $groupId = 0;
+    }
+}
+
 if ($groupId > 0) {
     $where[] = 'ce.group_id = :group_id';
     $params['group_id'] = $groupId;
@@ -76,11 +96,34 @@ $events = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $groups = dc_accessible_groups();
 
-$statusCountsStmt = db()->query("
-    SELECT status, COUNT(*) AS total
-    FROM calendar_events
-    GROUP BY status
-");
+/*
+ * For group-level reviewers, only show groups they can review in the filter dropdown.
+ */
+if (!$isDistrictReviewer && $reviewableGroupIds) {
+    $groups = array_filter($groups, function (array $group) use ($reviewableGroupIds): bool {
+        return in_array((int) ($group['id'] ?? $group['group_id'] ?? 0), $reviewableGroupIds, true);
+    });
+    $groups = array_values($groups);
+}
+
+/*
+ * Status counts — scoped to reviewable groups for group-level reviewers.
+ */
+if ($isDistrictReviewer) {
+    $statusCountsStmt = db()->query("
+        SELECT status, COUNT(*) AS total
+        FROM calendar_events
+        GROUP BY status
+    ");
+} else {
+    $statusCountsStmt = db()->prepare("
+        SELECT status, COUNT(*) AS total
+        FROM calendar_events
+        WHERE group_id IN (" . implode(',', array_map('intval', $reviewableGroupIds)) . ")
+        GROUP BY status
+    ");
+    $statusCountsStmt->execute();
+}
 
 $statusCounts = [];
 

@@ -1504,3 +1504,81 @@ function gm_find_potential_duplicates(string $fullName, string $email, int $excl
 
     return $duplicates;
 }
+
+/**
+ * Set or remove group_reviewer access for a person in a specific group.
+ *
+ * Only District Admins (or higher) should call this.
+ *
+ * @param int  $personId       The person to grant/revoke group reviewer access.
+ * @param int  $groupId        The group the permission applies to.
+ * @param bool $grantReviewer  True to grant, false to revoke (resets to member or group_admin based on role).
+ * @param int  $actorPersonId  The admin performing the action.
+ */
+function gm_set_group_reviewer(int $personId, int $groupId, bool $grantReviewer, int $actorPersonId): void
+{
+    if ($personId < 1 || $groupId < 1) {
+        throw new RuntimeException('Invalid person or group.');
+    }
+
+    // Fetch current membership to check it exists and get the current role
+    $stmt = db()->prepare("
+        SELECT id, membership_role, access_level
+        FROM group_memberships
+        WHERE person_id = :person_id
+          AND group_id = :group_id
+          AND status = 'active'
+        LIMIT 1
+    ");
+    $stmt->execute(['person_id' => $personId, 'group_id' => $groupId]);
+    $membership = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$membership) {
+        throw new RuntimeException('This person does not have an active membership in this Group.');
+    }
+
+    $currentAccessLevel = (string) ($membership['access_level'] ?? 'member');
+    $membershipRole = (string) ($membership['membership_role'] ?? '');
+
+    if ($grantReviewer) {
+        // Don't downgrade someone who already has a higher access level
+        if (in_array($currentAccessLevel, ['district_reviewer', 'district_admin', 'system_admin'], true)) {
+            throw new RuntimeException('This person already has district-level or higher access. No change needed.');
+        }
+
+        $newAccessLevel = 'group_reviewer';
+    } else {
+        // Only revoke if they currently are a group_reviewer
+        if ($currentAccessLevel !== 'group_reviewer') {
+            return; // Nothing to revoke
+        }
+
+        // Reset to appropriate level based on their membership role
+        $newAccessLevel = gm_access_level_for_membership_role($membershipRole);
+    }
+
+    $stmt = db()->prepare("
+        UPDATE group_memberships
+        SET access_level = :access_level
+        WHERE person_id = :person_id
+          AND group_id = :group_id
+          AND status = 'active'
+    ");
+    $stmt->execute([
+        'access_level' => $newAccessLevel,
+        'person_id' => $personId,
+        'group_id' => $groupId,
+    ]);
+
+    gm_log_action(
+        $actorPersonId,
+        $grantReviewer ? 'group_reviewer_granted' : 'group_reviewer_revoked',
+        'person',
+        $personId,
+        [
+            'group_id' => $groupId,
+            'previous_access_level' => $currentAccessLevel,
+            'new_access_level' => $newAccessLevel,
+        ]
+    );
+}

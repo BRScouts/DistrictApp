@@ -149,6 +149,62 @@ try {
             ], $selectedGroupId);
 
             $success = 'Calendar access instructions have been queued.';
+        } elseif ($action === 'request_m365_account') {
+            $person = gm_fetch_person_for_group($selectedGroupId, $personId);
+
+            if (!$person) {
+                throw new RuntimeException('Person not found.');
+            }
+
+            if ((int) ($person['has_microsoft_account'] ?? 0) > 0) {
+                throw new RuntimeException('This person already has a Microsoft 365 account.');
+            }
+
+            if (gm_person_has_pending_account_request($personId, (string) $person['primary_email'])) {
+                throw new RuntimeException('A Microsoft 365 account request is already pending for this person.');
+            }
+
+            // Split full name into first/last for email generation.
+            $nameParts = explode(' ', trim((string) $person['full_name']), 2);
+            $firstName = $nameParts[0] ?? '';
+            $lastName = $nameParts[1] ?? '';
+
+            if ($firstName === '' || $lastName === '') {
+                throw new RuntimeException('This person needs both a first and last name to generate a District email. Update their name first.');
+            }
+
+            $suggestion = gm_available_district_email($firstName, $lastName);
+            $requestedUpn = strtolower(trim((string) $suggestion['email']));
+
+            if ($requestedUpn === '' || !filter_var($requestedUpn, FILTER_VALIDATE_EMAIL)) {
+                throw new RuntimeException('Could not generate a valid District email address. Please contact a District Administrator.');
+            }
+
+            $created = gm_create_district_email_request(
+                $actorPersonId,
+                $personId,
+                $selectedGroupId,
+                $requestedUpn,
+                (string) $person['primary_email'],
+                'Requested from Group Manager person page by ' . (string) $user['full_name']
+            );
+
+            if (!$created) {
+                throw new RuntimeException('The account request could not be saved. Please try again.');
+            }
+
+            gm_log_action($actorPersonId, 'm365_account_requested', 'person', $personId, [
+                'group_id' => $selectedGroupId,
+                'requested_upn' => $requestedUpn,
+            ]);
+
+            audit_log(AUDIT_ADMIN_M365_ACCOUNT_REQ, 'person', $personId, $personId, [
+                'requested_email' => $requestedUpn,
+                'group_id' => $selectedGroupId,
+                'method' => 'person_page',
+            ], $selectedGroupId);
+
+            $success = 'Microsoft 365 account requested. This will be provisioned within 5 minutes and ' . e($person['full_name']) . ' will receive their login details to their personal email (' . e($person['primary_email']) . '). Please check their email address is correct.';
         } elseif ($action === 'set_primary') {
             if (!$isDistrictAdmin) {
                 throw new RuntimeException('Only District Administrators can set a primary role.');
@@ -165,6 +221,23 @@ try {
             ], $targetGroupId);
 
             $success = 'This membership has been set as the primary role for this person.';
+        } elseif ($action === 'set_group_reviewer') {
+            if (!$isDistrictAdmin) {
+                throw new RuntimeException('Only District Administrators can grant or revoke event review permissions.');
+            }
+
+            $grantReviewer = isset($_POST['is_group_reviewer']) && $_POST['is_group_reviewer'] === '1';
+
+            gm_set_group_reviewer($personId, $selectedGroupId, $grantReviewer, $actorPersonId);
+
+            audit_log(AUDIT_USER_ROLE_CHANGED, 'person', $personId, $personId, [
+                'group_id' => $selectedGroupId,
+                'action' => $grantReviewer ? 'group_reviewer_granted' : 'group_reviewer_revoked',
+            ], $selectedGroupId);
+
+            $success = $grantReviewer
+                ? 'Event review permission granted. This person can now review and approve events for this Group.'
+                : 'Event review permission removed for this Group.';
         }
     }
 } catch (Throwable $e) {
@@ -501,7 +574,7 @@ include __DIR__ . '/app/group-manager-nav.php';
             <h2 class="lt-section-title">Access instructions</h2>
             <p>Use these to resend access instructions if someone cannot find their original email.</p>
 
-            <?php if ((int) ($person['has_microsoft_account'] ?? 0) > 0 || $accessLabel === 'Microsoft SSO' || $accessLabel === 'Account requested'): ?>
+            <?php if ((int) ($person['has_microsoft_account'] ?? 0) > 0 || $accessLabel === 'Microsoft SSO'): ?>
                 <form method="post" class="mb-2">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="send_microsoft_instructions">
@@ -510,15 +583,41 @@ include __DIR__ . '/app/group-manager-nav.php';
                     <button class="btn btn-secondary lt-btn btn-block" type="submit">Resend Microsoft sign-in instructions</button>
                 </form>
                 <p class="gm-muted" style="font-size:.85rem;">Sends an email explaining how to sign in with their District Microsoft 365 account.</p>
-            <?php else: ?>
+            <?php elseif ($accessLabel === 'Account requested'): ?>
+                <div class="alert alert-info mb-2" style="font-size:.85rem;">
+                    <strong>Microsoft 365 account requested.</strong><br>
+                    This will be set up within 5 minutes. Login details will be sent to their personal email.
+                </div>
                 <form method="post" class="mb-2">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="send_calendar_link">
                     <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
                     <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
-                    <button class="btn btn-secondary lt-btn btn-block" type="submit">Resend calendar link</button>
+                    <button class="btn btn-secondary lt-btn btn-block" type="submit">Send calendar link in the meantime</button>
                 </form>
-                <p class="gm-muted" style="font-size:.85rem;">Sends a new personal calendar link to this person.</p>
+            <?php else: ?>
+                <form method="post" class="mb-3" onsubmit="return confirm('Request a Microsoft 365 account for this person? Their login details will be sent to their personal email (<?= e($person['primary_email']) ?>). Make sure this email is correct before proceeding.');">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="request_m365_account">
+                    <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                    <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                    <button class="btn btn-primary lt-btn btn-block" type="submit">Request Microsoft 365 account</button>
+                </form>
+                <p class="gm-muted" style="font-size:.85rem;">
+                    This will create a District Microsoft 365 account for this person within 5 minutes.
+                    Their username and temporary password will be emailed to <strong><?= e($person['primary_email']) ?></strong> — make sure this is correct in their profile above.
+                </p>
+
+                <hr style="margin:1rem 0;">
+
+                <form method="post" class="mb-2">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="send_calendar_link">
+                    <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                    <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                    <button class="btn btn-secondary lt-btn btn-block" type="submit">Send calendar link only</button>
+                </form>
+                <p class="gm-muted" style="font-size:.85rem;">If this person only needs calendar access and does not need a Microsoft 365 account.</p>
             <?php endif; ?>
         </aside>
     </div>
@@ -559,6 +658,49 @@ include __DIR__ . '/app/group-manager-nav.php';
             </form>
         <?php endif; ?>
     </section>
+
+    <?php if ($isDistrictAdmin && (string) $person['membership_status'] === 'active'): ?>
+    <?php
+        $personCurrentAccessLevel = (string) ($person['access_level'] ?? 'member');
+        $isCurrentlyGroupReviewer = $personCurrentAccessLevel === 'group_reviewer';
+        $hasHigherAccess = in_array($personCurrentAccessLevel, ['district_reviewer', 'district_admin', 'system_admin'], true);
+    ?>
+    <section class="lt-panel mt-4">
+        <h2 class="lt-section-title">Event review permission</h2>
+
+        <?php if ($hasHigherAccess): ?>
+            <p class="gm-muted">
+                This person has <strong><?= e(str_replace('_', ' ', $personCurrentAccessLevel)) ?></strong> access
+                and can already review events across the entire District. No group-level permission is needed.
+            </p>
+        <?php else: ?>
+            <p class="gm-muted">
+                Allow this person to review and approve calendar events submitted for <strong><?= e($selectedGroup['group_name']) ?></strong>.
+                They will be able to approve, reject, or request changes to events for this Group only.
+            </p>
+
+            <form method="post">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="set_group_reviewer">
+                <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+
+                <label class="lt-check">
+                    <input type="checkbox" name="is_group_reviewer" value="1" <?= $isCurrentlyGroupReviewer ? 'checked' : '' ?>>
+                    <span>Can review and approve events for this Group</span>
+                </label>
+
+                <button class="btn btn-primary lt-btn mt-3" type="submit">Save review permission</button>
+            </form>
+
+            <?php if ($isCurrentlyGroupReviewer): ?>
+                <p class="gm-muted mt-2" style="font-size:.85rem;">
+                    This person will receive email notifications when events are submitted for review in this Group.
+                </p>
+            <?php endif; ?>
+        <?php endif; ?>
+    </section>
+    <?php endif; ?>
 </main>
 
 <script>

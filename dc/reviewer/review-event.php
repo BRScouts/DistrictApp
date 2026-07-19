@@ -14,6 +14,26 @@ if (!$event) {
     exit;
 }
 
+/*
+ * Enforce group-level scope: group_reviewer users can only review events
+ * belonging to groups they are assigned to review.
+ */
+if (!dc_context_has_group_reviewer_access($ctx, (int) $event['group_id'])) {
+    require __DIR__ . '/../403.php';
+    exit;
+}
+
+/*
+ * Self-review prevention: group-level reviewers cannot approve their own events.
+ * District-level reviewers (district_reviewer, district_admin) are exempt.
+ */
+$isSelfReview = (int) ($event['submitted_by_person_id'] ?? 0) === (int) $ctx['person_id'];
+$canReview = true;
+
+if ($isSelfReview && !dc_context_has_reviewer_access($ctx)) {
+    $canReview = false;
+}
+
 $errors = [];
 
 $allowedOutcomes = [
@@ -28,6 +48,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_validate();
     $status = (string) ($_POST['status'] ?? 'under_review');
     $reviewerNotes = trim((string) ($_POST['reviewer_notes'] ?? ''));
+
+    if (!$canReview) {
+        $errors[] = 'You cannot review your own event. Another reviewer must approve it.';
+    }
 
     if (!in_array($status, $allowedOutcomes, true)) {
         $errors[] = 'Choose a valid review outcome.';
@@ -509,42 +533,54 @@ require __DIR__ . '/../layout.php';
         <section class="lt-panel-grey">
             <h2 class="lt-section-title">Review outcome</h2>
 
-            <form method="post">
-                <?= csrf_field() ?>
-                <input type="hidden" name="id" value="<?= (int) $id ?>">
-
-                <div class="form-group">
-                    <label for="status">Outcome</label>
-                    <select id="status" name="status" class="form-control">
-                        <?php foreach ($allowedOutcomes as $outcome): ?>
-                            <option value="<?= e($outcome) ?>" <?= (string) $event['status'] === $outcome ? 'selected' : '' ?>>
-                                <?= e(ucwords(str_replace('_', ' ', $outcome))) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="reviewer_notes">Review notes</label>
-                    <textarea
-                        id="reviewer_notes"
-                        name="reviewer_notes"
-                        class="form-control"
-                        rows="7"
-                    ><?= e((string) ($event['reviewer_notes'] ?? '')) ?></textarea>
-                    <p class="form-text">
-                        Required if requesting changes or rejecting. These comments are shown to the submitter.
+            <?php if (!$canReview): ?>
+                <div class="dc-review-warning">
+                    <strong>You cannot review this event.</strong>
+                    <p class="mb-0">
+                        You submitted this event. Another reviewer must approve, reject or request changes.
                     </p>
                 </div>
-
-                <button class="btn btn-primary lt-btn" type="submit">
-                    Save review
-                </button>
-
                 <a class="btn lt-btn lt-btn-secondary" href="/dc/reviewer/events.php?status=submitted">
                     Back to review list
                 </a>
-            </form>
+            <?php else: ?>
+                <form method="post">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="id" value="<?= (int) $id ?>">
+
+                    <div class="form-group">
+                        <label for="status">Outcome</label>
+                        <select id="status" name="status" class="form-control">
+                            <?php foreach ($allowedOutcomes as $outcome): ?>
+                                <option value="<?= e($outcome) ?>" <?= (string) $event['status'] === $outcome ? 'selected' : '' ?>>
+                                    <?= e(ucwords(str_replace('_', ' ', $outcome))) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="reviewer_notes">Review notes</label>
+                        <textarea
+                            id="reviewer_notes"
+                            name="reviewer_notes"
+                            class="form-control"
+                            rows="7"
+                        ><?= e((string) ($event['reviewer_notes'] ?? '')) ?></textarea>
+                        <p class="form-text">
+                            Required if requesting changes or rejecting. These comments are shown to the submitter.
+                        </p>
+                    </div>
+
+                    <button class="btn btn-primary lt-btn" type="submit">
+                        Save review
+                    </button>
+
+                    <a class="btn lt-btn lt-btn-secondary" href="/dc/reviewer/events.php?status=submitted">
+                        Back to review list
+                    </a>
+                </form>
+            <?php endif; ?>
         </section>
     </aside>
 </div>

@@ -1,0 +1,50 @@
+-- Migration 002: Group-level event reviewer
+--
+-- Introduces the 'group_reviewer' access level for group_memberships.access_level.
+-- This allows designated volunteers to review and approve calendar events
+-- scoped to their own group(s), without needing district-wide reviewer access.
+--
+-- Hierarchy (dc_access_rank):
+--   system_admin     = 100
+--   district_admin   = 90
+--   district_reviewer = 80
+--   group_reviewer   = 70   <-- NEW
+--   group_admin      = 60
+--   member           = 10
+--   group_link       = 1
+--
+-- No schema change is required because access_level is a VARCHAR column.
+-- This migration documents the new value and provides a helper query for
+-- District Admins to grant the permission manually if needed.
+--
+-- To grant group_reviewer access to a person for a specific group:
+--
+--   UPDATE group_memberships
+--   SET access_level = 'group_reviewer'
+--   WHERE person_id = :person_id
+--     AND group_id = :group_id
+--     AND status = 'active';
+--
+-- To revoke (reset to default based on role):
+--
+--   UPDATE group_memberships
+--   SET access_level = 'member'
+--   WHERE person_id = :person_id
+--     AND group_id = :group_id
+--     AND access_level = 'group_reviewer'
+--     AND status = 'active';
+--
+-- Behaviour:
+--   - group_reviewer users can access /dc/reviewer/ pages but ONLY see events
+--     belonging to groups where they hold this access level.
+--   - They cannot review their own submitted events (self-review prevention).
+--   - They receive email notifications when events are submitted for their group.
+--   - District-level reviewers (district_reviewer, district_admin) are unaffected
+--     and retain full cross-district review access.
+--   - system_admin users are NOT emailed on event submission (they retain full
+--     access but are not considered active reviewers for notification purposes).
+--
+-- The permission is granted via the Group Manager > Person page by District Admins.
+
+-- No-op statement to mark migration as executed:
+SELECT 1;

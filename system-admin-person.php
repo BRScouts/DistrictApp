@@ -121,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $personId > 0) {
         } elseif ($action === 'update_access_level') {
             $groupId = (int) ($_POST['group_id'] ?? 0);
             $accessLevel = (string) ($_POST['access_level'] ?? 'member');
-            $allowed = ['system_admin', 'district_admin', 'district_reviewer', 'group_admin', 'member'];
+            $allowed = ['system_admin', 'district_admin', 'district_reviewer', 'group_reviewer', 'group_admin', 'member'];
 
             if (!in_array($accessLevel, $allowed, true)) {
                 throw new RuntimeException('Invalid access level.');
@@ -489,7 +489,7 @@ include __DIR__ . '/header.php';
                                             <input type="hidden" name="action" value="update_access_level">
                                             <input type="hidden" name="group_id" value="<?= (int) $gm['group_id'] ?>">
                                             <select name="access_level" onchange="this.form.submit()" style="font-size:.78rem; padding:.15rem .3rem;">
-                                                <?php foreach (['member','group_admin','district_reviewer','district_admin','system_admin'] as $lvl): ?>
+                                                <?php foreach (['member','group_admin','group_reviewer','district_reviewer','district_admin','system_admin'] as $lvl): ?>
                                                     <option value="<?= $lvl ?>" <?= ($gm['access_level'] ?? 'member') === $lvl ? 'selected' : '' ?>><?= ucwords(str_replace('_', ' ', $lvl)) ?></option>
                                                 <?php endforeach; ?>
                                             </select>
