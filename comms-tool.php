@@ -1606,7 +1606,7 @@ if (!$recipients && in_array($step, ['write', 'preview'], true)) {
     <?php endif; ?>
 </main>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     function syncEditor() {
         var editor = document.getElementById('editor');

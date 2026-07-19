@@ -540,7 +540,7 @@ require __DIR__ . '/../layout.php';
     </section>
 </div>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     document.querySelectorAll('.dc-clickable-row[data-href]').forEach(function (row) {
         row.addEventListener('click', function (event) {

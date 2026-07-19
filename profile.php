@@ -983,7 +983,7 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
     </div>
 </main>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     var searchInput = document.getElementById('accreditation_search');
     var clearButton = document.getElementById('clear_accreditation_search');

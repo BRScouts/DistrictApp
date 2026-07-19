@@ -165,9 +165,9 @@ if ($isLoggedIn) {
 <main class="lt-privacy">
     <?php if (!$isLoggedIn): ?>
         <h1>Privacy Notice</h1>
-        <p class="lt-privacy-updated">Last updated: <?= e(date('j F Y')) ?></p>
+        <p class="lt-privacy-updated">Last updated: 19 July 2025</p>
     <?php else: ?>
-        <p class="lt-privacy-updated">Last updated: <?= e(date('j F Y')) ?></p>
+        <p class="lt-privacy-updated">Last updated: 19 July 2025</p>
     <?php endif; ?>
 
     <h2>1. Who we are</h2>

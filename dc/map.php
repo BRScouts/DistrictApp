@@ -346,7 +346,7 @@ require __DIR__ . '/layout.php';
 ?>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" <?= csp_nonce_attr() ?>></script>
 
 <style>
     .dc-map-toolbar { background:#fff; border:1px solid var(--dc-border, #e2e8f0); border-radius:0; padding:1rem; margin-bottom:1rem; }
@@ -469,7 +469,7 @@ require __DIR__ . '/layout.php';
 <?php endif; ?>
 
 <?php if ($mapEvents): ?>
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     var events = <?= json_encode($mapEvents, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     var mapElement = document.getElementById('dc-map');

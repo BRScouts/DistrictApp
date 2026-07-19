@@ -414,7 +414,7 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
     <?php endif; ?>
 </header>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function() {
     var toggle = document.querySelector('.lt-mobile-nav-toggle');
     var nav = document.getElementById('lt-mobile-nav');

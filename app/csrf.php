@@ -35,6 +35,9 @@ function csrf_field(): string
 /**
  * Validate the submitted CSRF token against the session token.
  * Aborts with 403 if the token is missing or invalid.
+ *
+ * On success the token is rotated so it cannot be replayed. Any
+ * subsequent form render will receive the fresh token via csrf_token().
  */
 function csrf_validate(): void
 {
@@ -46,4 +49,7 @@ function csrf_validate(): void
         echo '<h1>403 Forbidden</h1><p>Your session has expired or the form submission could not be verified. Please go back and try again.</p>';
         exit;
     }
+
+    // Rotate token after successful validation to prevent replay
+    $_SESSION['_csrf_token'] = bin2hex(random_bytes(32));
 }

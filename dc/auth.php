@@ -354,11 +354,82 @@ function dc_queue_email(string $toEmail, ?string $toName, string $subject, strin
     }
 }
 
+/**
+ * IP-based rate limiting for group-link token attempts.
+ * Prevents brute-force enumeration of access tokens.
+ */
+function dc_token_rate_limit_check(): bool
+{
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $maxAttempts = 10; // max attempts per window
+    $windowSeconds = 300; // 5-minute sliding window
+
+    // Use database table if available, fall back to session-based tracking
+    if (dc_table_has_column('token_rate_limits', 'ip_address')) {
+        try {
+            // Clean old entries
+            db()->exec("DELETE FROM token_rate_limits WHERE attempted_at < DATE_SUB(NOW(), INTERVAL {$windowSeconds} SECOND)");
+
+            $stmt = db()->prepare("
+                SELECT COUNT(*) FROM token_rate_limits
+                WHERE ip_address = :ip
+                  AND attempted_at > DATE_SUB(NOW(), INTERVAL {$windowSeconds} SECOND)
+            ");
+            $stmt->execute(['ip' => $ip]);
+
+            return ((int) $stmt->fetchColumn()) < $maxAttempts;
+        } catch (Throwable $e) {
+            // Fall through to session-based check
+        }
+    }
+
+    // Session-based fallback
+    $attempts = $_SESSION['dc_token_attempts'] ?? [];
+    $cutoff = time() - $windowSeconds;
+
+    // Prune expired entries
+    $attempts = array_filter($attempts, static fn(int $ts): bool => $ts > $cutoff);
+    $_SESSION['dc_token_attempts'] = $attempts;
+
+    return count($attempts) < $maxAttempts;
+}
+
+/**
+ * Record a failed token attempt for rate limiting.
+ */
+function dc_token_rate_limit_record(): void
+{
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+
+    if (dc_table_has_column('token_rate_limits', 'ip_address')) {
+        try {
+            $stmt = db()->prepare("
+                INSERT INTO token_rate_limits (ip_address, attempted_at)
+                VALUES (:ip, NOW())
+            ");
+            $stmt->execute(['ip' => $ip]);
+            return;
+        } catch (Throwable $e) {
+            // Fall through to session-based tracking
+        }
+    }
+
+    // Session-based fallback
+    $_SESSION['dc_token_attempts'] = $_SESSION['dc_token_attempts'] ?? [];
+    $_SESSION['dc_token_attempts'][] = time();
+}
+
 function dc_group_link_from_token(string $rawToken): ?array
 {
     $rawToken = trim($rawToken);
 
     if ($rawToken === '') {
+        return null;
+    }
+
+    // Rate limit check — block if too many failed attempts from this IP
+    if (!dc_token_rate_limit_check()) {
+        error_log('Rate limit exceeded for token attempts from IP: ' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
         return null;
     }
 
@@ -402,6 +473,7 @@ function dc_group_link_from_token(string $rawToken): ?array
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$row) {
+        dc_token_rate_limit_record();
         return null;
     }
 

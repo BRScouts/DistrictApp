@@ -317,7 +317,7 @@ include __DIR__ . '/app/group-manager-nav.php';
     </section>
 </main>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     document.querySelectorAll('.gm-copy').forEach(function (button) {
         button.addEventListener('click', function () {

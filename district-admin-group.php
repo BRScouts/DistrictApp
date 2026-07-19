@@ -637,7 +637,7 @@ include __DIR__ . '/header.php';
     <?php endif; ?>
 </main>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     document.querySelectorAll('.da-copy').forEach(function (button) {
         button.addEventListener('click', function () {

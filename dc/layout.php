@@ -934,7 +934,7 @@ $profileUrl = '/profile.php';
     </div>
 </div>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     var toggle = document.querySelector('[data-menu-toggle]');
     var nav = document.getElementById('dc-main-nav');

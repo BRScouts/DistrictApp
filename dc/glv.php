@@ -658,7 +658,7 @@ require __DIR__ . '/layout.php';
     </aside>
 </div>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     document.querySelectorAll('.dc-copy-link').forEach(function (button) {
         button.addEventListener('click', async function () {

@@ -1201,7 +1201,7 @@ require __DIR__ . '/layout.php';
     </div>
 </div>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     var events = <?= json_encode($popupEvents, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     var modal = document.getElementById('dc-event-modal');

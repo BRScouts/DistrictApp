@@ -8,6 +8,33 @@ declare(strict_types=1);
  * Include this file early (via bootstrap.php) before any output.
  */
 
+// ─── CSP Nonce ──────────────────────────────────────────────────────────────
+
+/**
+ * Generate a per-request nonce for Content-Security-Policy.
+ * Every inline <script> tag must include nonce="<?= csp_nonce() ?>".
+ */
+function csp_nonce(): string
+{
+    static $nonce = null;
+
+    if ($nonce === null) {
+        $nonce = base64_encode(random_bytes(16));
+    }
+
+    return $nonce;
+}
+
+/**
+ * Output a nonce attribute for use in script tags: <script <?= csp_nonce_attr() ?>>
+ */
+function csp_nonce_attr(): string
+{
+    return 'nonce="' . csp_nonce() . '"';
+}
+
+// ─── Headers ────────────────────────────────────────────────────────────────
+
 // Prevent clickjacking
 header('X-Frame-Options: DENY');
 
@@ -25,6 +52,7 @@ if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
     header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
 }
 
-// Content Security Policy — allows inline styles/scripts for now since the app uses them,
-// but blocks embedding from unknown origins and restricts form targets.
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+// Content Security Policy — nonce-based for scripts, still allows unsafe-inline
+// for styles (moving styles to nonces is lower priority and more disruptive).
+$nonce = csp_nonce();
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");

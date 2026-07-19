@@ -1325,9 +1325,9 @@ require __DIR__ . '/layout.php';
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" <?= csp_nonce_attr() ?>></script>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 const riskAssessments = <?= json_encode(
     $riskAssessmentCards,
     JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
@@ -1339,7 +1339,7 @@ const initiallySelectedRiskIds = <?= json_encode(
 ) ?>;
 </script>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     const modal = document.getElementById('risk_modal');
     const openButton = document.getElementById('open_risk_modal');
@@ -1559,7 +1559,7 @@ const initiallySelectedRiskIds = <?= json_encode(
 })();
 </script>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     const picker = document.getElementById('risk_file_picker');
     const realInput = document.getElementById('risk_files');
@@ -1734,7 +1734,7 @@ const initiallySelectedRiskIds = <?= json_encode(
 })();
 </script>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     const startInput = document.getElementById('starts_at');
     const endInput = document.getElementById('ends_at');
@@ -1841,7 +1841,7 @@ const initiallySelectedRiskIds = <?= json_encode(
 })();
 </script>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     const mapElement = document.getElementById('location_map');
     const searchInput = document.getElementById('location_search');

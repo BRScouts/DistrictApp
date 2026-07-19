@@ -42,7 +42,6 @@ try {
     $user = find_or_create_microsoft_user($claims);
 
     login_user($user);
-    $_SESSION['microsoft_access_token'] = $accessToken->getToken();
     unset($_SESSION['oauth2state']);
 
     // Audit: successful login

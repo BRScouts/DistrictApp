@@ -264,7 +264,7 @@ unset($_SESSION['auth_error']);
 
     <footer class="lt-login-footer">
         <p>&copy; <?= e(date('Y')) ?> Irwell Valley Scout District. Built by <a href="https://www.ckenterprises.co.uk" target="_blank" rel="noopener noreferrer">CK Enterprises UK</a></p>
-        <p><a href="/privacy-notice.php">Privacy Notice</a></p>
+        <p><a href="/privacy-notice.php">Privacy Notice</a> &middot; <a href="/terms-of-service.php">Terms of Service</a></p>
     </footer>
 </body>
 </html>

@@ -776,7 +776,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 </main>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     var radios = document.querySelectorAll('[data-raise-for]');
     var onBehalfWrap = document.getElementById('on-behalf-wrap');

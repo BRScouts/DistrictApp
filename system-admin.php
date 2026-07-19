@@ -594,7 +594,7 @@ include __DIR__ . '/header.php';
 
 </main>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     // Toggle details row via button click
     document.querySelectorAll('.sa-details-toggle').forEach(function (button) {

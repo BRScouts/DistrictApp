@@ -1066,7 +1066,7 @@ include __DIR__ . '/app/group-manager-nav.php';
     </div>
 </main>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     function slugPart(value) {
         return (value || '')
@@ -1274,7 +1274,7 @@ include __DIR__ . '/app/group-manager-nav.php';
 </script>
 
 <?php if (($_POST['action'] ?? '') === 'suggest_email'): ?>
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     var target = document.getElementById('step-district-email');
     if (target) {

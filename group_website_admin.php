@@ -2210,9 +2210,9 @@ include __DIR__ . '/header.php';
     <?php endif; ?>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" <?= csp_nonce_attr() ?>></script>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     const insertGlvButton = document.getElementById('insert-glv');
 
@@ -2851,7 +2851,7 @@ include __DIR__ . '/header.php';
 })();
 </script>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     var tabs = document.querySelectorAll('.gwa-tabs [role="tab"]');
     var panels = document.querySelectorAll('.gwa-tab-panel');

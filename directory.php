@@ -989,7 +989,7 @@ foreach ($people as $person) {
     <div class="directory-drawer-body" id="directory-drawer-body"></div>
 </aside>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     var people = <?= json_encode($directoryPeople, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     var peopleById = {};

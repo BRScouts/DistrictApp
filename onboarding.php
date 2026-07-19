@@ -1820,6 +1820,13 @@ $pageTitle = 'Complete your profile | ' . $appName;
                     </section>
 
                     <section class="onboarding-panel">
+                        <p style="font-size: .92rem; font-weight: 700; color: var(--iv-grey-700, #555); margin: 0 0 1rem;">
+                            By completing this form you acknowledge our
+                            <a href="/privacy-notice.php" target="_blank" rel="noopener noreferrer" style="font-weight: 900;">Privacy Notice</a>
+                            and agree to our
+                            <a href="/terms-of-service.php" target="_blank" rel="noopener noreferrer" style="font-weight: 900;">Terms of Service</a>.
+                        </p>
+
                         <div class="onboarding-save-row">
                             <button type="submit" name="action" value="complete_onboarding" class="btn btn-primary btn-lg lt-btn">
                                 Save and continue
@@ -1836,7 +1843,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
     </div>
 </main>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     var searchInput = document.getElementById('accreditation_search');
     var clearButton = document.getElementById('clear_accreditation_search');

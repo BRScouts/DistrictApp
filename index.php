@@ -1046,7 +1046,7 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
     </div>
 </div>
 
-<script>
+<script <?= csp_nonce_attr() ?>>
 (function () {
     var sharedMailboxTableReady = <?= $sharedMailboxTableReady ? 'true' : 'false' ?>;
     var sharedMailboxes = <?= $sharedMailboxesJson ?>;
