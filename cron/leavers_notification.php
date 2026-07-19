@@ -340,7 +340,95 @@ function leavers_fetch_new_leavers(bool $hasTrackingColumn): array
 {
     $pdo = db();
 
-    // Determine which column stores the M365 UPN / email on the people table.
+    // Build the "not yet notified" filter.
+    if ($hasTrackingColumn) {
+        $notifiedFilter = "AND p.leaver_notified_at IS NULL";
+    } else {
+        // Fallback: exclude anyone already in audit_log with this action.
+        if (leavers_table_exists('audit_log')) {
+            $notifiedFilter = "AND p.id NOT IN (
+                SELECT entity_id FROM audit_log
+                WHERE action = 'leaver_notification_sent' AND entity_type = 'person'
+            )";
+        } else {
+            $notifiedFilter = "";
+        }
+    }
+
+    // Strategy 1: Use user_accounts table (primary source of M365 link).
+    if (leavers_table_exists('user_accounts')
+        && leavers_column_exists('user_accounts', 'provider')
+        && leavers_column_exists('user_accounts', 'provider_subject')
+        && leavers_column_exists('user_accounts', 'person_id')
+    ) {
+        // Also grab the email column from user_accounts if available for the UPN.
+        $uaEmailCol = leavers_column_exists('user_accounts', 'email') ? 'ua.email' : 'NULL';
+
+        $sql = "
+            SELECT
+                p.id AS person_id,
+                p.full_name,
+                p.primary_email,
+                {$uaEmailCol} AS m365_upn,
+                ua.provider_subject AS m365_user_id
+            FROM people p
+            INNER JOIN user_accounts ua
+                ON ua.person_id = p.id
+                AND ua.provider = 'microsoft'
+                AND ua.provider_subject IS NOT NULL
+                AND ua.provider_subject <> ''
+            WHERE p.status = 'inactive'
+              {$notifiedFilter}
+            ORDER BY p.full_name ASC
+            LIMIT 50
+        ";
+
+        $stmt = $pdo->query($sql);
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (count($results) > 0) {
+            leavers_log('Using user_accounts table to identify M365 accounts.');
+            return $results;
+        }
+    }
+
+    // Strategy 2: Use m365_account_requests table.
+    if (leavers_table_exists('m365_account_requests')
+        && leavers_column_exists('m365_account_requests', 'graph_user_id')
+        && leavers_column_exists('m365_account_requests', 'person_id')
+    ) {
+        $upnCol = leavers_column_exists('m365_account_requests', 'graph_user_principal_name')
+            ? 'mar.graph_user_principal_name'
+            : (leavers_column_exists('m365_account_requests', 'requested_upn') ? 'mar.requested_upn' : 'NULL');
+
+        $sql = "
+            SELECT
+                p.id AS person_id,
+                p.full_name,
+                p.primary_email,
+                {$upnCol} AS m365_upn,
+                mar.graph_user_id AS m365_user_id
+            FROM people p
+            INNER JOIN m365_account_requests mar
+                ON mar.person_id = p.id
+                AND mar.graph_user_id IS NOT NULL
+                AND mar.graph_user_id <> ''
+            WHERE p.status = 'inactive'
+              {$notifiedFilter}
+            ORDER BY p.full_name ASC
+            LIMIT 50
+        ";
+
+        $stmt = $pdo->query($sql);
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (count($results) > 0) {
+            leavers_log('Using m365_account_requests table to identify M365 accounts.');
+            return $results;
+        }
+    }
+
+    // Strategy 3: Fall back to columns on people table.
     $upnColumn = null;
     foreach (['m365_user_principal_name', 'microsoft_user_principal_name', 'district_email'] as $candidate) {
         if (leavers_column_exists('people', $candidate)) {
@@ -349,7 +437,6 @@ function leavers_fetch_new_leavers(bool $hasTrackingColumn): array
         }
     }
 
-    // Also check for the M365 user ID column.
     $m365IdColumn = null;
     foreach (['m365_user_id', 'microsoft_user_id'] as $candidate) {
         if (leavers_column_exists('people', $candidate)) {
@@ -358,13 +445,11 @@ function leavers_fetch_new_leavers(bool $hasTrackingColumn): array
         }
     }
 
-    // We need at least one identifier to know they have an M365 account.
     if ($upnColumn === null && $m365IdColumn === null) {
-        leavers_log('ERROR: No M365 identifier column found on people table (need m365_user_principal_name, microsoft_user_principal_name, district_email, m365_user_id, or microsoft_user_id).');
+        leavers_log('WARNING: No M365 identifier found via user_accounts, m365_account_requests, or people table columns. No leavers to report.');
         return [];
     }
 
-    // Build the condition for "has M365 account".
     $m365Conditions = [];
     if ($upnColumn !== null) {
         $m365Conditions[] = "(p.`{$upnColumn}` IS NOT NULL AND p.`{$upnColumn}` <> '')";
@@ -374,24 +459,8 @@ function leavers_fetch_new_leavers(bool $hasTrackingColumn): array
     }
     $m365Where = '(' . implode(' OR ', $m365Conditions) . ')';
 
-    // Build the "not yet notified" filter.
-    if ($hasTrackingColumn) {
-        $notifiedFilter = "AND p.leaver_notified_at IS NULL";
-    } else {
-        // Fallback: exclude anyone already in audit_log with this action.
-        $notifiedFilter = "AND p.id NOT IN (
-            SELECT entity_id FROM audit_log
-            WHERE action = 'leaver_notification_sent' AND entity_type = 'person'
-        )";
-    }
-
-    $upnSelect = $upnColumn !== null
-        ? "p.`{$upnColumn}` AS m365_upn"
-        : "NULL AS m365_upn";
-
-    $m365IdSelect = $m365IdColumn !== null
-        ? "p.`{$m365IdColumn}` AS m365_user_id"
-        : "NULL AS m365_user_id";
+    $upnSelect = $upnColumn !== null ? "p.`{$upnColumn}` AS m365_upn" : "NULL AS m365_upn";
+    $m365IdSelect = $m365IdColumn !== null ? "p.`{$m365IdColumn}` AS m365_user_id" : "NULL AS m365_user_id";
 
     $sql = "
         SELECT
@@ -408,6 +477,7 @@ function leavers_fetch_new_leavers(bool $hasTrackingColumn): array
         LIMIT 50
     ";
 
+    leavers_log('Using people table columns to identify M365 accounts.');
     $stmt = $pdo->query($sql);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }

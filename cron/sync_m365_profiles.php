@@ -282,65 +282,182 @@ function sync_role_to_job_title(string $membershipRole): string
 // ─── Fetch people to sync ───────────────────────────────────────────────────
 
 /**
- * Get all active people who have a Microsoft 365 user ID stored,
+ * Resolve the M365 Graph user ID for a person.
+ *
+ * Checks (in order):
+ *   1. user_accounts table (provider = 'microsoft', provider_subject = Graph ID)
+ *   2. m365_account_requests table (graph_user_id)
+ *   3. people table columns (m365_user_id, microsoft_user_id) — if they exist
+ */
+function sync_resolve_m365_id_source(): string
+{
+    // Prefer user_accounts — this is the canonical link for Microsoft sign-in.
+    if (sync_table_exists('user_accounts')
+        && sync_column_exists('user_accounts', 'provider')
+        && sync_column_exists('user_accounts', 'provider_subject')
+        && sync_column_exists('user_accounts', 'person_id')
+    ) {
+        return 'user_accounts';
+    }
+
+    // Fallback: m365_account_requests.
+    if (sync_table_exists('m365_account_requests')
+        && sync_column_exists('m365_account_requests', 'graph_user_id')
+        && sync_column_exists('m365_account_requests', 'person_id')
+    ) {
+        return 'm365_account_requests';
+    }
+
+    // Last resort: columns on people table.
+    foreach (['m365_user_id', 'microsoft_user_id'] as $candidate) {
+        if (sync_column_exists('people', $candidate)) {
+            return 'people:' . $candidate;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Get all active people who have a Microsoft 365 user ID,
  * along with their primary group membership and group lead volunteer info.
  */
 function sync_fetch_people_to_sync(): array
 {
     $pdo = db();
+    $source = sync_resolve_m365_id_source();
 
-    // Determine which column stores the M365 user ID on the people table.
-    $m365IdColumn = null;
-    foreach (['m365_user_id', 'microsoft_user_id'] as $candidate) {
-        if (sync_column_exists('people', $candidate)) {
-            $m365IdColumn = $candidate;
-            break;
-        }
-    }
-
-    if ($m365IdColumn === null) {
-        sync_log('ERROR: No m365_user_id or microsoft_user_id column found on people table.');
+    if ($source === '') {
+        sync_log('ERROR: Could not find M365 user IDs. Need user_accounts, m365_account_requests, or people.m365_user_id column.');
         return [];
     }
 
-    // Fetch active people with an M365 account along with their primary active membership.
-    // We pick the first active membership ordered by role priority (GLV first) as the "primary".
-    $sql = "
-        SELECT
-            p.id AS person_id,
-            p.full_name,
-            p.`{$m365IdColumn}` AS m365_user_id,
-            gm.membership_role,
-            gm.group_id,
-            g.group_name,
-            glv_ua_subject.m365_id AS glv_m365_id
-        FROM people p
-        INNER JOIN group_memberships gm
-            ON gm.person_id = p.id
-            AND gm.status = 'active'
-        INNER JOIN groups g
-            ON g.id = gm.group_id
-            AND g.is_active = 1
-        LEFT JOIN (
-            -- Find the Group Lead Volunteer for each group and their M365 ID
+    sync_log("Using M365 ID source: {$source}");
+
+    if ($source === 'user_accounts') {
+        // Join through user_accounts where provider = 'microsoft'.
+        // provider_subject holds the Graph object ID (GUID).
+        $sql = "
             SELECT
-                glv_gm.group_id,
-                p2.`{$m365IdColumn}` AS m365_id
-            FROM group_memberships glv_gm
-            INNER JOIN people p2 ON p2.id = glv_gm.person_id AND p2.status = 'active'
-            WHERE glv_gm.membership_role = 'group_lead_volunteer'
-              AND glv_gm.status = 'active'
-              AND p2.`{$m365IdColumn}` IS NOT NULL
-              AND p2.`{$m365IdColumn}` <> ''
-            GROUP BY glv_gm.group_id
-        ) glv_ua_subject ON glv_ua_subject.group_id = gm.group_id
-        WHERE p.status = 'active'
-          AND p.`{$m365IdColumn}` IS NOT NULL
-          AND p.`{$m365IdColumn}` <> ''
-        ORDER BY
-            p.id ASC,
-            FIELD(gm.membership_role, 'group_lead_volunteer', 'section_leader', 'assistant_section_leader', 'section_assistant', 'trustee', 'district_volunteer', 'other') ASC
-    ";
+                p.id AS person_id,
+                p.full_name,
+                ua.provider_subject AS m365_user_id,
+                gm.membership_role,
+                gm.group_id,
+                g.group_name,
+                glv_ua.provider_subject AS glv_m365_id
+            FROM people p
+            INNER JOIN user_accounts ua
+                ON ua.person_id = p.id
+                AND ua.provider = 'microsoft'
+                AND ua.provider_subject IS NOT NULL
+                AND ua.provider_subject <> ''
+            INNER JOIN group_memberships gm
+                ON gm.person_id = p.id
+                AND gm.status = 'active'
+            INNER JOIN groups g
+                ON g.id = gm.group_id
+                AND g.is_active = 1
+            LEFT JOIN (
+                -- Find the GLV for each group and their M365 ID via user_accounts
+                SELECT
+                    glv_gm.group_id,
+                    glv_ua_inner.provider_subject
+                FROM group_memberships glv_gm
+                INNER JOIN people glv_p ON glv_p.id = glv_gm.person_id AND glv_p.status = 'active'
+                INNER JOIN user_accounts glv_ua_inner
+                    ON glv_ua_inner.person_id = glv_p.id
+                    AND glv_ua_inner.provider = 'microsoft'
+                    AND glv_ua_inner.provider_subject IS NOT NULL
+                    AND glv_ua_inner.provider_subject <> ''
+                WHERE glv_gm.membership_role = 'group_lead_volunteer'
+                  AND glv_gm.status = 'active'
+                GROUP BY glv_gm.group_id
+            ) glv_ua ON glv_ua.group_id = gm.group_id
+            WHERE p.status = 'active'
+            ORDER BY
+                p.id ASC,
+                FIELD(gm.membership_role, 'group_lead_volunteer', 'section_leader', 'assistant_section_leader', 'section_assistant', 'trustee', 'district_volunteer', 'other') ASC
+        ";
+    } elseif ($source === 'm365_account_requests') {
+        $sql = "
+            SELECT
+                p.id AS person_id,
+                p.full_name,
+                mar.graph_user_id AS m365_user_id,
+                gm.membership_role,
+                gm.group_id,
+                g.group_name,
+                glv_mar.graph_user_id AS glv_m365_id
+            FROM people p
+            INNER JOIN m365_account_requests mar
+                ON mar.person_id = p.id
+                AND mar.graph_user_id IS NOT NULL
+                AND mar.graph_user_id <> ''
+            INNER JOIN group_memberships gm
+                ON gm.person_id = p.id
+                AND gm.status = 'active'
+            INNER JOIN groups g
+                ON g.id = gm.group_id
+                AND g.is_active = 1
+            LEFT JOIN (
+                SELECT
+                    glv_gm.group_id,
+                    glv_mar_inner.graph_user_id
+                FROM group_memberships glv_gm
+                INNER JOIN people glv_p ON glv_p.id = glv_gm.person_id AND glv_p.status = 'active'
+                INNER JOIN m365_account_requests glv_mar_inner
+                    ON glv_mar_inner.person_id = glv_p.id
+                    AND glv_mar_inner.graph_user_id IS NOT NULL
+                    AND glv_mar_inner.graph_user_id <> ''
+                WHERE glv_gm.membership_role = 'group_lead_volunteer'
+                  AND glv_gm.status = 'active'
+                GROUP BY glv_gm.group_id
+            ) glv_mar ON glv_mar.group_id = gm.group_id
+            WHERE p.status = 'active'
+            ORDER BY
+                p.id ASC,
+                FIELD(gm.membership_role, 'group_lead_volunteer', 'section_leader', 'assistant_section_leader', 'section_assistant', 'trustee', 'district_volunteer', 'other') ASC
+        ";
+    } else {
+        // people:<column> fallback
+        $m365IdColumn = substr($source, strlen('people:'));
+        $sql = "
+            SELECT
+                p.id AS person_id,
+                p.full_name,
+                p.`{$m365IdColumn}` AS m365_user_id,
+                gm.membership_role,
+                gm.group_id,
+                g.group_name,
+                glv_sub.m365_id AS glv_m365_id
+            FROM people p
+            INNER JOIN group_memberships gm
+                ON gm.person_id = p.id
+                AND gm.status = 'active'
+            INNER JOIN groups g
+                ON g.id = gm.group_id
+                AND g.is_active = 1
+            LEFT JOIN (
+                SELECT
+                    glv_gm.group_id,
+                    p2.`{$m365IdColumn}` AS m365_id
+                FROM group_memberships glv_gm
+                INNER JOIN people p2 ON p2.id = glv_gm.person_id AND p2.status = 'active'
+                WHERE glv_gm.membership_role = 'group_lead_volunteer'
+                  AND glv_gm.status = 'active'
+                  AND p2.`{$m365IdColumn}` IS NOT NULL
+                  AND p2.`{$m365IdColumn}` <> ''
+                GROUP BY glv_gm.group_id
+            ) glv_sub ON glv_sub.group_id = gm.group_id
+            WHERE p.status = 'active'
+              AND p.`{$m365IdColumn}` IS NOT NULL
+              AND p.`{$m365IdColumn}` <> ''
+            ORDER BY
+                p.id ASC,
+                FIELD(gm.membership_role, 'group_lead_volunteer', 'section_leader', 'assistant_section_leader', 'section_assistant', 'trustee', 'district_volunteer', 'other') ASC
+        ";
+    }
 
     $stmt = $pdo->query($sql);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
