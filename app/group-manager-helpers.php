@@ -1283,7 +1283,7 @@ function gm_access_status_label(array $person): string
 function gm_send_microsoft_instructions(array $person, int $groupId, int $actorPersonId): void
 {
     $firstName = explode(' ', trim((string) $person['full_name']))[0] ?: 'there';
-    $ssoUrl = gm_absolute_url('/auth/microsoft-start.php');
+    $appUrl = gm_absolute_url('/');
 
     gm_queue_email_and_log(
         (int) $person['person_id'],
@@ -1294,8 +1294,8 @@ function gm_send_microsoft_instructions(array $person, int $groupId, int $actorP
         . "Here are your sign-in instructions for the Irwell Valley District App.\n\n"
         . "\n"
         . "HOW TO SIGN IN\n\n"
-        . "Go to the link below and click \"Sign in with Microsoft\". Use your District Microsoft 365 email address and password to sign in.\n\n"
-        . "{$ssoUrl}\n\n"
+        . "Open the link below and click \"Sign in with Microsoft\". Use your District Microsoft 365 email address and password to sign in.\n\n"
+        . "{$appUrl}\n\n"
         . "\n"
         . "WHAT YOU CAN ACCESS\n\n"
         . "Once signed in you will have access to:\n\n"

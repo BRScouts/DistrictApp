@@ -112,6 +112,11 @@ include __DIR__ . '/app/group-manager-nav.php';
         color: #842029;
     }
 
+    .gm-badge-reviewer {
+        background: #e8e0f3;
+        color: #4d0b93;
+    }
+
     .gm-muted {
         color: var(--iv-grey-700);
     }
@@ -199,7 +204,12 @@ include __DIR__ . '/app/group-manager-nav.php';
                             </a><br>
                             <span class="gm-muted"><?= e($leader['primary_email']) ?></span>
                         </td>
-                        <td><?= e(gm_role_title_from_membership_role((string) $leader['membership_role'])) ?></td>
+                        <td>
+                            <?= e(gm_role_title_from_membership_role((string) $leader['membership_role'])) ?>
+                            <?php if (($leader['access_level'] ?? '') === 'group_reviewer'): ?>
+                                <br><span class="gm-badge gm-badge-reviewer">Reviewer</span>
+                            <?php endif; ?>
+                        </td>
                         <td><span class="gm-badge <?= e($accessClass) ?>"><?= e($accessLabel) ?></span></td>
                         <td><?= (int) $leader['total_events'] ?></td>
                         <td><?= $leader['latest_event_at'] ? e(date('d M Y', strtotime((string) $leader['latest_event_at']))) : '—' ?></td>

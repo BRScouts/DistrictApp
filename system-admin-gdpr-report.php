@@ -41,6 +41,9 @@ audit_log('admin.gdpr_report_generated', 'person', $personId, $personId, [
     <meta charset="utf-8">
     <title>GDPR Audit Report — <?= e($person['full_name'] ?? 'Person #' . $personId) ?></title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="icon" type="image/png" href="/assets/img/favicon.png">
+
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
