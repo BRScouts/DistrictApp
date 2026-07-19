@@ -10,7 +10,8 @@ declare(strict_types=1);
  *
  *   - department  → group name (their primary/active group)
  *   - jobTitle    → membership role label (e.g. Section Leader)
- *   - manager     → the Group Lead Volunteer of their group
+ *   - manager     → the Group Lead Volunteer of their group (or the District
+ *                   Lead Volunteer for GLVs)
  *
  * Run manually:
  *   php /home/brscouts/app.irvalscouts.org.uk/cron/sync_m365_profiles.php
@@ -332,14 +333,17 @@ function sync_role_to_job_title(string $membershipRole): string
 // ─── District team GLV (manager for all GLVs) ───────────────────────────────
 
 /**
- * The group/team ID whose Group Lead Volunteer acts as the manager for
+ * The group/team ID whose District Lead Volunteer acts as the manager for
  * all other Group Lead Volunteers in the district.
  */
 define('SYNC_DISTRICT_TEAM_ID', 3);
 
 /**
- * Resolve the M365 user ID of the GLV of the district team (group ID 3).
+ * Resolve the M365 user ID of the District Lead Volunteer (district team, group ID 3).
  * This person is set as the manager for all other GLVs.
+ *
+ * Note: The district team (group 3) uses 'district_lead_volunteer' as its
+ * lead role rather than 'group_lead_volunteer'.
  */
 function sync_resolve_district_glv_m365_id(): ?string
 {
@@ -363,7 +367,7 @@ function sync_resolve_district_glv_m365_id(): ?string
                 AND ua.provider_subject IS NOT NULL
                 AND ua.provider_subject <> ''
             WHERE gm.group_id = :group_id
-              AND gm.membership_role = 'group_lead_volunteer'
+              AND gm.membership_role = 'district_lead_volunteer'
               AND gm.status = 'active'
             LIMIT 1
         ");
@@ -382,7 +386,7 @@ function sync_resolve_district_glv_m365_id(): ?string
                 AND mar.graph_user_id IS NOT NULL
                 AND mar.graph_user_id <> ''
             WHERE gm.group_id = :group_id
-              AND gm.membership_role = 'group_lead_volunteer'
+              AND gm.membership_role = 'district_lead_volunteer'
               AND gm.status = 'active'
             LIMIT 1
         ");
@@ -398,7 +402,7 @@ function sync_resolve_district_glv_m365_id(): ?string
         FROM group_memberships gm
         INNER JOIN people p ON p.id = gm.person_id AND p.status = 'active'
         WHERE gm.group_id = :group_id
-          AND gm.membership_role = 'group_lead_volunteer'
+          AND gm.membership_role = 'district_lead_volunteer'
           AND gm.status = 'active'
           AND p.`{$m365IdColumn}` IS NOT NULL
           AND p.`{$m365IdColumn}` <> ''
@@ -498,7 +502,8 @@ function sync_fetch_people_to_sync(): array
                 ON g.id = gm.group_id
                 AND g.is_active = 1
             LEFT JOIN (
-                -- Find the GLV for each group and their M365 ID via user_accounts
+                -- Find the GLV for each group and their M365 ID via user_accounts.
+                -- District team (group 3) uses 'district_lead_volunteer' role.
                 SELECT
                     glv_gm.group_id,
                     glv_ua_inner.provider_subject
@@ -509,8 +514,11 @@ function sync_fetch_people_to_sync(): array
                     AND glv_ua_inner.provider = 'microsoft'
                     AND glv_ua_inner.provider_subject IS NOT NULL
                     AND glv_ua_inner.provider_subject <> ''
-                WHERE glv_gm.membership_role = 'group_lead_volunteer'
-                  AND glv_gm.status = 'active'
+                WHERE glv_gm.status = 'active'
+                  AND (
+                      (glv_gm.group_id = " . SYNC_DISTRICT_TEAM_ID . " AND glv_gm.membership_role = 'district_lead_volunteer')
+                      OR (glv_gm.group_id <> " . SYNC_DISTRICT_TEAM_ID . " AND glv_gm.membership_role = 'group_lead_volunteer')
+                  )
                 GROUP BY glv_gm.group_id
             ) glv_ua ON glv_ua.group_id = gm.group_id
             WHERE p.status = 'active'
@@ -541,6 +549,7 @@ function sync_fetch_people_to_sync(): array
                 ON g.id = gm.group_id
                 AND g.is_active = 1
             LEFT JOIN (
+                -- District team (group 3) uses 'district_lead_volunteer' role.
                 SELECT
                     glv_gm.group_id,
                     glv_mar_inner.graph_user_id
@@ -550,8 +559,11 @@ function sync_fetch_people_to_sync(): array
                     ON glv_mar_inner.person_id = glv_p.id
                     AND glv_mar_inner.graph_user_id IS NOT NULL
                     AND glv_mar_inner.graph_user_id <> ''
-                WHERE glv_gm.membership_role = 'group_lead_volunteer'
-                  AND glv_gm.status = 'active'
+                WHERE glv_gm.status = 'active'
+                  AND (
+                      (glv_gm.group_id = " . SYNC_DISTRICT_TEAM_ID . " AND glv_gm.membership_role = 'district_lead_volunteer')
+                      OR (glv_gm.group_id <> " . SYNC_DISTRICT_TEAM_ID . " AND glv_gm.membership_role = 'group_lead_volunteer')
+                  )
                 GROUP BY glv_gm.group_id
             ) glv_mar ON glv_mar.group_id = gm.group_id
             WHERE p.status = 'active'
@@ -580,13 +592,17 @@ function sync_fetch_people_to_sync(): array
                 ON g.id = gm.group_id
                 AND g.is_active = 1
             LEFT JOIN (
+                -- District team (group 3) uses 'district_lead_volunteer' role.
                 SELECT
                     glv_gm.group_id,
                     p2.`{$m365IdColumn}` AS m365_id
                 FROM group_memberships glv_gm
                 INNER JOIN people p2 ON p2.id = glv_gm.person_id AND p2.status = 'active'
-                WHERE glv_gm.membership_role = 'group_lead_volunteer'
-                  AND glv_gm.status = 'active'
+                WHERE glv_gm.status = 'active'
+                  AND (
+                      (glv_gm.group_id = " . SYNC_DISTRICT_TEAM_ID . " AND glv_gm.membership_role = 'district_lead_volunteer')
+                      OR (glv_gm.group_id <> " . SYNC_DISTRICT_TEAM_ID . " AND glv_gm.membership_role = 'group_lead_volunteer')
+                  )
                   AND p2.`{$m365IdColumn}` IS NOT NULL
                   AND p2.`{$m365IdColumn}` <> ''
                 GROUP BY glv_gm.group_id
@@ -648,9 +664,9 @@ if ($total === 0) {
 $districtGlvM365Id = sync_resolve_district_glv_m365_id();
 
 if ($districtGlvM365Id !== null) {
-    sync_log("District team (group " . SYNC_DISTRICT_TEAM_ID . ") GLV M365 ID: {$districtGlvM365Id}");
+    sync_log("District team (group " . SYNC_DISTRICT_TEAM_ID . ") DLV M365 ID: {$districtGlvM365Id}");
 } else {
-    sync_log("WARNING: Could not resolve district team GLV (group " . SYNC_DISTRICT_TEAM_ID . "). GLVs will have no manager set.");
+    sync_log("WARNING: Could not resolve district team DLV (group " . SYNC_DISTRICT_TEAM_ID . "). GLVs will have no manager set.");
 }
 
 $updated = 0;
@@ -670,10 +686,10 @@ foreach ($people as $person) {
 
     // Manager logic:
     // - Regular volunteers → managed by their group's GLV
-    // - GLVs → managed by the district team (group 3) GLV
+    // - GLVs (and the District Lead Volunteer) → managed by the district team GLV
     // - Never set someone as their own manager
-    if ($membershipRole === 'group_lead_volunteer') {
-        // GLVs are managed by the district team GLV, not themselves.
+    if ($membershipRole === 'group_lead_volunteer' || $membershipRole === 'district_lead_volunteer') {
+        // GLVs and the DLV are managed by the district team GLV.
         $desiredManagerId = $districtGlvM365Id;
     } else {
         $desiredManagerId = $glvM365Id;
@@ -729,7 +745,7 @@ foreach ($people as $person) {
         if ($desiredManagerId !== null && $currentManagerId !== $desiredManagerId) {
             $managerSet = sync_graph_set_manager($client, $token, $m365UserId, $desiredManagerId);
             if ($managerSet) {
-                $managerLabel = $membershipRole === 'group_lead_volunteer' ? 'district GLV' : 'group GLV';
+                $managerLabel = ($membershipRole === 'group_lead_volunteer' || $membershipRole === 'district_lead_volunteer') ? 'district GLV' : 'group GLV';
                 sync_log("  UPDATED [{$fullName}]: manager set to {$managerLabel} (ID: {$desiredManagerId}).");
             } else {
                 sync_log("  WARNING [{$fullName}]: Could not set manager.");

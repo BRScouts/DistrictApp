@@ -68,6 +68,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             (int) $event['group_id']
         );
 
+        $reviewAuditCode = match ($status) {
+            'approved' => AUDIT_EVENT_APPROVED,
+            'rejected' => AUDIT_EVENT_REJECTED,
+            'changes_requested' => AUDIT_EVENT_CHANGES_REQUESTED,
+            default => AUDIT_EVENT_UPDATED,
+        };
+
+        audit_log($reviewAuditCode, 'calendar_event', $id, null, [
+            'previous_status' => $event['status'] ?? null,
+            'new_status' => $status,
+            'title' => $event['title'] ?? '',
+        ], (int) $event['group_id']);
+
         dc_queue_event_notifications($id, $status);
 
         redirect('/dc/reviewer/review-event.php?id=' . $id . '&reviewed=1');

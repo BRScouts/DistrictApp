@@ -807,6 +807,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ],
                 ]);
 
+                audit_log(AUDIT_COMMS_EMAIL_SENT, null, null, null, [
+                    'recipient_count' => count($recipients),
+                    'subject' => $form['subject'],
+                    'audience_mode' => $form['audience_mode'],
+                ]);
+
                 $pdo->commit();
 
                 $success = count($recipients) . ' email' . (count($recipients) === 1 ? '' : 's') . ' added to the email queue.';

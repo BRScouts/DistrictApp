@@ -73,11 +73,22 @@ try {
             $pdo->commit();
 
             $group = da_fetch_group($groupId);
+
+            audit_log(AUDIT_GROUP_CREATED, 'group', $groupId, null, [
+                'group_name' => $group['group_name'] ?? '',
+                'lead_person_id' => $leadPersonId ?: null,
+            ], $groupId);
+
             $success = 'Group created.';
         } elseif ($action === 'update_group') {
             da_update_group_details($groupId, $_POST, $actorPersonId);
 
             $group = da_fetch_group($groupId);
+
+            audit_log(AUDIT_GROUP_UPDATED, 'group', $groupId, null, [
+                'group_name' => $group['group_name'] ?? '',
+            ], $groupId);
+
             $success = 'Group details saved.';
         } elseif ($action === 'set_group_status') {
             $newStatus = (int) ($_POST['is_active'] ?? 0) === 1 ? 1 : 0;
@@ -85,6 +96,11 @@ try {
             da_set_group_status($groupId, $newStatus, $actorPersonId);
 
             $group = da_fetch_group($groupId);
+
+            audit_log(AUDIT_GROUP_STATUS_CHANGED, 'group', $groupId, null, [
+                'new_status' => $newStatus === 1 ? 'active' : 'inactive',
+            ], $groupId);
+
             $success = $newStatus === 1 ? 'Group reactivated.' : 'Group deactivated.';
         } elseif ($action === 'assign_group_editor') {
             $personId = (int) ($_POST['person_id'] ?? 0);
@@ -98,6 +114,11 @@ try {
             );
 
             $group = da_fetch_group($groupId);
+
+            audit_log(AUDIT_GROUP_EDITOR_ASSIGNED, 'group', $groupId, $personId, [
+                'editor_role' => $editorRole,
+            ], $groupId);
+
             $success = 'Group editor permission assigned.';
         } elseif ($action === 'remove_group_editor') {
             $personId = (int) ($_POST['person_id'] ?? 0);
@@ -105,6 +126,11 @@ try {
             da_remove_group_editor($personId, $groupId, $actorPersonId);
 
             $group = da_fetch_group($groupId);
+
+            audit_log(AUDIT_GROUP_EDITOR_REMOVED, 'group', $groupId, $personId, [
+                'person_id' => $personId,
+            ], $groupId);
+
             $success = 'Group editor permission removed.';
         } elseif ($action === 'generate_group_link') {
             $label = trim((string) ($_POST['label'] ?? 'Main Group calendar link'));
@@ -118,6 +144,16 @@ try {
             );
 
             $group = da_fetch_group($groupId);
+
+            audit_log(
+                $disableExisting ? AUDIT_GROUP_LINK_ROTATED : AUDIT_GROUP_LINK_CREATED,
+                'group',
+                $groupId,
+                null,
+                ['label' => $label, 'disabled_existing' => $disableExisting],
+                $groupId
+            );
+
             $success = $disableExisting
                 ? 'Group calendar link rotated. Existing active links were disabled.'
                 : 'New Group calendar link generated.';
@@ -142,6 +178,10 @@ try {
             da_log_action($actorPersonId, 'group_link_disabled', 'group', $groupId, [
                 'link_id' => $linkId,
             ]);
+
+            audit_log(AUDIT_GROUP_LINK_DISABLED, 'group', $groupId, null, [
+                'link_id' => $linkId,
+            ], $groupId);
 
             $group = da_fetch_group($groupId);
             $success = 'Group calendar link disabled.';

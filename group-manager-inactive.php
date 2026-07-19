@@ -225,6 +225,13 @@ function gmi_reactivate_person(
             ]);
         }
 
+        audit_log(AUDIT_USER_REACTIVATED, 'person', $personId, $personId, [
+            'group_id' => $groupId,
+            'membership_role' => $membershipRole,
+            'access_level' => $accessLevel,
+            'previous_status' => $membership['person_status'] ?? null,
+        ], $groupId);
+
         db()->commit();
     } catch (Throwable $e) {
         db()->rollBack();

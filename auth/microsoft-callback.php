@@ -45,9 +45,34 @@ try {
     $_SESSION['microsoft_access_token'] = $accessToken->getToken();
     unset($_SESSION['oauth2state']);
 
+    // Audit: successful login
+    audit_log(
+        AUDIT_AUTH_LOGIN_SUCCESS,
+        'person',
+        (int) $user['id'],
+        (int) $user['id'],
+        [
+            'email' => $user['primary_email'] ?? $user['email'] ?? '',
+            'provider' => 'microsoft',
+            'access_level' => $user['highest_access_level'] ?? 'member',
+        ]
+    );
+
     redirect(user_needs_group_onboarding() ? '/onboarding.php' : '/index.php');
 } catch (Throwable $e) {
     error_log('Microsoft sign-in failed: ' . $e->getMessage());
+
+    // Audit: failed login attempt
+    audit_log(
+        AUDIT_AUTH_LOGIN_FAILED,
+        null,
+        null,
+        null,
+        [
+            'error' => substr($e->getMessage(), 0, 255),
+            'provider' => 'microsoft',
+        ]
+    );
 
     http_response_code(500);
     echo '<h1>Microsoft sign-in failed</h1>';

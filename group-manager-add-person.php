@@ -145,6 +145,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->commit();
 
                 $createdPersonId = $existingPersonId;
+
+                audit_log(AUDIT_USER_LINKED_TO_GROUP, 'person', $existingPersonId, $existingPersonId, [
+                    'group_id' => $selectedGroupId,
+                    'membership_role' => $membershipRole,
+                    'method' => 'link_existing',
+                ], $selectedGroupId);
+
                 $success = e($existingPerson['full_name']) . ' has been added to ' . e($selectedGroup['group_name']) . ' as ' . e(gm_role_title_from_membership_role($membershipRole)) . '.';
                 $posted = [];
             } elseif ($searchTerm !== '') {
@@ -319,6 +326,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo->commit();
 
                     $createdPersonId = $personId;
+
+                    audit_log(AUDIT_USER_LINKED_TO_GROUP, 'person', $personId, $personId, [
+                        'group_id' => $selectedGroupId,
+                        'membership_role' => $membershipRole,
+                        'method' => 'duplicate_add_existing_role',
+                    ], $selectedGroupId);
+
                     $success = 'Existing person "' . $existingPerson['full_name'] . '" has been added to this Group with the role ' . gm_role_title_from_membership_role($membershipRole) . '.';
                     $posted = [];
                 } else {
@@ -502,6 +516,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
 
                 $pdo->commit();
+
+                audit_log(
+                    $existingPerson ? AUDIT_USER_LINKED_TO_GROUP : AUDIT_USER_CREATED,
+                    'person',
+                    $personId,
+                    $personId,
+                    [
+                        'group_id' => $selectedGroupId,
+                        'membership_role' => $membershipRole,
+                        'access_route' => $finalAccessRoute,
+                        'full_name' => $fullName,
+                    ],
+                    $selectedGroupId
+                );
+
+                if ($finalAccessRoute === 'district_account_requested') {
+                    audit_log(AUDIT_ADMIN_M365_ACCOUNT_REQ, 'person', $personId, $personId, [
+                        'requested_email' => $requestedDistrictEmail,
+                        'group_id' => $selectedGroupId,
+                    ], $selectedGroupId);
+                }
 
                 $createdPersonId = $personId;
                 $success = $existingPerson

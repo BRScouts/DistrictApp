@@ -462,6 +462,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $groupId
             );
 
+            audit_log(
+                $isDraft ? AUDIT_EVENT_DRAFT_CREATED : AUDIT_EVENT_CREATED,
+                'calendar_event',
+                $eventId,
+                null,
+                ['title' => $title, 'status' => $eventStatus, 'event_type' => $eventType],
+                $groupId
+            );
+
             if (!$isDraft) {
                 dc_queue_event_notifications($eventId, 'submitted');
             }

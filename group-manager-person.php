@@ -74,6 +74,12 @@ try {
             );
 
             $pdo->commit();
+
+            audit_log(AUDIT_USER_EDITED, 'person', $personId, $personId, [
+                'group_id' => $selectedGroupId,
+                'fields_changed' => 'details',
+            ], $selectedGroupId);
+
             $success = 'Person details saved.';
         } elseif ($action === 'update_role') {
             $membershipRole = (string) ($_POST['membership_role'] ?? '');
@@ -88,6 +94,11 @@ try {
             gm_update_group_role($personId, $targetGroupId, $membershipRole, $actorPersonId);
             $pdo->commit();
 
+            audit_log(AUDIT_USER_ROLE_CHANGED, 'person', $personId, $personId, [
+                'group_id' => $targetGroupId,
+                'membership_role' => $membershipRole,
+            ], $targetGroupId);
+
             $success = 'Role updated.';
         } elseif ($action === 'set_status') {
             $newStatus = (string) ($_POST['new_status'] ?? 'inactive');
@@ -95,6 +106,15 @@ try {
             $pdo->beginTransaction();
             gm_set_person_membership_status($personId, $selectedGroupId, $newStatus, $actorPersonId);
             $pdo->commit();
+
+            audit_log(
+                $newStatus === 'active' ? AUDIT_USER_REACTIVATED : AUDIT_USER_DEACTIVATED,
+                'person',
+                $personId,
+                $personId,
+                ['group_id' => $selectedGroupId, 'new_status' => $newStatus],
+                $selectedGroupId
+            );
 
             $success = $newStatus === 'active'
                 ? 'Person reactivated for this Group.'
@@ -107,6 +127,12 @@ try {
             }
 
             gm_send_microsoft_instructions($person, $selectedGroupId, $actorPersonId);
+
+            audit_log(AUDIT_USER_INSTRUCTIONS_SENT, 'person', $personId, $personId, [
+                'type' => 'microsoft_sso',
+                'group_id' => $selectedGroupId,
+            ], $selectedGroupId);
+
             $success = 'Microsoft sign-in instructions have been queued.';
         } elseif ($action === 'send_calendar_link') {
             $person = gm_fetch_person_for_group($selectedGroupId, $personId);
@@ -116,6 +142,12 @@ try {
             }
 
             $createdInviteUrl = gm_send_calendar_link_instructions($person, $selectedGroupId, $actorPersonId);
+
+            audit_log(AUDIT_USER_INSTRUCTIONS_SENT, 'person', $personId, $personId, [
+                'type' => 'calendar_link',
+                'group_id' => $selectedGroupId,
+            ], $selectedGroupId);
+
             $success = 'Calendar access instructions have been queued.';
         } elseif ($action === 'set_primary') {
             if (!$isDistrictAdmin) {
@@ -127,6 +159,10 @@ try {
             $pdo->beginTransaction();
             gm_set_primary_membership($personId, $targetGroupId, $actorPersonId);
             $pdo->commit();
+
+            audit_log(AUDIT_USER_PRIMARY_SET, 'person', $personId, $personId, [
+                'group_id' => $targetGroupId,
+            ], $targetGroupId);
 
             $success = 'This membership has been set as the primary role for this person.';
         }

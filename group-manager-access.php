@@ -68,6 +68,15 @@ try {
                 $disableExisting
             );
 
+            audit_log(
+                $disableExisting ? AUDIT_GROUP_LINK_ROTATED : AUDIT_GROUP_LINK_CREATED,
+                'group',
+                $selectedGroupId,
+                null,
+                ['label' => $label, 'disabled_existing' => $disableExisting],
+                $selectedGroupId
+            );
+
             $success = $disableExisting
                 ? 'Group calendar link rotated. Existing active links were disabled.'
                 : 'New Group calendar link generated.';
@@ -75,6 +84,11 @@ try {
             $linkId = (int) ($_POST['link_id'] ?? 0);
 
             gm_disable_group_link($selectedGroupId, $linkId, $actorPersonId);
+
+            audit_log(AUDIT_GROUP_LINK_DISABLED, 'group', $selectedGroupId, null, [
+                'link_id' => $linkId,
+            ], $selectedGroupId);
+
             $success = 'Group calendar link disabled.';
         }
     }

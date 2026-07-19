@@ -3,13 +3,19 @@
 declare(strict_types=1);
 
 /**
- * Send pending emails from email_queue using PHPMailer.
+ * Send pending emails from email_queue using Microsoft Graph API (sendMail).
+ *
+ * Uses the existing Entra app registration (client_credentials flow) to send
+ * mail via the Graph API instead of shared-hosting SMTP.
+ *
+ * Requirements:
+ *   - The app registration (MS_CLIENT_ID) must have the "Mail.Send" application
+ *     permission granted with admin consent in Azure Portal.
+ *   - The MS_GRAPH_MAIL_FROM mailbox must exist and be licensed in your tenant.
  *
  * Intended to run from CLI cron only:
- * php /home/brscouts/app.irvalscouts.org.uk/cron/send-email-queue.php
+ *   php /home/brscouts/app.irvalscouts.org.uk/cron/send-email-queue.php
  */
-
-
 
 require_once __DIR__ . '/../app/bootstrap.php';
 require_once __DIR__ . '/../config.php';
@@ -17,14 +23,15 @@ require_once __DIR__ . '/../config.php';
 $autoload = __DIR__ . '/../vendor/autoload.php';
 
 if (!is_file($autoload)) {
-    fwrite(STDERR, "Composer autoload file not found. Run: composer require phpmailer/phpmailer\n");
+    fwrite(STDERR, "Composer autoload file not found. Run: composer install\n");
     exit(1);
 }
 
 require_once $autoload;
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception as PHPMailerException;
+use GuzzleHttp\Client;
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function mailq_config(string $key, mixed $default = null): mixed
 {
@@ -207,48 +214,132 @@ function mailq_wrap_template(string $subject, string $bodyHtml): string
 </html>';
 }
 
-function mailq_build_mailer(): PHPMailer
+// ─── Microsoft Graph API ────────────────────────────────────────────────────
+
+/**
+ * Obtain a client_credentials access token from Microsoft Entra for Graph API.
+ */
+function mailq_graph_token(Client $client): string
 {
-    $host = (string) mailq_config('SMTP_HOST', '');
-    $username = (string) mailq_config('SMTP_USERNAME', '');
-    $password = (string) mailq_config('SMTP_PASSWORD', '');
-    $fromEmail = (string) mailq_config('SMTP_FROM_EMAIL', $username);
-    $fromName = (string) mailq_config('SMTP_FROM_NAME', 'Irwell Valley Scout District');
+    $tenantId = (string) mailq_config('MS_TENANT_ID', '');
+    $clientId = (string) mailq_config('MS_CLIENT_ID', '');
+    $clientSecret = (string) mailq_config('MS_CLIENT_SECRET', '');
 
-    if ($host === '' || $username === '' || $fromEmail === '') {
-        throw new RuntimeException('SMTP settings are incomplete. Check SMTP_HOST, SMTP_USERNAME and SMTP_FROM_EMAIL in config.php.');
+    if ($tenantId === '' || $clientId === '' || $clientSecret === '') {
+        throw new RuntimeException(
+            'Microsoft Graph credentials are not configured. '
+            . 'Check MS_TENANT_ID, MS_CLIENT_ID, and MS_CLIENT_SECRET in config.php.'
+        );
     }
 
-    $mail = new PHPMailer(true);
-    $mail->isSMTP();
-    $mail->Host = $host;
-    $mail->Port = (int) mailq_config('SMTP_PORT', 587);
-    $mail->SMTPAuth = true;
-    $mail->Username = $username;
-    $mail->Password = $password;
-    $mail->CharSet = 'UTF-8';
+    $response = $client->post(
+        'https://login.microsoftonline.com/' . rawurlencode($tenantId) . '/oauth2/v2.0/token',
+        [
+            'form_params' => [
+                'client_id' => $clientId,
+                'client_secret' => $clientSecret,
+                'scope' => 'https://graph.microsoft.com/.default',
+                'grant_type' => 'client_credentials',
+            ],
+        ]
+    );
 
-    $encryption = strtolower((string) mailq_config('SMTP_ENCRYPTION', 'tls'));
+    $payload = json_decode((string) $response->getBody(), true) ?: [];
 
-    if ($encryption === 'tls') {
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    } elseif ($encryption === 'ssl') {
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-    } else {
-        $mail->SMTPSecure = false;
+    if (empty($payload['access_token'])) {
+        $error = $payload['error_description'] ?? $payload['error'] ?? 'Unknown token error';
+        throw new RuntimeException('Graph token request failed: ' . $error);
     }
 
-    $mail->setFrom($fromEmail, $fromName);
+    return (string) $payload['access_token'];
+}
 
-    $replyToEmail = (string) mailq_config('SMTP_REPLY_TO_EMAIL', '');
-    $replyToName = (string) mailq_config('SMTP_REPLY_TO_NAME', '');
+/**
+ * Send an email via Microsoft Graph API using POST /users/{from}/sendMail.
+ *
+ * @param Client $client  Guzzle HTTP client
+ * @param string $token   Bearer access token
+ * @param string $to      Recipient email address
+ * @param string $toName  Recipient display name
+ * @param string $subject Email subject
+ * @param string $html    Full HTML body
+ * @param string $plain   Plain-text alternative body
+ */
+function mailq_graph_send(
+    Client $client,
+    string $token,
+    string $to,
+    string $toName,
+    string $subject,
+    string $html,
+    string $plain
+): void {
+    $fromEmail = (string) mailq_config('MS_GRAPH_MAIL_FROM', '');
+    $fromName = (string) mailq_config('MS_GRAPH_MAIL_FROM_NAME', 'Irwell Valley Scout District');
+    $replyToEmail = (string) mailq_config('MS_GRAPH_MAIL_REPLY_TO', '');
+    $replyToName = (string) mailq_config('MS_GRAPH_MAIL_REPLY_TO_NAME', $fromName);
+
+    if ($fromEmail === '') {
+        throw new RuntimeException('MS_GRAPH_MAIL_FROM is not configured in config.php.');
+    }
+
+    $message = [
+        'subject' => $subject,
+        'body' => [
+            'contentType' => 'HTML',
+            'content' => $html,
+        ],
+        'toRecipients' => [
+            [
+                'emailAddress' => [
+                    'address' => $to,
+                    'name' => $toName !== '' ? $toName : $to,
+                ],
+            ],
+        ],
+        'from' => [
+            'emailAddress' => [
+                'address' => $fromEmail,
+                'name' => $fromName,
+            ],
+        ],
+    ];
 
     if ($replyToEmail !== '') {
-        $mail->addReplyTo($replyToEmail, $replyToName ?: $fromName);
+        $message['replyTo'] = [
+            [
+                'emailAddress' => [
+                    'address' => $replyToEmail,
+                    'name' => $replyToName,
+                ],
+            ],
+        ];
     }
 
-    return $mail;
+    $url = 'https://graph.microsoft.com/v1.0/users/' . rawurlencode($fromEmail) . '/sendMail';
+
+    $response = $client->post($url, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $token,
+            'Content-Type' => 'application/json',
+        ],
+        'json' => [
+            'message' => $message,
+            'saveToSentItems' => false,
+        ],
+    ]);
+
+    $status = $response->getStatusCode();
+
+    if ($status < 200 || $status >= 300) {
+        $body = (string) $response->getBody();
+        $payload = json_decode($body, true) ?: [];
+        $errorMsg = $payload['error']['message'] ?? $body;
+        throw new RuntimeException('Graph sendMail failed (HTTP ' . $status . '): ' . $errorMsg);
+    }
 }
+
+// ─── Queue processing (unchanged logic) ────────────────────────────────────
 
 function mailq_fetch_pending(int $limit): array
 {
@@ -365,7 +456,7 @@ function mailq_mark_failed(int $id, string $error): void
     mailq_update_email($id, $values);
 }
 
-function mailq_send_row(array $row): void
+function mailq_send_row(Client $client, string $token, array $row): void
 {
     $id = (int) ($row['id'] ?? 0);
     $toEmail = trim((string) ($row['to_email'] ?? ''));
@@ -397,15 +488,10 @@ function mailq_send_row(array $row): void
     $html = mailq_wrap_template($subject, $bodyHtml);
     $plain = mailq_plain_text_from_html($bodyHtml);
 
-    $mail = mailq_build_mailer();
-    $mail->addAddress($toEmail, $toName);
-    $mail->Subject = $subject;
-    $mail->isHTML(true);
-    $mail->Body = $html;
-    $mail->AltBody = $plain !== '' ? $plain : strip_tags($subject);
-
-    $mail->send();
+    mailq_graph_send($client, $token, $toEmail, $toName, $subject, $html, $plain);
 }
+
+// ─── Main execution ─────────────────────────────────────────────────────────
 
 $batchSize = (int) mailq_config('EMAIL_QUEUE_BATCH_SIZE', 25);
 $batchSize = max(1, min($batchSize, 100));
@@ -414,6 +500,15 @@ $sent = 0;
 $failed = 0;
 
 try {
+    $client = new Client([
+        'timeout' => 30,
+        'http_errors' => false,
+    ]);
+
+    $token = mailq_graph_token($client);
+
+    echo "[info] Graph token acquired. Sending as: " . mailq_config('MS_GRAPH_MAIL_FROM') . PHP_EOL;
+
     $rows = mailq_fetch_pending($batchSize);
 
     foreach ($rows as $row) {
@@ -421,7 +516,7 @@ try {
 
         try {
             mailq_mark_processing($id);
-            mailq_send_row($row);
+            mailq_send_row($client, $token, $row);
             mailq_mark_sent($id);
             $sent++;
 

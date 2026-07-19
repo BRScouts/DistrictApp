@@ -346,11 +346,18 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
         </a>
 
         <?php if ($user): ?>
+            <?php
+                $userAccessLevel = (string) ($user['highest_access_level'] ?? $user['role'] ?? 'member');
+                $isAdminUser = in_array($userAccessLevel, ['system_admin', 'district_admin'], true);
+            ?>
             <nav class="lt-primary-nav" aria-label="Main navigation">
                 <a href="/index.php">Home</a>
                 <a href="/dc/">Calendar</a>
                 <a href="/directory.php">Directory</a>
                 <a href="/profile.php">My Profile</a>
+                <?php if ($isAdminUser): ?>
+                    <a href="/system-admin.php">System Admin</a>
+                <?php endif; ?>
             </nav>
 
             <button type="button" class="lt-mobile-nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="lt-mobile-nav">
@@ -389,6 +396,9 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
 
                         <div class="lt-account-dropdown-links">
                             <a href="/profile.php" role="menuitem">My profile</a>
+                            <?php if (!empty($isAdminUser)): ?>
+                                <a href="/system-admin.php" role="menuitem">System Admin</a>
+                            <?php endif; ?>
                             <a class="lt-sign-out-link" href="/logout.php" role="menuitem">Sign out</a>
                         </div>
                     </div>
@@ -403,6 +413,9 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
             <a href="/dc/">Calendar</a>
             <a href="/directory.php">Directory</a>
             <a href="/profile.php">My Profile</a>
+            <?php if (!empty($isAdminUser)): ?>
+                <a href="/system-admin.php">System Admin</a>
+            <?php endif; ?>
             <a href="/logout.php">Sign out</a>
         </div>
     <?php endif; ?>

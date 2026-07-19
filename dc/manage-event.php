@@ -194,6 +194,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $groupId
             );
 
+            audit_log(AUDIT_EVENT_CANCELLED, 'calendar_event', $eventId, null, [
+                'previous_status' => $event['status'] ?? null,
+            ], $groupId);
+
             dc_queue_event_notifications($eventId, 'cancelled');
 
             redirect('/dc/manage-event.php?id=' . $eventId . '&cancelled=1');
@@ -541,6 +545,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'previous_status' => $previousStatus,
                         'new_status' => $newStatus,
                         'approval_reset' => $statusReset,
+                    ],
+                    $groupId
+                );
+
+                audit_log(
+                    $isDraft ? AUDIT_EVENT_DRAFT_CREATED : AUDIT_EVENT_UPDATED,
+                    'calendar_event',
+                    $eventId,
+                    null,
+                    [
+                        'previous_status' => $previousStatus,
+                        'new_status' => $newStatus,
+                        'title' => $title,
                     ],
                     $groupId
                 );
