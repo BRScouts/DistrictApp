@@ -53,7 +53,7 @@ if (!$selectedGroup || !gm_group_is_manageable($selectedGroupId, $manageableGrou
 $errors = [];
 $success = null;
 $actorPersonId = (int) $user['id'];
-$roleOptions = gm_membership_role_options();
+$roleOptions = gm_membership_role_options($selectedGroupId);
 
 function gmi_membership_role_label(?string $role): string
 {

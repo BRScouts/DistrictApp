@@ -721,7 +721,7 @@ $active = 'home';
 require __DIR__ . '/layout.php';
 ?>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 
 <style>
     .dc-notice {
@@ -1653,7 +1653,7 @@ require __DIR__ . '/layout.php';
     </div>
 <?php endif; ?>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
 const riskAssessments = <?= json_encode(

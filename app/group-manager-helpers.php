@@ -271,9 +271,9 @@ function gm_fetch_group(int $groupId): ?array
     return $group ?: null;
 }
 
-function gm_membership_role_options(): array
+function gm_membership_role_options(?int $groupId = null): array
 {
-    return [
+    $roles = [
         'group_lead_volunteer' => 'Group Lead Volunteer',
         'section_leader' => 'Section Leader',
         'assistant_section_leader' => 'Assistant Section Leader',
@@ -282,13 +282,58 @@ function gm_membership_role_options(): array
         'district_volunteer' => 'District Volunteer',
         'other' => 'Other',
     ];
+
+    // District-specific roles only available for the District Team (group ID 3).
+    if ($groupId === 3) {
+        $roles = array_merge($roles, gm_district_role_options());
+    }
+
+    return $roles;
+}
+
+/**
+ * Additional roles exclusive to the District Team (group ID 3).
+ */
+function gm_district_role_options(): array
+{
+    return [
+        'district_lead_volunteer' => 'District Lead Volunteer',
+        'district_youth_lead' => 'District Youth Lead',
+        'district_leadership_team_member' => 'District Leadership Team Member',
+        'district_14_24_team_leader' => 'District 14–24 Team Leader',
+        'district_14_24_team_member' => 'District 14–24 Team Member',
+        'explorer_section_team_leader' => 'Explorer Section Team Leader',
+        'explorer_section_team_member' => 'Explorer Section Team Member',
+        'young_leader_unit_team_leader' => 'Young Leader Unit Team Leader',
+        'young_leader_unit_team_member' => 'Young Leader Unit Team Member',
+        'scout_network_section_team_leader' => 'Scout Network Section Team Leader',
+        'scout_network_section_team_member' => 'Scout Network Section Team Member',
+        'district_programme_team_leader' => 'District Programme Team Leader',
+        'district_programme_team_member' => 'District Programme Team Member',
+        'district_volunteering_development_team_leader' => 'District Volunteering Development Team Leader',
+        'district_volunteering_development_team_member' => 'District Volunteering Development Team Member',
+        'district_support_team_leader' => 'District Support Team Leader',
+        'district_support_team_member' => 'District Support Team Member',
+        'district_sub_team_leader' => 'District Sub-team Leader',
+        'district_chair' => 'District Chair',
+        'district_treasurer' => 'District Treasurer',
+        'district_trustee' => 'District Trustee',
+        'co_opted_district_trustee' => 'Co-opted District Trustee',
+        'district_president' => 'District President',
+        'district_vice_president' => 'District Vice President',
+    ];
 }
 
 function gm_role_title_from_membership_role(string $membershipRole): string
 {
-    $options = gm_membership_role_options();
+    // Check standard roles first, then district roles.
+    $options = gm_membership_role_options(null);
+    if (isset($options[$membershipRole])) {
+        return $options[$membershipRole];
+    }
 
-    return $options[$membershipRole] ?? 'Other';
+    $districtOptions = gm_district_role_options();
+    return $districtOptions[$membershipRole] ?? 'Other';
 }
 
 function gm_access_level_for_membership_role(string $membershipRole): string
@@ -1021,7 +1066,7 @@ function gm_queue_email_and_log(
 
 function gm_update_group_role(int $personId, int $groupId, string $membershipRole, int $actorPersonId): void
 {
-    $roleOptions = gm_membership_role_options();
+    $roleOptions = gm_membership_role_options($groupId);
 
     if (!array_key_exists($membershipRole, $roleOptions)) {
         throw new RuntimeException('Choose a valid role.');
@@ -1287,4 +1332,61 @@ function gm_send_calendar_link_instructions(array $person, int $groupId, int $ac
 function gm_nav_url(string $page, int $groupId): string
 {
     return $page . '?group_id=' . $groupId;
+}
+
+/**
+ * Set a membership as the person's primary role.
+ *
+ * Clears is_primary on all other memberships for this person,
+ * then sets is_primary = 1 on the specified group membership.
+ * Only district admins should call this.
+ */
+function gm_set_primary_membership(int $personId, int $groupId, int $actorPersonId): void
+{
+    if (!gm_column_exists('group_memberships', 'is_primary')) {
+        throw new RuntimeException('The is_primary column has not been added yet. Please run the migration first.');
+    }
+
+    // Verify the membership exists and is active.
+    $stmt = db()->prepare("
+        SELECT id
+        FROM group_memberships
+        WHERE person_id = :person_id
+          AND group_id = :group_id
+          AND status = 'active'
+        LIMIT 1
+    ");
+    $stmt->execute([
+        'person_id' => $personId,
+        'group_id' => $groupId,
+    ]);
+
+    if (!$stmt->fetchColumn()) {
+        throw new RuntimeException('That person does not have an active membership in this Group.');
+    }
+
+    // Clear primary from all this person's memberships.
+    $stmt = db()->prepare("
+        UPDATE group_memberships
+        SET is_primary = 0
+        WHERE person_id = :person_id
+    ");
+    $stmt->execute(['person_id' => $personId]);
+
+    // Set this one as primary.
+    $stmt = db()->prepare("
+        UPDATE group_memberships
+        SET is_primary = 1
+        WHERE person_id = :person_id
+          AND group_id = :group_id
+          AND status = 'active'
+    ");
+    $stmt->execute([
+        'person_id' => $personId,
+        'group_id' => $groupId,
+    ]);
+
+    gm_log_action($actorPersonId, 'primary_membership_set', 'person', $personId, [
+        'group_id' => $groupId,
+    ]);
 }

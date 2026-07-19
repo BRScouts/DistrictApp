@@ -48,7 +48,7 @@ $errors = [];
 $success = null;
 $createdInviteUrl = null;
 $actorPersonId = (int) $user['id'];
-$roleOptions = gm_membership_role_options();
+$roleOptions = gm_membership_role_options($selectedGroupId);
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -111,6 +111,16 @@ try {
 
             $createdInviteUrl = gm_send_calendar_link_instructions($person, $selectedGroupId, $actorPersonId);
             $success = 'Calendar access instructions have been queued.';
+        } elseif ($action === 'set_primary') {
+            if (!$isDistrictAdmin) {
+                throw new RuntimeException('Only District Administrators can set a primary role.');
+            }
+
+            $pdo->beginTransaction();
+            gm_set_primary_membership($personId, $selectedGroupId, $actorPersonId);
+            $pdo->commit();
+
+            $success = 'This membership has been set as the primary role for this person.';
         }
     }
 } catch (Throwable $e) {
@@ -381,6 +391,45 @@ include __DIR__ . '/app/group-manager-nav.php';
             <?php endif; ?>
         </aside>
     </div>
+
+    <?php if ($isDistrictAdmin): ?>
+    <?php
+        // Check if this membership is currently the primary one.
+        $isPrimary = false;
+        if (gm_column_exists('group_memberships', 'is_primary')) {
+            $stmtPrimary = $pdo->prepare("
+                SELECT is_primary
+                FROM group_memberships
+                WHERE person_id = :person_id
+                  AND group_id = :group_id
+                  AND status = 'active'
+                LIMIT 1
+            ");
+            $stmtPrimary->execute(['person_id' => $personId, 'group_id' => $selectedGroupId]);
+            $isPrimary = (int) $stmtPrimary->fetchColumn() === 1;
+        }
+    ?>
+    <section class="lt-panel mt-4">
+        <h2 class="lt-section-title">Primary role <small style="font-weight:normal;color:#555;">(District Admin only)</small></h2>
+
+        <?php if ($isPrimary): ?>
+            <p><span class="gm-badge gm-badge-active">Primary</span> This is currently set as this person's primary role. Their Microsoft 365 profile (job title and department) reflects this membership.</p>
+        <?php else: ?>
+            <p class="gm-muted">
+                If this person has roles in multiple groups, you can mark this membership as their primary role.
+                Their Microsoft 365 job title and department will be set based on their primary membership.
+            </p>
+
+            <form method="post" onsubmit="return confirm('Set this as the primary role for this person? This will replace any existing primary.');">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="set_primary">
+                <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                <button class="btn btn-primary lt-btn" type="submit">Set as primary role</button>
+            </form>
+        <?php endif; ?>
+    </section>
+    <?php endif; ?>
 
     <section class="lt-panel mt-4">
         <h2 class="lt-section-title">Remove or reactivate</h2>

@@ -1294,7 +1294,7 @@ include __DIR__ . '/header.php';
 
 <link
     rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
 >
 
 <style>
@@ -2210,7 +2210,7 @@ include __DIR__ . '/header.php';
     <?php endif; ?>
 </main>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
 (function () {

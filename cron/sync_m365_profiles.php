@@ -267,20 +267,47 @@ function sync_graph_remove_manager(\GuzzleHttp\Client $client, string $token, st
 /**
  * Maps internal membership_role values to human-readable job titles for M365.
  *
- * These must match the values used in gm_membership_role_options() from
- * group-manager-helpers.php. If new roles are added there, add them here too.
+ * These must match the values used in gm_membership_role_options() and
+ * gm_district_role_options() from group-manager-helpers.php.
  */
 function sync_role_to_job_title(string $membershipRole): string
 {
     $map = [
+        // Standard group roles
         'group_lead_volunteer' => 'Group Lead Volunteer',
         'section_leader' => 'Section Leader',
         'assistant_section_leader' => 'Assistant Section Leader',
         'section_assistant' => 'Section Assistant',
         'trustee' => 'Trustee',
         'district_volunteer' => 'District Volunteer',
-        'group_link' => 'Volunteer', // calendar-link pseudo role, unlikely to hit
+        'group_link' => 'Volunteer',
         'other' => 'Volunteer',
+
+        // District team roles (group 3)
+        'district_lead_volunteer' => 'District Lead Volunteer',
+        'district_youth_lead' => 'District Youth Lead',
+        'district_leadership_team_member' => 'District Leadership Team Member',
+        'district_14_24_team_leader' => 'District 14–24 Team Leader',
+        'district_14_24_team_member' => 'District 14–24 Team Member',
+        'explorer_section_team_leader' => 'Explorer Section Team Leader',
+        'explorer_section_team_member' => 'Explorer Section Team Member',
+        'young_leader_unit_team_leader' => 'Young Leader Unit Team Leader',
+        'young_leader_unit_team_member' => 'Young Leader Unit Team Member',
+        'scout_network_section_team_leader' => 'Scout Network Section Team Leader',
+        'scout_network_section_team_member' => 'Scout Network Section Team Member',
+        'district_programme_team_leader' => 'District Programme Team Leader',
+        'district_programme_team_member' => 'District Programme Team Member',
+        'district_volunteering_development_team_leader' => 'District Volunteering Development Team Leader',
+        'district_volunteering_development_team_member' => 'District Volunteering Development Team Member',
+        'district_support_team_leader' => 'District Support Team Leader',
+        'district_support_team_member' => 'District Support Team Member',
+        'district_sub_team_leader' => 'District Sub-team Leader',
+        'district_chair' => 'District Chair',
+        'district_treasurer' => 'District Treasurer',
+        'district_trustee' => 'District Trustee',
+        'co_opted_district_trustee' => 'Co-opted District Trustee',
+        'district_president' => 'District President',
+        'district_vice_president' => 'District Vice President',
     ];
 
     return $map[$membershipRole] ?? 'Volunteer';
@@ -421,6 +448,15 @@ function sync_fetch_people_to_sync(): array
 
     sync_log("Using M365 ID source: {$source}");
 
+    // If is_primary column exists, prefer it for sorting (primary first).
+    $hasPrimaryCol = sync_column_exists('group_memberships', 'is_primary');
+    $primaryOrder = $hasPrimaryCol ? 'gm.is_primary DESC, ' : '';
+    $roleFieldOrder = "FIELD(gm.membership_role, 'group_lead_volunteer', 'section_leader', 'assistant_section_leader', 'section_assistant', 'trustee', 'district_volunteer', 'other') ASC";
+
+    if ($hasPrimaryCol) {
+        sync_log('is_primary column detected — will prefer primary memberships.');
+    }
+
     if ($source === 'user_accounts') {
         // Join through user_accounts where provider = 'microsoft'.
         // provider_subject holds the Graph object ID (GUID).
@@ -464,7 +500,8 @@ function sync_fetch_people_to_sync(): array
             WHERE p.status = 'active'
             ORDER BY
                 p.id ASC,
-                FIELD(gm.membership_role, 'group_lead_volunteer', 'section_leader', 'assistant_section_leader', 'section_assistant', 'trustee', 'district_volunteer', 'other') ASC
+                {$primaryOrder}
+                {$roleFieldOrder}
         ";
     } elseif ($source === 'm365_account_requests') {
         $sql = "
@@ -504,7 +541,8 @@ function sync_fetch_people_to_sync(): array
             WHERE p.status = 'active'
             ORDER BY
                 p.id ASC,
-                FIELD(gm.membership_role, 'group_lead_volunteer', 'section_leader', 'assistant_section_leader', 'section_assistant', 'trustee', 'district_volunteer', 'other') ASC
+                {$primaryOrder}
+                {$roleFieldOrder}
         ";
     } else {
         // people:<column> fallback
@@ -542,7 +580,8 @@ function sync_fetch_people_to_sync(): array
               AND p.`{$m365IdColumn}` <> ''
             ORDER BY
                 p.id ASC,
-                FIELD(gm.membership_role, 'group_lead_volunteer', 'section_leader', 'assistant_section_leader', 'section_assistant', 'trustee', 'district_volunteer', 'other') ASC
+                {$primaryOrder}
+                {$roleFieldOrder}
         ";
     }
 

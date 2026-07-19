@@ -570,7 +570,7 @@ $active = 'add';
 require __DIR__ . '/layout.php';
 ?>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 
 <style>
     .dc-map-search {
@@ -1316,7 +1316,7 @@ require __DIR__ . '/layout.php';
     </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
 const riskAssessments = <?= json_encode(

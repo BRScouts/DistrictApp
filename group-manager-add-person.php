@@ -91,7 +91,7 @@ $posted = [];
 $districtEmailSuggestion = null;
 $graphChecked = false;
 $actorPersonId = (int) $user['id'];
-$roleOptions = gm_membership_role_options();
+$roleOptions = gm_membership_role_options($selectedGroupId);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_validate();
