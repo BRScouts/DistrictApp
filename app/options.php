@@ -6,15 +6,18 @@ function portal_role_options(): array
 {
     return [
         'Group Lead Volunteer',
-        'Section Leader',
-        'Assistant Section Leader',
-        'Section Assistant',
-        'Trustee',
-        'District Volunteer',
-        'Skills Instructor',
-        'Nights Away Adviser',
-        'Permit Holder',
-        'Other',
+        'Group Leadership Team Member',
+        'Squirrel Section Team Leader',
+        'Squirrel Section Team Member',
+        'Beaver Section Team Leader',
+        'Beaver Section Team Member',
+        'Cub Section Team Leader',
+        'Cub Section Team Member',
+        'Scout Section Team Leader',
+        'Scout Section Team Member',
+        'Group Chair',
+        'Group Treasurer',
+        'Group Trustee',
     ];
 }
 
@@ -22,31 +25,76 @@ function portal_membership_role_from_title(string $roleTitle): string
 {
     $roleTitle = strtolower($roleTitle);
 
-    if (str_contains($roleTitle, 'group lead')) {
+    if (str_contains($roleTitle, 'group lead volunteer')) {
         return 'group_lead_volunteer';
     }
 
-    if (str_contains($roleTitle, 'assistant section leader')) {
-        return 'assistant_section_leader';
+    if (str_contains($roleTitle, 'group leadership')) {
+        return 'group_leadership_team_member';
     }
 
-    if (str_contains($roleTitle, 'section assistant')) {
-        return 'section_assistant';
+    if (str_contains($roleTitle, 'squirrel') && str_contains($roleTitle, 'leader')) {
+        return 'squirrel_section_team_leader';
+    }
+
+    if (str_contains($roleTitle, 'squirrel') && str_contains($roleTitle, 'member')) {
+        return 'squirrel_section_team_member';
+    }
+
+    if (str_contains($roleTitle, 'beaver') && str_contains($roleTitle, 'leader')) {
+        return 'beaver_section_team_leader';
+    }
+
+    if (str_contains($roleTitle, 'beaver') && str_contains($roleTitle, 'member')) {
+        return 'beaver_section_team_member';
+    }
+
+    if (str_contains($roleTitle, 'cub') && str_contains($roleTitle, 'leader')) {
+        return 'cub_section_team_leader';
+    }
+
+    if (str_contains($roleTitle, 'cub') && str_contains($roleTitle, 'member')) {
+        return 'cub_section_team_member';
+    }
+
+    if (str_contains($roleTitle, 'scout section') && str_contains($roleTitle, 'leader')) {
+        return 'scout_section_team_leader';
+    }
+
+    if (str_contains($roleTitle, 'scout section') && str_contains($roleTitle, 'member')) {
+        return 'scout_section_team_member';
+    }
+
+    if (str_contains($roleTitle, 'group chair')) {
+        return 'group_chair';
+    }
+
+    if (str_contains($roleTitle, 'group treasurer')) {
+        return 'group_treasurer';
+    }
+
+    if (str_contains($roleTitle, 'group trustee') || str_contains($roleTitle, 'trustee')) {
+        return 'group_trustee';
+    }
+
+    // Legacy fallbacks for existing data
+    if (str_contains($roleTitle, 'assistant section leader')) {
+        return 'group_leadership_team_member';
     }
 
     if (str_contains($roleTitle, 'section leader')) {
-        return 'section_leader';
+        return 'scout_section_team_leader';
     }
 
-    if (str_contains($roleTitle, 'trustee')) {
-        return 'trustee';
+    if (str_contains($roleTitle, 'section assistant')) {
+        return 'scout_section_team_member';
     }
 
     if (str_contains($roleTitle, 'district')) {
-        return 'district_volunteer';
+        return 'group_leadership_team_member';
     }
 
-    return 'other';
+    return 'group_leadership_team_member';
 }
 
 function portal_access_level_from_membership_role(string $membershipRole): string

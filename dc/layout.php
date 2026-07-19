@@ -662,10 +662,16 @@ $profileUrl = '/profile.php';
 
             .lt-nav,
             .dc-nav {
+                display: none;
                 width: 100%;
                 justify-content: flex-start;
                 padding-top: 0.75rem;
                 border-top: 1px solid var(--dc-border);
+            }
+
+            .lt-nav.is-open,
+            .dc-nav.is-open {
+                display: flex;
             }
 
             .lt-nav a,
@@ -734,9 +740,14 @@ $profileUrl = '/profile.php';
 
             .lt-nav,
             .dc-nav {
-                display: grid;
+                display: none;
                 grid-template-columns: 1fr;
                 gap: 0.25rem;
+            }
+
+            .lt-nav.is-open,
+            .dc-nav.is-open {
+                display: grid;
             }
 
             .lt-nav a,
@@ -920,5 +931,19 @@ $profileUrl = '/profile.php';
         <?php endif; ?>
     </div>
 </div>
+
+<script>
+(function () {
+    var toggle = document.querySelector('[data-menu-toggle]');
+    var nav = document.getElementById('dc-main-nav');
+    if (!toggle || !nav) return;
+
+    toggle.addEventListener('click', function () {
+        var isOpen = nav.classList.toggle('is-open');
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        toggle.textContent = isOpen ? 'Close' : 'Menu';
+    });
+}());
+</script>
 
 <main class="lt-main dc-main">

@@ -274,29 +274,32 @@ require __DIR__ . '/layout.php';
 <style>
     .dc-risk-layout {
         display: grid;
-        gap: 1.5rem;
+        gap: 2rem;
     }
 
     .dc-risk-main-panel {
         background: #ffffff;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0;
+        border-radius: 0.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
     }
 
     .dc-risk-main-panel-inner {
-        padding: clamp(1.25rem, 3vw, 2rem);
+        padding: clamp(1.25rem, 3vw, 2.25rem);
     }
 
     .dc-risk-results-head {
         display: grid;
         gap: 1rem;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.75rem;
+        padding-bottom: 1.25rem;
+        border-bottom: 1px solid var(--dc-border, #e2e8f0);
     }
 
     @media (min-width: 760px) {
         .dc-risk-results-head {
             grid-template-columns: minmax(0, 1fr) auto;
-            align-items: start;
+            align-items: center;
         }
     }
 
@@ -310,24 +313,41 @@ require __DIR__ . '/layout.php';
     }
 
     .dc-risk-count {
-        margin-top: 0.35rem;
+        margin-top: 0.25rem;
         color: var(--dc-muted, #64748b);
-        font-size: 0.9rem;
+        font-size: 0.88rem;
         font-weight: 600;
         line-height: 1.4;
+        letter-spacing: 0.01em;
     }
 
     .dc-risk-search {
         margin-bottom: 1.75rem;
-        padding: 1.25rem;
+        padding: 1.5rem;
         background: var(--dc-canvas, #f8fafc);
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0;
+        border-radius: 0.5rem;
+    }
+
+    .dc-risk-search-title {
+        margin: 0 0 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--dc-ink, #1d2939);
+        font-size: 0.95rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .dc-risk-search-title svg {
+        flex-shrink: 0;
+        color: var(--dc-scouts-purple, #7413dc);
     }
 
     .dc-risk-search-grid {
         display: grid;
-        gap: 1rem;
+        gap: 0.85rem;
     }
 
     @media (min-width: 768px) {
@@ -368,20 +388,24 @@ require __DIR__ . '/layout.php';
     .dc-risk-per-page label,
     .dc-risk-search-actions label {
         display: block;
-        margin-bottom: 0.35rem;
+        margin-bottom: 0.3rem;
         color: var(--dc-ink, #1d2939);
         font-weight: 700;
-        font-size: 0.88rem;
+        font-size: 0.82rem;
         line-height: 1.2;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
     }
 
     .dc-risk-search .form-control,
     .dc-risk-search-actions .form-control {
         min-height: 42px;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0;
+        border-radius: 0.35rem;
         color: var(--dc-ink, #1d2939);
         font-weight: 500;
+        background: #ffffff;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
     .dc-risk-search .form-control:focus,
@@ -395,7 +419,9 @@ require __DIR__ . '/layout.php';
     .dc-risk-search-actions {
         display: grid;
         gap: 0.75rem;
-        margin-top: 1rem;
+        margin-top: 1.15rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--dc-border, #e2e8f0);
     }
 
     @media (min-width: 760px) {
@@ -408,7 +434,7 @@ require __DIR__ . '/layout.php';
     .dc-risk-button-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.75rem;
+        gap: 0.6rem;
         align-items: center;
     }
 
@@ -417,13 +443,14 @@ require __DIR__ . '/layout.php';
     .dc-risk-download,
     .dc-pagination a,
     .dc-pagination span {
-        border-radius: 0;
+        border-radius: 0.35rem;
         font-weight: 700;
     }
 
     .dc-risk-search-actions .btn,
     .dc-risk-search-actions .lt-btn {
         min-height: 42px;
+        padding: 0.5rem 1.25rem;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -454,24 +481,31 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-list {
         display: grid;
-        gap: 0.9rem;
+        gap: 0.75rem;
     }
 
     .dc-risk-row {
         display: grid;
         gap: 1rem;
-        padding: 1rem;
+        padding: 1.25rem;
         background: #ffffff;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-left: 3px solid var(--dc-scouts-purple, #7413dc);
-        border-radius: 0;
+        border-left: 4px solid var(--dc-scouts-purple, #7413dc);
+        border-radius: 0.5rem;
+        transition: box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+
+    .dc-risk-row:hover {
+        box-shadow: 0 2px 8px rgba(116, 19, 220, 0.08);
+        border-color: rgba(116, 19, 220, 0.25);
+        border-left-color: var(--dc-scouts-purple, #7413dc);
     }
 
     @media (min-width: 760px) {
         .dc-risk-row {
             grid-template-columns: minmax(0, 1fr) auto;
             align-items: center;
-            padding: 1.15rem;
+            padding: 1.35rem 1.5rem;
         }
     }
 
@@ -480,25 +514,30 @@ require __DIR__ . '/layout.php';
         color: var(--dc-ink, #1d2939);
         font-size: clamp(1.05rem, 1.8vw, 1.2rem);
         font-weight: 700;
-        line-height: 1.25;
+        line-height: 1.3;
         letter-spacing: -0.01em;
     }
 
     .dc-risk-title a {
         color: var(--dc-scouts-purple-dark, #4d0b93);
-        text-decoration-thickness: 1px;
-        text-underline-offset: 0.16em;
+        text-decoration: none;
     }
 
     .dc-risk-title a:hover {
         color: var(--dc-scouts-purple-deep, #2f005c);
+        text-decoration: underline;
         text-decoration-thickness: 2px;
+        text-underline-offset: 0.16em;
     }
 
     .dc-risk-meta {
-        margin: 0.4rem 0 0;
+        margin: 0.45rem 0 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.15rem 0.5rem;
         color: var(--dc-muted, #64748b);
-        font-size: 0.88rem;
+        font-size: 0.85rem;
         font-weight: 600;
         line-height: 1.5;
     }
@@ -508,50 +547,58 @@ require __DIR__ . '/layout.php';
         font-weight: 700;
     }
 
+    .dc-risk-meta-sep {
+        color: var(--dc-border, #e2e8f0);
+    }
+
     .dc-risk-desc {
         max-width: 760px;
-        margin: 0.65rem 0 0;
-        color: #101820;
-        font-size: 0.98rem;
-        font-weight: 700;
-        line-height: 1.5;
+        margin: 0.6rem 0 0;
+        color: var(--dc-muted, #64748b);
+        font-size: 0.92rem;
+        font-weight: 500;
+        line-height: 1.55;
     }
 
     .dc-risk-badges {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.45rem;
-        margin-top: 0.8rem;
+        gap: 0.4rem;
+        margin-top: 0.75rem;
     }
 
     .dc-risk-badge {
         display: inline-flex;
         align-items: center;
-        min-height: 26px;
-        padding: 0.2rem 0.5rem;
+        min-height: 24px;
+        padding: 0.2rem 0.55rem;
         background: var(--dc-canvas, #f8fafc);
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0;
-        color: var(--dc-ink, #1d2939);
-        font-size: 0.75rem;
+        border-radius: 1rem;
+        color: var(--dc-muted, #64748b);
+        font-size: 0.72rem;
         font-weight: 700;
         line-height: 1.1;
+        letter-spacing: 0.01em;
     }
 
     .dc-risk-badge-district {
-        background: #f8f5fc;
-        border-color: rgba(116, 19, 220, 0.3);
+        background: #f3e8ff;
+        border-color: rgba(116, 19, 220, 0.2);
         color: var(--dc-scouts-purple-dark, #4d0b93);
     }
 
     .dc-risk-actions {
         display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
         justify-content: flex-start;
     }
 
     @media (min-width: 760px) {
         .dc-risk-actions {
-            justify-content: flex-end;
+            justify-content: center;
+            align-items: flex-end;
         }
     }
 
@@ -559,17 +606,20 @@ require __DIR__ . '/layout.php';
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        gap: 0.4rem;
         min-height: 40px;
-        padding: 0.55rem 0.85rem;
+        padding: 0.55rem 1rem;
         background: var(--dc-scouts-purple, #7413dc);
         border: 1px solid var(--dc-scouts-purple, #7413dc);
-        border-radius: 0;
+        border-radius: 0.35rem;
         color: #ffffff;
-        box-shadow: none;
+        box-shadow: 0 1px 2px rgba(116, 19, 220, 0.2);
         text-decoration: none;
         font-size: 0.88rem;
+        font-weight: 700;
         line-height: 1.15;
         white-space: nowrap;
+        transition: background 0.15s ease, box-shadow 0.15s ease;
     }
 
     .dc-risk-download:hover,
@@ -578,19 +628,48 @@ require __DIR__ . '/layout.php';
         border-color: var(--dc-scouts-purple-dark, #4d0b93);
         color: #ffffff;
         text-decoration: none;
+        box-shadow: 0 2px 6px rgba(116, 19, 220, 0.3);
+    }
+
+    .dc-risk-preview {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        min-height: 36px;
+        padding: 0.4rem 0.85rem;
+        background: #ffffff;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-radius: 0.35rem;
+        color: var(--dc-scouts-purple-dark, #4d0b93);
+        text-decoration: none;
+        font-size: 0.82rem;
+        font-weight: 700;
+        line-height: 1.15;
+        white-space: nowrap;
+        transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .dc-risk-preview:hover,
+    .dc-risk-preview:focus {
+        background: #f8f5fc;
+        border-color: var(--dc-scouts-purple, #7413dc);
+        color: var(--dc-scouts-purple-dark, #4d0b93);
+        text-decoration: none;
     }
 
     .dc-risk-empty {
-        padding: 1.25rem;
+        padding: 2rem 1.5rem;
         background: var(--dc-canvas, #f8fafc);
         border: 1px dashed var(--dc-border, #e2e8f0);
-        border-radius: 0;
+        border-radius: 0.5rem;
+        text-align: center;
     }
 
     .dc-risk-empty h3 {
         margin: 0;
         color: var(--dc-ink, #1d2939);
-        font-size: 1.1rem;
+        font-size: 1.15rem;
         font-weight: 700;
         line-height: 1.2;
     }
@@ -600,15 +679,17 @@ require __DIR__ . '/layout.php';
         color: var(--dc-muted, #64748b);
         font-weight: 500;
         line-height: 1.5;
+        font-size: 0.92rem;
     }
 
     .dc-pagination {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.35rem;
+        gap: 0.4rem;
         align-items: center;
-        margin-top: 1.5rem;
-        padding-top: 1.25rem;
+        justify-content: center;
+        margin-top: 2rem;
+        padding-top: 1.5rem;
         border-top: 1px solid var(--dc-border, #e2e8f0);
     }
 
@@ -617,14 +698,17 @@ require __DIR__ . '/layout.php';
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 38px;
-        min-height: 38px;
-        padding: 0.35rem 0.6rem;
+        min-width: 40px;
+        min-height: 40px;
+        padding: 0.4rem 0.7rem;
         border: 1px solid var(--dc-border, #e2e8f0);
-        border-radius: 0;
+        border-radius: 0.35rem;
         background: #ffffff;
         color: var(--dc-scouts-purple-dark, #4d0b93);
         text-decoration: none;
+        font-size: 0.88rem;
+        font-weight: 700;
+        transition: background 0.12s ease, border-color 0.12s ease;
     }
 
     .dc-pagination a:hover {
@@ -637,19 +721,22 @@ require __DIR__ . '/layout.php';
         background: var(--dc-scouts-purple-dark, #4d0b93);
         color: #ffffff;
         border-color: var(--dc-scouts-purple-dark, #4d0b93);
+        box-shadow: 0 1px 3px rgba(116, 19, 220, 0.25);
     }
 
     .dc-pagination .disabled {
         color: var(--dc-muted, #64748b);
         background: var(--dc-canvas, #f8fafc);
+        cursor: default;
     }
 
     .dc-success {
         margin-bottom: 1.25rem;
         padding: 0.85rem 1.15rem;
-        background: #f0fdf9;
-        border-left: 3px solid #00a794;
-        border-radius: 0;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-left: 4px solid #00a794;
+        border-radius: 0.4rem;
         color: var(--dc-ink, #1d2939);
         font-weight: 600;
         font-size: 0.92rem;
@@ -660,8 +747,9 @@ require __DIR__ . '/layout.php';
         margin-bottom: 1.25rem;
         padding: 1rem 1.15rem;
         background: #fef2f2;
-        border-left: 3px solid #dc2626;
-        border-radius: 0;
+        border: 1px solid #fecaca;
+        border-left: 4px solid #dc2626;
+        border-radius: 0.4rem;
         color: var(--dc-ink, #1d2939);
     }
 
@@ -681,11 +769,16 @@ require __DIR__ . '/layout.php';
 
     @media (max-width: 767.98px) {
         .dc-risk-main-panel-inner {
-            padding: 1rem;
+            padding: 1.15rem;
+        }
+
+        .dc-risk-main-panel {
+            border-radius: 0.35rem;
         }
 
         .dc-risk-search {
-            padding: 1rem;
+            padding: 1.15rem;
+            border-radius: 0.35rem;
         }
 
         .dc-risk-search-actions {
@@ -694,11 +787,15 @@ require __DIR__ . '/layout.php';
 
         .dc-risk-button-row {
             display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
         }
 
         .dc-risk-button-row .btn,
-        .dc-risk-button-row .lt-btn,
+        .dc-risk-button-row .lt-btn {
+            width: 100%;
+        }
+
         .dc-risk-download {
             width: 100%;
         }
@@ -715,6 +812,23 @@ require __DIR__ . '/layout.php';
 
         .dc-risk-row {
             padding: 1rem;
+            border-radius: 0.35rem;
+        }
+
+        .dc-risk-results-head {
+            padding-bottom: 1rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .dc-pagination {
+            gap: 0.3rem;
+        }
+
+        .dc-pagination a,
+        .dc-pagination span {
+            min-width: 36px;
+            min-height: 36px;
+            font-size: 0.82rem;
         }
     }
 
@@ -761,6 +875,12 @@ require __DIR__ . '/layout.php';
             </div>
 
             <form method="get" class="dc-risk-search">
+                <div class="dc-risk-search-title">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path d="M11.5 11.5L14 14M6.5 12A5.5 5.5 0 1 0 6.5 1a5.5 5.5 0 0 0 0 11Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    Filter &amp; search
+                </div>
                 <div class="dc-risk-search-grid <?= $showGroupPicker ? 'has-group' : '' ?>">
                     <div class="form-group mb-0">
                         <label for="q">Search</label>
@@ -837,6 +957,9 @@ require __DIR__ . '/layout.php';
 
             <?php if (!$risks): ?>
                 <div class="dc-risk-empty">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="margin: 0 auto 0.75rem; display: block; color: var(--dc-muted, #64748b); opacity: 0.5;">
+                        <path d="M9 12h6M12 9v6M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
                     <h3>No risk assessments found</h3>
                     <p>Try a broader search, remove filters, or upload a new risk assessment.</p>
                 </div>
@@ -866,8 +989,10 @@ require __DIR__ . '/layout.php';
 
                                 <p class="dc-risk-meta">
                                     <strong><?= e($risk['group_name']) ?></strong>
-                                    · uploaded by <?= e($risk['uploaded_by_name'] ?: 'Unknown leader') ?>
-                                    · <?= e($uploadedAt) ?>
+                                    <span class="dc-risk-meta-sep" aria-hidden="true">·</span>
+                                    <span>Uploaded by <?= e($risk['uploaded_by_name'] ?: 'Unknown leader') ?></span>
+                                    <span class="dc-risk-meta-sep" aria-hidden="true">·</span>
+                                    <span><?= e($uploadedAt) ?></span>
                                 </p>
 
                                 <?php if (!empty($risk['description'])): ?>
@@ -891,7 +1016,17 @@ require __DIR__ . '/layout.php';
 
                             <div class="dc-risk-actions">
                                 <a class="dc-risk-download" href="/dc/download-risk-assessment.php?id=<?= (int) $risk['id'] ?>">
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                        <path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2M8 2v9M5 8l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
                                     Download
+                                </a>
+                                <a class="dc-risk-preview" href="/dc/preview-risk-assessment.php?id=<?= (int) $risk['id'] ?>">
+                                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                        <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5Z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/>
+                                    </svg>
+                                    Preview
                                 </a>
                             </div>
                         </article>

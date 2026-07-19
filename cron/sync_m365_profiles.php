@@ -275,6 +275,20 @@ function sync_role_to_job_title(string $membershipRole): string
     $map = [
         // Standard group roles
         'group_lead_volunteer' => 'Group Lead Volunteer',
+        'group_leadership_team_member' => 'Group Leadership Team Member',
+        'squirrel_section_team_leader' => 'Squirrel Section Team Leader',
+        'squirrel_section_team_member' => 'Squirrel Section Team Member',
+        'beaver_section_team_leader' => 'Beaver Section Team Leader',
+        'beaver_section_team_member' => 'Beaver Section Team Member',
+        'cub_section_team_leader' => 'Cub Section Team Leader',
+        'cub_section_team_member' => 'Cub Section Team Member',
+        'scout_section_team_leader' => 'Scout Section Team Leader',
+        'scout_section_team_member' => 'Scout Section Team Member',
+        'group_chair' => 'Group Chair',
+        'group_treasurer' => 'Group Treasurer',
+        'group_trustee' => 'Group Trustee',
+
+        // Legacy roles (backwards compatibility for existing data)
         'section_leader' => 'Section Leader',
         'assistant_section_leader' => 'Assistant Section Leader',
         'section_assistant' => 'Section Assistant',
@@ -451,7 +465,7 @@ function sync_fetch_people_to_sync(): array
     // If is_primary column exists, prefer it for sorting (primary first).
     $hasPrimaryCol = sync_column_exists('group_memberships', 'is_primary');
     $primaryOrder = $hasPrimaryCol ? 'gm.is_primary DESC, ' : '';
-    $roleFieldOrder = "FIELD(gm.membership_role, 'group_lead_volunteer', 'section_leader', 'assistant_section_leader', 'section_assistant', 'trustee', 'district_volunteer', 'other') ASC";
+    $roleFieldOrder = "FIELD(gm.membership_role, 'group_lead_volunteer', 'group_leadership_team_member', 'squirrel_section_team_leader', 'squirrel_section_team_member', 'beaver_section_team_leader', 'beaver_section_team_member', 'cub_section_team_leader', 'cub_section_team_member', 'scout_section_team_leader', 'scout_section_team_member', 'group_chair', 'group_treasurer', 'group_trustee', 'district_lead_volunteer', 'section_leader', 'assistant_section_leader', 'section_assistant', 'trustee', 'district_volunteer', 'other') ASC";
 
     if ($hasPrimaryCol) {
         sync_log('is_primary column detected — will prefer primary memberships.');
@@ -592,7 +606,7 @@ function sync_fetch_people_to_sync(): array
     // The SQL ORDER BY ensures the best membership is selected:
     //   1. is_primary = 1 (explicitly set by district admin, if column exists)
     //   2. Role priority via FIELD():
-    //      GLV > Section Leader > ASL > Section Assistant > Trustee > District Volunteer > Other
+    //      GLV > Group Leadership > Section Team Leaders > Section Team Members > Trustees > Legacy roles
     // This means if a district admin has set a primary, that wins. Otherwise,
     // the highest-ranking role is used for M365 job title and department.
     $people = [];

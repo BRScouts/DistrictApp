@@ -275,12 +275,18 @@ function gm_membership_role_options(?int $groupId = null): array
 {
     $roles = [
         'group_lead_volunteer' => 'Group Lead Volunteer',
-        'section_leader' => 'Section Leader',
-        'assistant_section_leader' => 'Assistant Section Leader',
-        'section_assistant' => 'Section Assistant',
-        'trustee' => 'Trustee',
-        'district_volunteer' => 'District Volunteer',
-        'other' => 'Other',
+        'group_leadership_team_member' => 'Group Leadership Team Member',
+        'squirrel_section_team_leader' => 'Squirrel Section Team Leader',
+        'squirrel_section_team_member' => 'Squirrel Section Team Member',
+        'beaver_section_team_leader' => 'Beaver Section Team Leader',
+        'beaver_section_team_member' => 'Beaver Section Team Member',
+        'cub_section_team_leader' => 'Cub Section Team Leader',
+        'cub_section_team_member' => 'Cub Section Team Member',
+        'scout_section_team_leader' => 'Scout Section Team Leader',
+        'scout_section_team_member' => 'Scout Section Team Member',
+        'group_chair' => 'Group Chair',
+        'group_treasurer' => 'Group Treasurer',
+        'group_trustee' => 'Group Trustee',
     ];
 
     // District-specific roles only available for the District Team (group ID 3).
@@ -1167,7 +1173,7 @@ function gm_update_person_details(
     ]);
 
     $person = gm_fetch_person_for_group($groupId, $personId);
-    $roleTitle = gm_role_title_from_membership_role((string) ($person['membership_role'] ?? 'section_leader'));
+    $roleTitle = gm_role_title_from_membership_role((string) ($person['membership_role'] ?? 'group_leadership_team_member'));
 
     gm_upsert_directory_profile($personId, $roleTitle, $visibleInDirectory, $sharePhone);
 

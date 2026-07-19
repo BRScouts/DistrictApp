@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/app/bootstrap.php';
 
+if (is_file(__DIR__ . '/app/group-manager-helpers.php')) {
+    require_once __DIR__ . '/app/group-manager-helpers.php';
+}
+
 require_login();
 
 if (user_needs_group_onboarding()) {
@@ -75,17 +79,15 @@ function profile_table_exists(string $table): bool
 
 function profile_membership_role_label(?string $role): string
 {
-    return match ((string) $role) {
-        'group_lead_volunteer' => 'Group Lead Volunteer',
-        'section_leader' => 'Section Leader',
-        'assistant_section_leader' => 'Assistant Section Leader',
-        'section_assistant' => 'Section Assistant',
-        'trustee' => 'Trustee',
-        'district_volunteer' => 'District Volunteer',
-        'administrator' => 'Administrator',
-        'other' => 'Other',
-        default => ucwords(str_replace('_', ' ', (string) ($role ?: 'Member'))),
-    };
+    if ($role === null || $role === '') {
+        return 'Member';
+    }
+
+    if (function_exists('gm_role_title_from_membership_role')) {
+        return gm_role_title_from_membership_role($role);
+    }
+
+    return ucwords(str_replace('_', ' ', $role));
 }
 
 function profile_access_level_label(?string $accessLevel): string

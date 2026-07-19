@@ -527,7 +527,7 @@ function onboarding_claim_existing_person(
                 $insert->execute([
                     'target_person_id' => $targetPersonId,
                     'group_id' => (int) $membership['group_id'],
-                    'membership_role' => (string) ($membership['membership_role'] ?? 'section_leader'),
+                    'membership_role' => (string) ($membership['membership_role'] ?? 'group_leadership_team_member'),
                     'access_level' => (string) ($membership['access_level'] ?? 'member'),
                     'status' => (string) ($membership['status'] ?? 'active'),
                     'is_primary' => (int) ($membership['is_primary'] ?? 0),

@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/app/bootstrap.php';
 
+if (is_file(__DIR__ . '/app/group-manager-helpers.php')) {
+    require_once __DIR__ . '/app/group-manager-helpers.php';
+}
+
 require_login();
 
 if (user_needs_group_onboarding()) {
@@ -102,16 +106,15 @@ function directory_query_with(array $changes): string
 
 function directory_role_label(?string $role): string
 {
-    return match ((string) $role) {
-        'group_lead_volunteer' => 'Group Lead Volunteer',
-        'section_leader' => 'Section Leader',
-        'assistant_section_leader' => 'Assistant Section Leader',
-        'section_assistant' => 'Section Assistant',
-        'trustee' => 'Trustee',
-        'district_volunteer' => 'District Volunteer',
-        'administrator' => 'Administrator',
-        default => ucwords(str_replace('_', ' ', (string) ($role ?: 'Member'))),
-    };
+    if ($role === null || $role === '') {
+        return 'Member';
+    }
+
+    if (function_exists('gm_role_title_from_membership_role')) {
+        return gm_role_title_from_membership_role($role);
+    }
+
+    return ucwords(str_replace('_', ' ', $role));
 }
 
 function directory_json_list(?string $json): array
@@ -346,6 +349,8 @@ $sql = "
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $people = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$defaultPhotoUrl = '/assets/img/default-profile.webp';
 
 $directoryPeople = [];
 
@@ -861,9 +866,9 @@ foreach ($people as $person) {
                                 <div class="directory-person-cell">
                                     <span class="directory-avatar" aria-hidden="true">
                                         <?php if ($person['photo_url'] !== ''): ?>
-                                            <img src="<?= e($person['photo_url']) ?>" alt="" onerror="this.remove(); this.parentElement.textContent='<?= e($person['initials']) ?>';">
+                                            <img src="<?= e($person['photo_url']) ?>" alt="" onerror="this.src='<?= e($defaultPhotoUrl) ?>'; this.onerror=null;">
                                         <?php else: ?>
-                                            <?= e($person['initials']) ?>
+                                            <img src="<?= e($defaultPhotoUrl) ?>" alt="">
                                         <?php endif; ?>
                                     </span>
 
@@ -902,9 +907,9 @@ foreach ($people as $person) {
                     <div class="directory-person-cell">
                         <span class="directory-avatar" aria-hidden="true">
                             <?php if ($person['photo_url'] !== ''): ?>
-                                <img src="<?= e($person['photo_url']) ?>" alt="" onerror="this.remove(); this.parentElement.textContent='<?= e($person['initials']) ?>';">
+                                <img src="<?= e($person['photo_url']) ?>" alt="" onerror="this.src='<?= e($defaultPhotoUrl) ?>'; this.onerror=null;">
                             <?php else: ?>
-                                <?= e($person['initials']) ?>
+                                <img src="<?= e($defaultPhotoUrl) ?>" alt="">
                             <?php endif; ?>
                         </span>
 
@@ -1063,6 +1068,8 @@ foreach ($people as $person) {
             '</section>';
     }
 
+    var defaultPhotoUrl = <?= json_encode($defaultPhotoUrl) ?>;
+
     function renderAvatar(person) {
         if (!avatar) {
             return;
@@ -1070,17 +1077,20 @@ foreach ($people as $person) {
 
         avatar.innerHTML = '';
 
+        var img = document.createElement('img');
+        img.alt = '';
+
         if (person.photo_url) {
-            var img = document.createElement('img');
             img.src = person.photo_url;
-            img.alt = '';
             img.onerror = function () {
-                avatar.textContent = person.initials || 'U';
+                img.src = defaultPhotoUrl;
+                img.onerror = null;
             };
-            avatar.appendChild(img);
         } else {
-            avatar.textContent = person.initials || 'U';
+            img.src = defaultPhotoUrl;
         }
+
+        avatar.appendChild(img);
     }
 
     function openProfile(personId) {

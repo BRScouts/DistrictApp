@@ -57,18 +57,19 @@ $roleOptions = gm_membership_role_options($selectedGroupId);
 
 function gmi_membership_role_label(?string $role): string
 {
-    return match ((string) $role) {
-        'group_lead_volunteer' => 'Group Lead Volunteer',
-        'section_leader' => 'Section Leader',
-        'assistant_section_leader' => 'Assistant Section Leader',
-        'section_assistant' => 'Section Assistant',
-        'trustee' => 'Trustee',
-        'district_volunteer' => 'District Volunteer',
-        'administrator' => 'Administrator',
-        'member' => 'Member',
-        'other' => 'Other',
-        default => ucwords(str_replace('_', ' ', (string) ($role ?: 'Member'))),
-    };
+    if ($role === null || $role === '') {
+        return 'Member';
+    }
+
+    // Use the central role title function for consistency.
+    if (function_exists('gm_role_title_from_membership_role')) {
+        $title = gm_role_title_from_membership_role($role);
+        if ($title !== 'Other' || $role === 'other') {
+            return $title;
+        }
+    }
+
+    return ucwords(str_replace('_', ' ', $role));
 }
 
 function gmi_access_level_label(?string $accessLevel): string
@@ -303,7 +304,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) ($_POST['action'] ?? '');
     $postedGroupId = (int) ($_POST['group_id'] ?? 0);
     $personId = (int) ($_POST['person_id'] ?? 0);
-    $membershipRole = (string) ($_POST['membership_role'] ?? 'section_leader');
+    $membershipRole = (string) ($_POST['membership_role'] ?? 'group_leadership_team_member');
 
     try {
         if ($postedGroupId !== $selectedGroupId || !gm_group_is_manageable($postedGroupId, $manageableGroups)) {
@@ -531,7 +532,7 @@ include __DIR__ . '/app/group-manager-nav.php';
                                 $personId = (int) $person['person_id'];
                                 $personStatus = (string) ($person['person_status'] ?? '');
                                 $membershipStatus = (string) ($person['membership_status'] ?? '');
-                                $membershipRole = (string) ($person['membership_role'] ?? 'section_leader');
+                                $membershipRole = (string) ($person['membership_role'] ?? 'group_leadership_team_member');
                                 $accessLevel = (string) ($person['access_level'] ?? 'member');
                                 $visibleInDirectory = (int) ($person['visible_in_directory'] ?? 1);
                                 $sharePhone = (int) ($person['share_phone'] ?? 0);

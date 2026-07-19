@@ -584,7 +584,7 @@ function da_assign_group_editor(int $personId, int $groupId, string $editorRole,
 
     $membershipRole = $editorRole === 'group_lead_volunteer'
         ? 'group_lead_volunteer'
-        : 'section_leader';
+        : 'group_leadership_team_member';
 
     $stmt = db()->prepare("
         INSERT INTO group_memberships (
@@ -635,7 +635,7 @@ function da_remove_group_editor(int $personId, int $groupId, int $actorPersonId)
         SET access_level = 'member',
             membership_role = CASE
                 WHEN membership_role = 'group_lead_volunteer'
-                THEN 'section_leader'
+                THEN 'group_leadership_team_member'
                 ELSE membership_role
             END
         WHERE person_id = :person_id

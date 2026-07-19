@@ -134,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fullName = trim($firstName . ' ' . $lastName);
             $personalEmail = gm_add_normalise_email((string) ($_POST['personal_email'] ?? ''));
             $phone = trim((string) ($_POST['phone'] ?? ''));
-            $membershipRole = (string) ($_POST['membership_role'] ?? 'section_leader');
+            $membershipRole = (string) ($_POST['membership_role'] ?? 'group_leadership_team_member');
             $sharePhone = isset($_POST['share_phone']) ? 1 : 0;
             $notes = trim((string) ($_POST['notes'] ?? ''));
 
@@ -199,21 +199,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$errors) {
                 // Duplicate person detection: check by name and email.
                 $confirmedDuplicate = isset($_POST['confirm_duplicate']) && $_POST['confirm_duplicate'] === '1';
+                $addExistingRole = isset($_POST['add_existing_role']) && $_POST['add_existing_role'] !== '';
                 $potentialDuplicates = [];
 
-                if (!$confirmedDuplicate) {
+                if (!$confirmedDuplicate && !$addExistingRole) {
                     $potentialDuplicates = gm_find_potential_duplicates($fullName, $personalEmail, $selectedGroupId);
                 }
 
-                if (!$confirmedDuplicate && count($potentialDuplicates) > 0) {
+                if (!$confirmedDuplicate && !$addExistingRole && count($potentialDuplicates) > 0) {
                     // Show warning — don't create the person yet.
                     $duplicateWarnings = [];
                     foreach ($potentialDuplicates as $dup) {
                         $dupGroups = $dup['groups_list'] ?: 'No active group';
                         $dupStatus = $dup['person_status'] === 'active' ? 'active' : 'inactive';
-                        $duplicateWarnings[] = e($dup['full_name']) . ' (' . e($dup['primary_email'] ?? 'no email') . ') — ' . e($dupGroups) . ' [' . $dupStatus . ']';
+                        $duplicateWarnings[] = [
+                            'person_id' => (int) $dup['person_id'],
+                            'label' => e($dup['full_name']) . ' (' . e($dup['primary_email'] ?? 'no email') . ') — ' . e($dupGroups) . ' [' . $dupStatus . ']',
+                        ];
                     }
-                    $errors[] = 'A person with a similar name or email already exists in another group. If this is a different person, tick the confirmation below and submit again.';
+                    $errors[] = 'A person with a similar name or email already exists. Choose an option below: add a new role to the existing person, or confirm this is a different person.';
+                } elseif ($addExistingRole) {
+                    // User chose to add a role to an existing person from the duplicate list.
+                    $existingPersonId = (int) $_POST['add_existing_role'];
+
+                    // Verify this person actually exists.
+                    $stmt = $pdo->prepare("SELECT id, full_name FROM people WHERE id = :id LIMIT 1");
+                    $stmt->execute(['id' => $existingPersonId]);
+                    $existingPerson = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                    if (!$existingPerson) {
+                        throw new RuntimeException('The selected person could not be found.');
+                    }
+
+                    $personId = (int) $existingPerson['id'];
+
+                    $pdo->beginTransaction();
+
+                    // Reactivate if inactive.
+                    $stmt = $pdo->prepare("UPDATE people SET status = 'active' WHERE id = :id AND status = 'inactive'");
+                    $stmt->execute(['id' => $personId]);
+
+                    gm_upsert_membership($personId, $selectedGroupId, $membershipRole);
+                    gm_upsert_directory_profile(
+                        $personId,
+                        gm_role_title_from_membership_role($membershipRole),
+                        1, // visible in directory
+                        $sharePhone
+                    );
+
+                    gm_log_action($actorPersonId, 'existing_person_added_to_group', 'person', $personId, [
+                        'group_id' => $selectedGroupId,
+                        'membership_role' => $membershipRole,
+                    ]);
+
+                    $pdo->commit();
+
+                    $createdPersonId = $personId;
+                    $success = 'Existing person "' . $existingPerson['full_name'] . '" has been added to this Group with the role ' . gm_role_title_from_membership_role($membershipRole) . '.';
+                    $posted = [];
                 } else {
                     $existingPerson = gm_find_person_by_email($personalEmail);
 
@@ -634,13 +677,29 @@ include __DIR__ . '/app/group-manager-nav.php';
 
     <?php if (!empty($duplicateWarnings)): ?>
         <div class="alert alert-warning">
-            <strong>Possible duplicate detected:</strong>
-            <ul class="mb-2 mt-2">
-                <?php foreach ($duplicateWarnings as $warning): ?>
-                    <li><?= $warning ?></li>
-                <?php endforeach; ?>
-            </ul>
-            <p class="mb-0">If you are sure this is a different person, tick the box below and submit again.</p>
+            <strong>Possible match found:</strong>
+            <p class="mt-2 mb-2">The following existing person(s) match the name or email you entered:</p>
+            <?php foreach ($duplicateWarnings as $dup): ?>
+                <div style="border:1px solid #e0c36a;background:#fff9e6;padding:.75rem;margin-bottom:.5rem;border-radius:4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+                    <span><?= $dup['label'] ?></span>
+                    <form method="post" style="margin:0;">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="add_person">
+                        <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                        <input type="hidden" name="first_name" value="<?= e($posted['first_name'] ?? '') ?>">
+                        <input type="hidden" name="last_name" value="<?= e($posted['last_name'] ?? '') ?>">
+                        <input type="hidden" name="personal_email" value="<?= e($posted['personal_email'] ?? '') ?>">
+                        <input type="hidden" name="phone" value="<?= e($posted['phone'] ?? '') ?>">
+                        <input type="hidden" name="membership_role" value="<?= e($posted['membership_role'] ?? 'group_leadership_team_member') ?>">
+                        <input type="hidden" name="access_route" value="<?= e($posted['access_route'] ?? 'microsoft') ?>">
+                        <input type="hidden" name="requested_district_email" value="<?= e($posted['requested_district_email'] ?? '') ?>">
+                        <input type="hidden" name="notes" value="<?= e($posted['notes'] ?? '') ?>">
+                        <input type="hidden" name="add_existing_role" value="<?= (int) $dup['person_id'] ?>">
+                        <button type="submit" class="btn btn-sm btn-primary">Add role to this person</button>
+                    </form>
+                </div>
+            <?php endforeach; ?>
+            <p class="mt-3 mb-0">Or, if this is a completely different person, tick the box in the form below and submit again.</p>
         </div>
     <?php endif; ?>
 
@@ -823,7 +882,7 @@ include __DIR__ . '/app/group-manager-nav.php';
                     <div class="form-group mb-0">
                         <label for="membership_role">Role</label>
                         <select class="form-control" id="membership_role" name="membership_role" required>
-                            <?php $selectedRole = (string) ($posted['membership_role'] ?? 'section_leader'); ?>
+                            <?php $selectedRole = (string) ($posted['membership_role'] ?? 'group_leadership_team_member'); ?>
                             <?php foreach ($roleOptions as $value => $label): ?>
                                 <option value="<?= e($value) ?>" <?= $selectedRole === $value ? 'selected' : '' ?>>
                                     <?= e($label) ?>
@@ -855,7 +914,7 @@ include __DIR__ . '/app/group-manager-nav.php';
                         <div class="form-group mt-3" style="background:#fff3cd;border:2px solid #ffc107;padding:.75rem;border-radius:4px;">
                             <label class="lt-check mb-0">
                                 <input type="checkbox" name="confirm_duplicate" value="1" required>
-                                <span><strong>I confirm this is not a duplicate.</strong> I have checked and this is a different person to the match shown above.</span>
+                                <span><strong>This is a different person.</strong> I have checked and want to create a new, separate person record.</span>
                             </label>
                         </div>
                     <?php endif; ?>

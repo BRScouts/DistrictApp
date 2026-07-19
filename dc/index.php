@@ -396,6 +396,37 @@ if ($selectedGroupId > 0) {
     $addEventUrl .= '?group_id=' . $selectedGroupId;
 }
 
+/*
+ * Upcoming events for the user's groups (next 14 days).
+ * This powers the compact table shown above the calendar on mobile.
+ */
+$upcomingWhere = ["ce.starts_at >= NOW()", "ce.starts_at <= DATE_ADD(NOW(), INTERVAL 14 DAY)"];
+$upcomingParams = [];
+
+if (!$isDistrictLevelUser) {
+    $upcomingAllowed = $allowedGroupIds ?: [0];
+    $upcomingWhere[] = 'ce.group_id IN (' . implode(',', array_fill(0, count($upcomingAllowed), '?')) . ')';
+    foreach ($upcomingAllowed as $gid) {
+        $upcomingParams[] = $gid;
+    }
+}
+
+$upcomingWhere[] = "ce.status NOT IN ('cancelled', 'rejected')";
+
+$upcomingWhereSql = implode("\n    AND ", $upcomingWhere);
+$upcomingSql = "
+    SELECT ce.id, ce.title, ce.starts_at, ce.ends_at, ce.location_name, ce.status, g.group_name, ce.group_id
+    FROM calendar_events ce
+    JOIN groups g ON g.id = ce.group_id
+    WHERE {$upcomingWhereSql}
+    ORDER BY ce.starts_at ASC
+    LIMIT 20
+";
+
+$upcomingStmt = db()->prepare($upcomingSql);
+$upcomingStmt->execute($upcomingParams);
+$upcomingEvents = $upcomingStmt->fetchAll(PDO::FETCH_ASSOC);
+
 $pageTitle = 'District Calendar';
 $heroTitle = 'District Calendar';
 $heroText = null;
