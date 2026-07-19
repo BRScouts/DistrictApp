@@ -712,6 +712,7 @@ $previewPlain = comms_plain_from_html($previewHtml);
 $previewSnippet = comms_preview_snippet($previewHtml);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_validate();
     if ($action === 'to_write') {
         $recipients = comms_fetch_recipients($form, $user);
 
@@ -1210,6 +1211,7 @@ if (!$recipients && in_array($step, ['write', 'preview'], true)) {
 
     <?php if ($step === 'recipients'): ?>
         <form method="post">
+            <?= csrf_field() ?>
             <input type="hidden" name="step" value="recipients">
 
             <div class="comms-layout">
@@ -1394,6 +1396,7 @@ if (!$recipients && in_array($step, ['write', 'preview'], true)) {
         </form>
     <?php elseif ($step === 'write'): ?>
         <form method="post" id="comms-write-form">
+            <?= csrf_field() ?>
             <input type="hidden" name="step" value="write">
             <?php comms_hidden_state_inputs($form, false); ?>
             <input type="hidden" name="body_html" id="body_html" value="<?= e($form['body_html']) ?>">
@@ -1488,6 +1491,7 @@ if (!$recipients && in_array($step, ['write', 'preview'], true)) {
         </form>
     <?php elseif ($step === 'preview'): ?>
         <form method="post">
+            <?= csrf_field() ?>
             <input type="hidden" name="step" value="preview">
             <?php comms_hidden_state_inputs($form, true); ?>
 

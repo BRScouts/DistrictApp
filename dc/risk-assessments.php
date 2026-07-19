@@ -121,6 +121,7 @@ $accessibleGroups = dc_accessible_groups();
 $showGroupPicker = count($accessibleGroups) > 1;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_validate();
     $selectedGroupId = dc_selected_group_id((int) ($_POST['group_id'] ?? $selectedGroupId));
     $people = dc_fetch_group_people($selectedGroupId);
     $uploader = $people[0] ?? null;

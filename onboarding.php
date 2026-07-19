@@ -671,6 +671,7 @@ $existingGroupIds = array_map(static fn(array $m): int => (int) $m['group_id'], 
 $claimCandidates = onboarding_fetch_claim_candidates($personId);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_validate();
     $action = (string) ($_POST['action'] ?? 'complete_onboarding');
 
     $postedGroupId = (int) ($_POST['group_id'] ?? 0);
@@ -1497,6 +1498,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
 
         <section class="onboarding-main">
             <form method="post" novalidate>
+                <?= csrf_field() ?>
                 <section class="onboarding-panel">
                     <h2>Your details</h2>
 

@@ -1,11 +1,13 @@
 :root {
-    --iv-purple: #4d0099;
+    --iv-purple: #4d2177;
     --iv-purple-bright: #7413dc;
-    --iv-purple-dark: #330066;
-    --iv-blue: #006ddf;
-    --iv-green: #00a794;
-    --iv-red: #e22b1a;
-    --iv-yellow: #ffdd00;
+    --iv-purple-dark: #2e1347;
+    --iv-blue: #003da5;
+    --iv-green: #009a44;
+    --iv-teal: #004851;
+    --iv-red: #ba0c2f;
+    --iv-yellow: #ffcd00;
+    --iv-orange: #ff8200;
     --iv-black: #111111;
     --iv-grey-900: #222222;
     --iv-grey-700: #555555;
@@ -92,4 +94,116 @@ a:focus, button:focus, input:focus, select:focus, textarea:focus {
     .lt-hero-inner { padding: 2.5rem 1rem; }
     .lt-hero h1 { font-size: 3rem; }
     .lt-login-brand, .lt-login-panel { padding: 3rem; }
+}
+
+/* ─── Back link (Gov.UK-inspired) ─── */
+.gm-back-link,
+.gmi-back-link {
+    display: inline-block;
+    margin-bottom: 1.25rem;
+    font-weight: 900;
+    font-size: .95rem;
+    color: var(--iv-grey-700);
+    text-decoration: none;
+}
+
+.gm-back-link::before,
+.gmi-back-link::before {
+    content: "\2190";
+    margin-right: .4rem;
+}
+
+.gm-back-link:hover,
+.gmi-back-link:hover {
+    color: var(--iv-black);
+    text-decoration: underline;
+}
+
+/* ─── Screen-reader only utility ─── */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ─── Task list navigation ─── */
+.gm-task-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 2.5rem;
+}
+
+.gm-task-list li {
+    border-top: 1px solid var(--iv-grey-300);
+    padding: 1rem 0;
+}
+
+.gm-task-list li:last-child {
+    border-bottom: 1px solid var(--iv-grey-300);
+}
+
+.gm-task-list a {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    text-decoration: none;
+    gap: 1rem;
+}
+
+.gm-task-list a:hover .gm-task-name,
+.gm-task-list a:focus .gm-task-name {
+    text-decoration: underline;
+}
+
+.gm-task-name {
+    font-weight: 900;
+    font-size: 1.1rem;
+    color: var(--iv-blue);
+}
+
+.gm-task-hint {
+    display: block;
+    margin-top: .25rem;
+    font-size: .92rem;
+    font-weight: 700;
+    color: var(--iv-grey-700);
+}
+
+.gm-task-count {
+    font-size: .88rem;
+    font-weight: 900;
+    color: var(--iv-grey-700);
+    white-space: nowrap;
+}
+
+/* ─── Summary row ─── */
+.gm-summary-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+    padding: 1.25rem;
+    background: var(--iv-grey-100);
+    border-left: 4px solid var(--iv-purple);
+}
+
+.gm-summary-item strong {
+    display: block;
+    font-size: 1.75rem;
+    line-height: 1;
+    color: var(--iv-purple);
+}
+
+.gm-summary-item span {
+    display: block;
+    font-size: .88rem;
+    font-weight: 700;
+    color: var(--iv-grey-700);
+    margin-top: .2rem;
 }

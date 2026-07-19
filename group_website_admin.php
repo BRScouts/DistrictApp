@@ -1178,6 +1178,7 @@ $actorPersonId = (int) $user['id'];
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        csrf_validate();
         $action = (string) ($_POST['action'] ?? '');
 
         if (!gwa_column_exists('groups', 'website_post_id')) {
@@ -1566,6 +1567,7 @@ include __DIR__ . '/header.php';
 
             <div class="gwa-grid gwa-grid-2">
                 <form method="post" class="gwa-card">
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="link_existing_post">
                     <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
 
@@ -1592,6 +1594,7 @@ include __DIR__ . '/header.php';
                 </form>
 
                 <form method="post" class="gwa-card">
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="create_website_post">
                     <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
 
@@ -1611,6 +1614,7 @@ include __DIR__ . '/header.php';
 
     <?php if ($websitePost): ?>
         <form method="post" enctype="multipart/form-data" id="gwa-editor-form">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="save_website_details">
             <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
             <input type="hidden" name="website_post_id" value="<?= (int) $websitePostId ?>">

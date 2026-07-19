@@ -42,6 +42,7 @@ $userSearch = trim((string) ($_GET['user_search'] ?? $_POST['user_search'] ?? ''
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        csrf_validate();
         $action = (string) ($_POST['action'] ?? '');
 
         if ($action === 'create_group') {
@@ -286,6 +287,7 @@ include __DIR__ . '/header.php';
                 </p>
 
                 <form method="post">
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="create_group">
 
                     <div class="form-group">
@@ -356,6 +358,7 @@ include __DIR__ . '/header.php';
                 <h2 class="lt-section-title">Group details</h2>
 
                 <form method="post">
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="update_group">
                     <input type="hidden" name="group_id" value="<?= (int) $groupId ?>">
 
@@ -407,6 +410,7 @@ include __DIR__ . '/header.php';
                 </p>
 
                 <form method="post" onsubmit="return confirm('Change this Group status?');">
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="set_group_status">
                     <input type="hidden" name="group_id" value="<?= (int) $groupId ?>">
                     <input type="hidden" name="is_active" value="<?= (int) ($group['is_active'] ?? 0) === 1 ? 0 : 1 ?>">
@@ -440,6 +444,7 @@ include __DIR__ . '/header.php';
             </form>
 
             <form method="post" class="lt-panel-grey mb-4">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="assign_group_editor">
                 <input type="hidden" name="group_id" value="<?= (int) $groupId ?>">
 

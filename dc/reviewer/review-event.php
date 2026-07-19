@@ -25,6 +25,7 @@ $allowedOutcomes = [
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_validate();
     $status = (string) ($_POST['status'] ?? 'under_review');
     $reviewerNotes = trim((string) ($_POST['reviewer_notes'] ?? ''));
 
@@ -496,6 +497,7 @@ require __DIR__ . '/../layout.php';
             <h2 class="lt-section-title">Review outcome</h2>
 
             <form method="post">
+                <?= csrf_field() ?>
                 <input type="hidden" name="id" value="<?= (int) $id ?>">
 
                 <div class="form-group">

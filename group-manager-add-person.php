@@ -94,6 +94,7 @@ $actorPersonId = (int) $user['id'];
 $roleOptions = gm_membership_role_options();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_validate();
     $action = (string) ($_POST['action'] ?? 'add_person');
     $posted = $_POST;
 
@@ -533,9 +534,47 @@ include __DIR__ . '/header.php';
         background: #fff8d6;
     }
 
+    .gm-legacy-warning {
+        margin-top: .75rem;
+        padding: .85rem 1rem;
+        background: #fef3cd;
+        border: 2px solid #e6a817;
+        border-left: 5px solid #e6a817;
+        font-weight: 700;
+        font-size: .92rem;
+        color: #664d03;
+    }
+
+    .gm-legacy-warning strong {
+        display: block;
+        margin-bottom: .25rem;
+    }
+
     .gm-good-panel {
         border-left: 6px solid #00a794;
         background: #eefaf7;
+    }
+
+    .gm-email-explainer {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid rgba(0, 167, 148, .25);
+        font-size: .92rem;
+    }
+
+    .gm-email-explainer p {
+        margin-bottom: .4rem;
+    }
+
+    .gm-email-explainer ol {
+        margin: 0;
+        padding-left: 1.25rem;
+        color: var(--iv-grey-700);
+        font-weight: 700;
+    }
+
+    .gm-email-explainer ol li {
+        margin-bottom: .25rem;
     }
 </style>
 
@@ -583,6 +622,7 @@ include __DIR__ . '/header.php';
             </p>
 
             <form method="post" id="gm-add-person-form">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="add_person" id="gm-action">
                 <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
 
@@ -607,8 +647,12 @@ include __DIR__ . '/header.php';
                             <label for="personal_email">Current email address</label>
                             <input class="form-control" type="email" id="personal_email" name="personal_email" value="<?= e($posted['personal_email'] ?? '') ?>" required>
                             <small class="form-text text-muted">
-                                Use their personal or Scouting email. If this is already an @<?= e($districtEmailDomain) ?> address, no new District account request will be created.
+                                Their personal email or existing Scouting email. If they already have an @<?= e($districtEmailDomain) ?> address, enter it here and we will link it automatically.
                             </small>
+                            <div id="legacy-email-warning" class="gm-legacy-warning" style="display:none;" role="alert">
+                                <strong>Legacy email detected.</strong>
+                                This looks like a old District email address. All volunteers should now be migrated to their new @<?= e($districtEmailDomain) ?> Irwell Valley email. Please use their personal email here and we will create a new account for them.
+                            </div>
                         </div>
 
                         <div class="form-group col-md-4">
@@ -618,7 +662,7 @@ include __DIR__ . '/header.php';
                     </div>
                 </div>
 
-                <div class="gm-flow-step">
+                <div class="gm-flow-step" id="step-district-email">
                     <span class="gm-step-kicker">Step 2</span>
                     <h3 class="h5 font-weight-bold">District email and access</h3>
 
@@ -687,7 +731,7 @@ include __DIR__ . '/header.php';
 
                             <input type="hidden" id="requested_district_email" name="requested_district_email" value="<?= e($districtEmailSuggestion ?: ($posted['requested_district_email'] ?? '')) ?>">
 
-                            <button class="btn btn-secondary lt-btn" type="submit" formnovalidate onclick="document.getElementById('gm-action').value='suggest_email';">
+                            <button class="btn btn-secondary lt-btn" type="submit" formnovalidate formaction="?group_id=<?= (int) $selectedGroupId ?>#step-district-email" onclick="document.getElementById('gm-action').value='suggest_email';">
                                 Check availability
                             </button>
 
@@ -831,6 +875,8 @@ include __DIR__ . '/header.php';
     var existingDistrictBlock = document.getElementById('existing-district-email-block');
     var linkBlock = document.getElementById('personal-link-block');
     var domain = <?= json_encode($districtEmailDomain) ?>;
+    var legacyDomains = ['brscouts.org.uk', 'prawscouts.org.uk'];
+    var legacyWarning = document.getElementById('legacy-email-warning');
 
     var serverSuggested = hidden ? hidden.value : '';
     var serverSuggestedNameKey = getNameKey();
@@ -849,6 +895,25 @@ include __DIR__ . '/header.php';
 
     function isDistrictEmail(value) {
         return emailDomain(value) === String(domain || '').toLowerCase();
+    }
+
+    function isLegacyEmail(value) {
+        var d = emailDomain(value);
+        if (!d) return false;
+        for (var i = 0; i < legacyDomains.length; i++) {
+            if (d === legacyDomains[i]) return true;
+        }
+        return false;
+    }
+
+    function updateLegacyWarning() {
+        if (!legacyWarning || !personalEmail) return;
+        var email = normaliseEmail(personalEmail.value);
+        if (email && isLegacyEmail(email)) {
+            legacyWarning.style.display = '';
+        } else {
+            legacyWarning.style.display = 'none';
+        }
     }
 
     function generatedDistrictEmail() {
@@ -949,6 +1014,7 @@ include __DIR__ . '/header.php';
 
     if (personalEmail) {
         personalEmail.addEventListener('input', updatePreview);
+        personalEmail.addEventListener('input', updateLegacyWarning);
     }
 
     document.querySelectorAll('[data-access-route]').forEach(function (radio) {
@@ -956,6 +1022,7 @@ include __DIR__ . '/header.php';
     });
 
     updatePreview();
+    updateLegacyWarning();
 
     document.querySelectorAll('.gm-copy').forEach(function (button) {
         button.addEventListener('click', function () {
@@ -977,5 +1044,16 @@ include __DIR__ . '/header.php';
     });
 }());
 </script>
+
+<?php if (($_POST['action'] ?? '') === 'suggest_email'): ?>
+<script>
+(function () {
+    var target = document.getElementById('step-district-email');
+    if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}());
+</script>
+<?php endif; ?>
 
 <?php include __DIR__ . '/footer.php'; ?>

@@ -67,7 +67,7 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
 
         .lt-account-trigger:hover,
         .lt-account-trigger:focus {
-            outline: 3px solid #ffdd00;
+            outline: 3px solid #ffcd00;
             outline-offset: 5px;
         }
 
@@ -176,7 +176,7 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
         .lt-account-dropdown-links a:hover,
         .lt-account-dropdown-links a:focus {
             background: #f7f5fb;
-            color: #4d0b93;
+            color: #4d2177;
             text-decoration: none;
         }
 
@@ -223,6 +223,119 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
                 width: min(260px, calc(100vw - 1rem));
             }
         }
+
+        /* ===== PRIMARY NAV (header menu items) ===== */
+        .lt-primary-nav {
+            display: none;
+            align-items: center;
+            gap: 0.15rem;
+            flex: 1;
+            justify-content: flex-end;
+            margin-right: 1.25rem;
+        }
+
+        .lt-primary-nav a {
+            padding: 0.5rem 0.75rem;
+            color: var(--iv-black, #111);
+            font-weight: 900;
+            font-size: 0.88rem;
+            text-decoration: none;
+            border-radius: 0;
+            transition: background 0.12s, color 0.12s;
+        }
+
+        .lt-primary-nav a:hover {
+            background: #f3eef9;
+            color: #4d2177;
+            text-decoration: none;
+        }
+
+        .lt-primary-nav a:focus {
+            outline: 3px solid #ffcd00;
+            outline-offset: 2px;
+        }
+
+        .lt-primary-nav a[aria-current="page"] {
+            background: #4d2177;
+            color: #fff;
+        }
+
+        @media (min-width: 768px) {
+            .lt-primary-nav {
+                display: flex;
+            }
+        }
+
+        /* Mobile hamburger toggle */
+        .lt-mobile-nav-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border: 2px solid var(--iv-grey-300, #d8d8d8);
+            background: transparent;
+            cursor: pointer;
+            margin-right: 0.5rem;
+        }
+
+        .lt-mobile-nav-toggle span {
+            display: block;
+            width: 20px;
+            height: 2px;
+            background: #111;
+            position: relative;
+        }
+
+        .lt-mobile-nav-toggle span::before,
+        .lt-mobile-nav-toggle span::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: #111;
+        }
+
+        .lt-mobile-nav-toggle span::before { top: -6px; }
+        .lt-mobile-nav-toggle span::after { top: 6px; }
+
+        @media (min-width: 768px) {
+            .lt-mobile-nav-toggle {
+                display: none;
+            }
+        }
+
+        .lt-mobile-nav {
+            display: none;
+            background: #fff;
+            border-bottom: 2px solid #4d2177;
+            padding: 0.5rem 1rem;
+        }
+
+        .lt-mobile-nav.is-open {
+            display: block;
+        }
+
+        .lt-mobile-nav a {
+            display: block;
+            padding: 0.75rem 0.5rem;
+            color: #111;
+            font-weight: 900;
+            font-size: 0.95rem;
+            text-decoration: none;
+            border-bottom: 1px solid #e6e6e6;
+        }
+
+        .lt-mobile-nav a:last-child {
+            border-bottom: 0;
+        }
+
+        .lt-mobile-nav a:hover,
+        .lt-mobile-nav a:focus {
+            color: #4d2177;
+            background: #f7f5fb;
+        }
     </style>
 </head>
 <body>
@@ -233,6 +346,17 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
         </a>
 
         <?php if ($user): ?>
+            <nav class="lt-primary-nav" aria-label="Main navigation">
+                <a href="/index.php">Home</a>
+                <a href="/dc/">Calendar</a>
+                <a href="/directory.php">Directory</a>
+                <a href="/profile.php">My Profile</a>
+            </nav>
+
+            <button type="button" class="lt-mobile-nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="lt-mobile-nav">
+                <span aria-hidden="true"></span>
+            </button>
+
             <nav class="lt-nav" aria-label="Account navigation">
                 <details class="lt-account-menu">
                     <summary class="lt-account-trigger" aria-label="Open account menu">
@@ -272,7 +396,29 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
             </nav>
         <?php endif; ?>
     </div>
+
+    <?php if ($user): ?>
+        <div class="lt-mobile-nav" id="lt-mobile-nav" aria-label="Mobile navigation">
+            <a href="/index.php">Home</a>
+            <a href="/dc/">Calendar</a>
+            <a href="/directory.php">Directory</a>
+            <a href="/profile.php">My Profile</a>
+            <a href="/logout.php">Sign out</a>
+        </div>
+    <?php endif; ?>
 </header>
+
+<script>
+(function() {
+    var toggle = document.querySelector('.lt-mobile-nav-toggle');
+    var nav = document.getElementById('lt-mobile-nav');
+    if (!toggle || !nav) return;
+    toggle.addEventListener('click', function() {
+        var open = nav.classList.toggle('is-open');
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+})();
+</script>
 
 <?php if ($heroTitle): ?>
     <section class="lt-hero">

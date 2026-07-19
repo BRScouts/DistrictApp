@@ -2,7 +2,7 @@
     <style>
         .lt-footer {
             margin-top: 3rem;
-            background: #4d0b93;
+            background: #4d2177;
             color: #ffffff;
         }
 
@@ -70,8 +70,8 @@
 
         .lt-footer-links a:hover,
         .lt-footer-links a:focus {
-            color: #ffb81c;
-            outline: 3px solid rgba(255, 184, 28, .55);
+            color: #ffcd00;
+            outline: 3px solid rgba(255, 205, 0, .55);
             outline-offset: 3px;
         }
 
@@ -87,7 +87,7 @@
         }
 
         .lt-footer-created {
-            background: #2f075c;
+            background: #2e1347;
             color: #ffffff;
             border-top: 1px solid rgba(255, 255, 255, .18);
         }
@@ -103,7 +103,7 @@
         }
 
         .lt-footer-created-inner span {
-            color: #ffb81c;
+            color: #ffcd00;
         }
 
         @media (min-width: 768px) {

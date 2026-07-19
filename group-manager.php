@@ -64,11 +64,6 @@ $leaders = gm_fetch_people($selectedGroupId, 'active', $search);
 $inactivePeople = gm_fetch_people($selectedGroupId, 'inactive');
 $groupLinks = gm_fetch_group_links($selectedGroupId);
 
-$leadersWithSso = count(array_filter($leaders, static fn(array $leader): bool => (int) ($leader['has_microsoft_account'] ?? 0) > 0));
-$leadersWithoutSso = count($leaders) - $leadersWithSso;
-$pendingAccountRequests = count(array_filter($leaders, static fn(array $leader): bool => gm_person_has_pending_account_request((int) $leader['person_id'], (string) $leader['primary_email'])));
-$totalEvents = array_sum(array_map(static fn(array $leader): int => (int) ($leader['total_events'] ?? 0), $leaders));
-
 $pageTitle = 'Group Manager | ' . $appName;
 $heroTitle = 'Group Manager';
 $heroText = 'Manage people, access, and Group details for ' . (string) $selectedGroup['group_name'] . '.';
@@ -100,6 +95,23 @@ include __DIR__ . '/header.php';
     .gm-selector-row select {
         flex: 1;
         min-width: 200px;
+    }
+
+    .gm-primary-action {
+        display: inline-block;
+        background: var(--iv-purple);
+        color: var(--iv-white);
+        font-weight: 900;
+        font-size: 1.05rem;
+        padding: .85rem 1.5rem;
+        text-decoration: none;
+        margin-bottom: 2rem;
+    }
+
+    .gm-primary-action:hover {
+        background: var(--iv-purple-dark);
+        color: var(--iv-white);
+        text-decoration: none;
     }
 
     .gm-task-list {
@@ -149,31 +161,6 @@ include __DIR__ . '/header.php';
         font-weight: 900;
         color: var(--iv-grey-700);
         white-space: nowrap;
-    }
-
-    .gm-summary-row {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 1rem;
-        margin-bottom: 2.5rem;
-        padding: 1.25rem;
-        background: var(--iv-grey-100);
-        border-left: 4px solid var(--iv-purple);
-    }
-
-    .gm-summary-item strong {
-        display: block;
-        font-size: 1.75rem;
-        line-height: 1;
-        color: var(--iv-purple);
-    }
-
-    .gm-summary-item span {
-        display: block;
-        font-size: .88rem;
-        font-weight: 700;
-        color: var(--iv-grey-700);
-        margin-top: .2rem;
     }
 
     .gm-table-wrap {
@@ -272,16 +259,12 @@ include __DIR__ . '/header.php';
         </form>
     <?php endif; ?>
 
+    <a class="gm-primary-action" href="/group-manager-add-person.php?group_id=<?= (int) $selectedGroupId ?>">
+        Add a person
+    </a>
+
     <nav aria-label="Group Manager tasks">
         <ul class="gm-task-list">
-            <li>
-                <a href="/group-manager-add-person.php?group_id=<?= (int) $selectedGroupId ?>">
-                    <div>
-                        <span class="gm-task-name">Add a person</span>
-                        <span class="gm-task-hint">Add a new volunteer and set up their District access.</span>
-                    </div>
-                </a>
-            </li>
             <li>
                 <a href="/group-manager-inactive.php?group_id=<?= (int) $selectedGroupId ?>">
                     <div>
@@ -314,25 +297,6 @@ include __DIR__ . '/header.php';
             </li>
         </ul>
     </nav>
-
-    <div class="gm-summary-row" aria-label="Group summary">
-        <div class="gm-summary-item">
-            <strong><?= count($leaders) ?></strong>
-            <span>Active people</span>
-        </div>
-        <div class="gm-summary-item">
-            <strong><?= $leadersWithSso ?></strong>
-            <span>Using Microsoft sign-in</span>
-        </div>
-        <div class="gm-summary-item">
-            <strong><?= $pendingAccountRequests ?></strong>
-            <span>Pending account requests</span>
-        </div>
-        <div class="gm-summary-item">
-            <strong><?= (int) $totalEvents ?></strong>
-            <span>Calendar events</span>
-        </div>
-    </div>
 
     <section>
         <h2 class="lt-section-title">People in <?= e($selectedGroup['group_name']) ?></h2>

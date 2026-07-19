@@ -167,6 +167,7 @@ $linkedRisks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $linkedRiskIds = array_map(static fn (array $risk): int => (int) $risk['id'], $linkedRisks);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_validate();
     $action = (string) ($_POST['save_action'] ?? '');
 
     if ($action === 'cancel') {
@@ -1259,6 +1260,7 @@ require __DIR__ . '/layout.php';
     </div>
 <?php else: ?>
     <form method="post" enctype="multipart/form-data" class="dc-form" novalidate>
+        <?= csrf_field() ?>
         <input type="hidden" name="id" value="<?= (int) $eventId ?>">
 
         <section class="lt-panel">

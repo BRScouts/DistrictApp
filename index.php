@@ -389,7 +389,7 @@ $modules = [
         'title' => 'District Calendar',
         'description' => 'Submit away-from-hut notifications, view Group activity and share risk assessments.',
         'url' => '/dc/',
-        'status' => 'soon',
+        'status' => 'available',
         'image' => '/assets/img/explorer-campfire-2-jpg.jpg',
         'visible' => true,
     ],
@@ -510,41 +510,6 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
         max-width: 600px;
     }
 
-    /* ===== QUICK NAV ===== */
-    .lt-dash-nav {
-        margin-top: 1.25rem;
-        display: flex;
-        flex-wrap: wrap;
-        gap: .5rem;
-    }
-
-    .lt-dash-nav a {
-        display: inline-flex;
-        align-items: center;
-        gap: .4rem;
-        padding: .5rem .9rem;
-        background: rgba(255,255,255,.15);
-        border: 2px solid rgba(255,255,255,.5);
-        color: #fff;
-        font-weight: 900;
-        font-size: .88rem;
-        text-decoration: none;
-        transition: background .15s, border-color .15s;
-    }
-
-    .lt-dash-nav a:hover,
-    .lt-dash-nav a:focus {
-        background: rgba(255,255,255,.28);
-        border-color: #fff;
-        text-decoration: none;
-        color: #fff;
-    }
-
-    .lt-dash-nav a:focus {
-        outline: 3px solid var(--iv-yellow);
-        outline-offset: 2px;
-    }
-
     @media (min-width: 768px) {
         .lt-dash-hero-inner {
             padding: 3.5rem 1rem 2.5rem;
@@ -566,11 +531,6 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
 
         .lt-dash-hero h1 {
             font-size: 1.65rem;
-        }
-
-        .lt-dash-nav a {
-            padding: .4rem .7rem;
-            font-size: .82rem;
         }
     }
 
@@ -918,19 +878,6 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
     <div class="lt-dash-hero-inner">
         <h1>Welcome, <?= e($user['preferred_name'] ?: $user['full_name'] ?: $user['email']) ?></h1>
         <p>Your District tools, communications and Group management in one place.</p>
-
-        <nav class="lt-dash-nav" aria-label="Quick links">
-            <a href="/profile.php">My Profile</a>
-            <a href="/dc/">District Calendar</a>
-            <a href="/directory.php">Directory</a>
-            <?php if ($isGroupAdmin): ?>
-                <a href="/group-manager.php">Group Admin</a>
-            <?php endif; ?>
-            <?php if ($isDistrictAdmin): ?>
-                <a href="/district-admin.php">District Admin</a>
-            <?php endif; ?>
-            <a href="https://outlook.cloud.microsoft/" target="_blank" rel="noopener noreferrer">Email / OneDrive</a>
-        </nav>
     </div>
 </section>
 

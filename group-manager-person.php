@@ -52,6 +52,7 @@ $roleOptions = gm_membership_role_options();
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        csrf_validate();
         $action = (string) ($_POST['action'] ?? '');
 
         if (!gm_group_is_manageable($selectedGroupId, $manageableGroups)) {
@@ -275,6 +276,7 @@ include __DIR__ . '/header.php';
             <h2 class="lt-section-title">Details</h2>
 
             <form method="post">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="update_details">
                 <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
                 <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
@@ -347,6 +349,7 @@ include __DIR__ . '/header.php';
             <h2 class="lt-section-title">Role in this Group</h2>
 
             <form method="post">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="update_role">
                 <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
                 <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
@@ -375,6 +378,7 @@ include __DIR__ . '/header.php';
             <p>Use these when someone cannot find their original email.</p>
 
             <form method="post" class="mb-2">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="send_microsoft_instructions">
                 <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
                 <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
@@ -382,6 +386,7 @@ include __DIR__ . '/header.php';
             </form>
 
             <form method="post" onsubmit="return confirm('Send calendar-link access instructions to this person?');">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="send_calendar_link">
                 <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
                 <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
@@ -399,6 +404,7 @@ include __DIR__ . '/header.php';
             </p>
 
             <form method="post" onsubmit="return confirm('Make this person inactive for this Group?');">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="set_status">
                 <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
                 <input type="hidden" name="person_id" value="<?= (int) $personId ?>">

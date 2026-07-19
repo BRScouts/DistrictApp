@@ -135,6 +135,7 @@ if ($isSsoUser) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_validate();
     $saveAction = (string) ($_POST['save_action'] ?? 'submit');
     $isDraft = $saveAction === 'draft';
 
@@ -878,6 +879,7 @@ require __DIR__ . '/layout.php';
 <?php endif; ?>
 
 <form method="post" enctype="multipart/form-data" class="dc-form" novalidate>
+    <?= csrf_field() ?>
     <?php if ($showGroupPicker): ?>
         <section class="lt-panel">
             <h2 class="lt-section-title">Group</h2>

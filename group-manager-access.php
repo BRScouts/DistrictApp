@@ -50,6 +50,7 @@ $actorPersonId = (int) $user['id'];
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        csrf_validate();
         $action = (string) ($_POST['action'] ?? '');
 
         if (!gm_group_is_manageable($selectedGroupId, $manageableGroups)) {

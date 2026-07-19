@@ -206,6 +206,7 @@ $hasActiveGroup = count($activeMemberships) > 0;
 $existingGroupIds = array_map(static fn(array $m): int => (int) $m['group_id'], $activeMemberships);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_validate();
     $fullName = trim((string) ($_POST['full_name'] ?? ''));
     $phone = trim((string) ($_POST['phone'] ?? ''));
     $roleTitle = trim((string) ($_POST['role_title'] ?? ''));
@@ -796,6 +797,7 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
 
         <section class="profile-main">
             <form method="post">
+                <?= csrf_field() ?>
                 <section class="profile-panel">
                     <h2>Contact details</h2>
 
