@@ -424,7 +424,7 @@ $modules = [
         'visible' => true,
     ],
     [
-        'title' => 'Group Admin',
+        'title' => 'Group Manager',
         'description' => 'Manage leaders in your Group and request District Microsoft 365 accounts.',
         'url' => '/group-manager.php',
         'status' => 'available',
