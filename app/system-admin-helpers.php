@@ -296,3 +296,108 @@ function sa_export_audit_csv(array $filters = []): void
     fclose($output);
     exit;
 }
+
+
+/**
+ * Generate a clickable link URL for an audit log entity.
+ */
+function sa_entity_link(string $entityType, int $entityId): ?string
+{
+    return match ($entityType) {
+        'person' => '/system-admin.php?target_person_id=' . $entityId,
+        'calendar_event' => '/dc/manage-event.php?id=' . $entityId,
+        'group' => '/district-admin-group.php?group_id=' . $entityId,
+        'risk_assessment' => '/dc/download-risk-assessment.php?id=' . $entityId,
+        default => null,
+    };
+}
+
+/**
+ * Fetch full person record for GDPR report.
+ */
+function sa_fetch_person_full(int $personId): ?array
+{
+    try {
+        $stmt = db()->prepare("
+            SELECT p.*
+            FROM people p
+            WHERE p.id = :id
+            LIMIT 1
+        ");
+        $stmt->execute(['id' => $personId]);
+        $person = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $person ?: null;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/**
+ * Fetch all group memberships for a person.
+ */
+function sa_fetch_person_memberships(int $personId): array
+{
+    try {
+        $stmt = db()->prepare("
+            SELECT gm.*, g.group_name
+            FROM group_memberships gm
+            JOIN groups g ON g.id = gm.group_id
+            WHERE gm.person_id = :person_id
+            ORDER BY gm.status ASC, g.group_name ASC
+        ");
+        $stmt->execute(['person_id' => $personId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+/**
+ * Fetch user accounts for a person.
+ */
+function sa_fetch_person_accounts(int $personId): array
+{
+    try {
+        $stmt = db()->prepare("
+            SELECT *
+            FROM user_accounts
+            WHERE person_id = :person_id
+            ORDER BY provider ASC
+        ");
+        $stmt->execute(['person_id' => $personId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+/**
+ * Fetch full audit history for a person (as actor or target), for GDPR report.
+ */
+function sa_fetch_person_audit_history(int $personId, int $limit = 5000): array
+{
+    try {
+        $stmt = db()->prepare("
+            SELECT
+                al.*,
+                p.full_name AS actor_name,
+                tp.full_name AS target_name,
+                g.group_name
+            FROM audit_log al
+            LEFT JOIN people p ON p.id = al.actor_person_id
+            LEFT JOIN people tp ON tp.id = al.target_person_id
+            LEFT JOIN groups g ON g.id = al.group_id
+            WHERE al.actor_person_id = :person_id
+               OR al.target_person_id = :person_id2
+            ORDER BY al.created_at DESC, al.id DESC
+            LIMIT :lim
+        ");
+        $stmt->bindValue('person_id', $personId, PDO::PARAM_INT);
+        $stmt->bindValue('person_id2', $personId, PDO::PARAM_INT);
+        $stmt->bindValue('lim', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return [];
+    }
+}

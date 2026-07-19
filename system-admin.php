@@ -328,6 +328,45 @@ include __DIR__ . '/header.php';
         background: #f7f5fb;
         border: 2px solid #e5e5e5;
     }
+
+    .sa-gdpr-panel {
+        background: #fff;
+        border: 2px solid #e5e5e5;
+        border-left: 5px solid #1d1d1b;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .sa-gdpr-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+    }
+
+    .sa-gdpr-title {
+        margin: 0 0 .25rem;
+        font-size: 1rem;
+        color: #1d1d1b;
+    }
+
+    .sa-gdpr-desc {
+        margin: 0;
+        font-size: .85rem;
+        color: #555;
+    }
+
+    .sa-gdpr-form {
+        display: flex;
+        gap: .5rem;
+        align-items: center;
+        flex-shrink: 0;
+    }
+
+    .sa-gdpr-form input {
+        width: 140px;
+    }
 </style>
 
 <nav class="sa-service-bar" aria-label="System Admin navigation">
@@ -339,6 +378,22 @@ include __DIR__ . '/header.php';
 </nav>
 
 <main class="lt-main">
+
+    <div class="sa-gdpr-panel">
+        <div class="sa-gdpr-inner">
+            <div>
+                <h3 class="sa-gdpr-title">GDPR Audit Report</h3>
+                <p class="sa-gdpr-desc">Generate a full audit history report for a person. Includes all data held, actions taken, and activity log. Outputs as a downloadable PDF.</p>
+            </div>
+            <form method="get" action="/system-admin-gdpr-report.php" class="sa-gdpr-form" target="_blank">
+                <div class="form-group mb-0">
+                    <label for="sa-gdpr-person" class="sr-only">Person ID</label>
+                    <input class="form-control" type="number" id="sa-gdpr-person" name="person_id" placeholder="Person ID" required min="1">
+                </div>
+                <button class="btn btn-primary lt-btn" type="submit">Generate Report</button>
+            </form>
+        </div>
+    </div>
 
     <div class="sa-stats">
         <div class="sa-stat">
@@ -498,8 +553,17 @@ include __DIR__ . '/header.php';
                         <td>
                             <?php if (!empty($row['target_name'])): ?>
                                 <a href="/system-admin.php?target_person_id=<?= (int) $row['target_person_id'] ?>"><?= e($row['target_name']) ?></a>
-                            <?php elseif (!empty($row['entity_type'])): ?>
-                                <span class="sa-muted"><?= e($row['entity_type']) ?> #<?= (int) $row['entity_id'] ?></span>
+                                <br><span class="sa-muted">Person #<?= (int) $row['target_person_id'] ?></span>
+                            <?php elseif (!empty($row['entity_type']) && !empty($row['entity_id'])): ?>
+                                <?php
+                                    $entityLabel = ucwords(str_replace('_', ' ', (string) $row['entity_type']));
+                                    $entityLink = sa_entity_link((string) $row['entity_type'], (int) $row['entity_id']);
+                                ?>
+                                <?php if ($entityLink): ?>
+                                    <a href="<?= e($entityLink) ?>"><?= e($entityLabel) ?> #<?= (int) $row['entity_id'] ?></a>
+                                <?php else: ?>
+                                    <span><?= e($entityLabel) ?> #<?= (int) $row['entity_id'] ?></span>
+                                <?php endif; ?>
                             <?php else: ?>
                                 <span class="sa-muted">—</span>
                             <?php endif; ?>
