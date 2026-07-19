@@ -819,6 +819,21 @@ function gm_upsert_membership(int $personId, int $groupId, string $membershipRol
 {
     $accessLevel = gm_access_level_for_membership_role($membershipRole);
 
+    // Only set is_primary = 1 if this person has no other active memberships yet.
+    $stmt = db()->prepare("
+        SELECT COUNT(*)
+        FROM group_memberships
+        WHERE person_id = :person_id
+          AND group_id <> :group_id
+          AND status = 'active'
+    ");
+    $stmt->execute([
+        'person_id' => $personId,
+        'group_id' => $groupId,
+    ]);
+    $hasOtherMemberships = ((int) $stmt->fetchColumn()) > 0;
+    $isPrimary = $hasOtherMemberships ? 0 : 1;
+
     $stmt = db()->prepare("
         INSERT INTO group_memberships (
             person_id,
@@ -835,7 +850,7 @@ function gm_upsert_membership(int $personId, int $groupId, string $membershipRol
             :membership_role,
             :access_level,
             'active',
-            1,
+            :is_primary,
             NOW()
         )
         ON DUPLICATE KEY UPDATE
@@ -849,6 +864,7 @@ function gm_upsert_membership(int $personId, int $groupId, string $membershipRol
         'group_id' => $groupId,
         'membership_role' => $membershipRole,
         'access_level' => $accessLevel,
+        'is_primary' => $isPrimary,
     ]);
 }
 

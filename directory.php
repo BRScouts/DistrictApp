@@ -879,7 +879,7 @@ foreach ($people as $person) {
                                 </div>
                             </td>
                             <td><?= e($person['group_names'] ?: '—') ?></td>
-                            <td><?= e($person['role_title'] ?: '—') ?></td>
+                            <td><?= !empty($person['membership_roles']) ? e(implode(', ', $person['membership_roles'])) : e($person['role_title'] ?: '—') ?></td>
                             <td><?= e($person['section_names'] ?: '—') ?></td>
                             <td>
                                 <?php if ($person['accreditation_count'] > 0): ?>
@@ -920,7 +920,7 @@ foreach ($people as $person) {
                     </div>
 
                     <p class="mb-1 mt-2"><strong>Group:</strong> <?= e($person['group_names'] ?: '—') ?></p>
-                    <p class="mb-1"><strong>Role:</strong> <?= e($person['role_title'] ?: '—') ?></p>
+                    <p class="mb-1"><strong>Role:</strong> <?= !empty($person['membership_roles']) ? e(implode(', ', $person['membership_roles'])) : e($person['role_title'] ?: '—') ?></p>
                     <p class="mb-0"><strong>Accreditations:</strong> <?= (int) $person['accreditation_count'] ?></p>
 
                     <button type="button" class="directory-open-btn" data-directory-open="<?= (int) $person['id'] ?>">
