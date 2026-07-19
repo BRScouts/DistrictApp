@@ -69,6 +69,12 @@ const AUDIT_ADMIN_SETTINGS_CHANGED   = 'admin.settings_changed';
 const AUDIT_ADMIN_PERMISSION_CHANGED = 'admin.permission_changed';
 const AUDIT_ADMIN_M365_ACCOUNT_REQ   = 'admin.m365_account_requested';
 
+// Cron Jobs
+const AUDIT_CRON_LEAVERS_RUN         = 'cron.leavers_run';
+const AUDIT_CRON_PROVISION_RUN       = 'cron.provision_m365_run';
+const AUDIT_CRON_REMINDERS_RUN       = 'cron.reminders_cleanse_run';
+const AUDIT_CRON_SYNC_PROFILES_RUN   = 'cron.sync_m365_profiles_run';
+
 // ─── Severity Levels ─────────────────────────────────────────────────────────
 
 const AUDIT_SEVERITY_INFO     = 'info';
@@ -143,6 +149,12 @@ function audit_event_types(): array
         AUDIT_ADMIN_SETTINGS_CHANGED   => ['admin', 'System settings changed', AUDIT_SEVERITY_CRITICAL],
         AUDIT_ADMIN_PERMISSION_CHANGED => ['admin', 'Permission level changed', AUDIT_SEVERITY_CRITICAL],
         AUDIT_ADMIN_M365_ACCOUNT_REQ   => ['admin', 'M365 account requested', AUDIT_SEVERITY_INFO],
+
+        // Cron Jobs
+        AUDIT_CRON_LEAVERS_RUN         => ['cron', 'Leavers notification cron completed', AUDIT_SEVERITY_INFO],
+        AUDIT_CRON_PROVISION_RUN       => ['cron', 'M365 provisioning cron completed', AUDIT_SEVERITY_INFO],
+        AUDIT_CRON_REMINDERS_RUN       => ['cron', 'Reminders and cleanse cron completed', AUDIT_SEVERITY_INFO],
+        AUDIT_CRON_SYNC_PROFILES_RUN   => ['cron', 'M365 profile sync cron completed', AUDIT_SEVERITY_INFO],
     ];
 
     return $types;

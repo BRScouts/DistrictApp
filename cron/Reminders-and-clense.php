@@ -19,6 +19,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../app/bootstrap.php';
 
+require_once __DIR__ . '/cron-guard.php';
+
 $pdo = db();
 
 /**
@@ -942,8 +944,27 @@ try {
     dc_clense_log('Deleted old draft/cancelled/rejected events: ' . $deletedEvents);
 
     dc_clense_log('District Calendar data clense completed.');
+
+    // Unified audit log entry for this cron run
+    audit_log(AUDIT_CRON_REMINDERS_RUN, null, null, null, [
+        'status' => 'success',
+        'day_before_reminders_sent' => $dayBeforeQueued,
+        'eight_day_reminders_sent' => $eightDayQueued,
+        'reviewer_reminders_events' => $reviewEventsQueued,
+        'reviewer_reminders_emails' => $reviewEmailsQueued,
+        'old_events_deleted' => $deletedEvents,
+        'old_risk_links_deleted' => $deletedRiskLinks,
+    ]);
+
     exit(0);
 } catch (Throwable $e) {
     dc_clense_log('ERROR: ' . $e->getMessage());
+
+    // Unified audit log entry for failed cron run
+    audit_log(AUDIT_CRON_REMINDERS_RUN, null, null, null, [
+        'status' => 'failed',
+        'error' => substr($e->getMessage(), 0, 255),
+    ]);
+
     exit(1);
 }

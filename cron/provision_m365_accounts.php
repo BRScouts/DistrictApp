@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../app/bootstrap.php';
 
+require_once __DIR__ . '/cron-guard.php';
+
 if (is_file(__DIR__ . '/../app/group-manager-helpers.php')) {
     require_once __DIR__ . '/../app/group-manager-helpers.php';
 }
@@ -1023,4 +1025,13 @@ foreach ($requests as $request) {
 }
 
 m365_stdout("Done. Provisioned: {$processed}. Failed: {$failed}.");
+
+// Unified audit log entry for this cron run
+audit_log(AUDIT_CRON_PROVISION_RUN, null, null, null, [
+    'status' => $failed > 0 ? 'completed_with_errors' : 'success',
+    'total_requests' => count($requests),
+    'provisioned' => $processed,
+    'failed' => $failed,
+]);
+
 exit($failed > 0 ? 1 : 0);

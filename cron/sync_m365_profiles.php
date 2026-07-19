@@ -22,6 +22,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../app/bootstrap.php';
 
+require_once __DIR__ . '/cron-guard.php';
+
 if (is_file(__DIR__ . '/../app/group-manager-helpers.php')) {
     require_once __DIR__ . '/../app/group-manager-helpers.php';
 }
@@ -771,3 +773,12 @@ foreach ($people as $person) {
 }
 
 sync_log("=== Sync complete: {$updated} updated, {$skipped} unchanged, {$errors} errors ===");
+
+// Unified audit log entry for this cron run
+audit_log(AUDIT_CRON_SYNC_PROFILES_RUN, null, null, null, [
+    'status' => $errors > 0 ? 'completed_with_errors' : 'success',
+    'total_people' => $total,
+    'updated' => $updated,
+    'skipped' => $skipped,
+    'errors' => $errors,
+]);

@@ -22,6 +22,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../app/bootstrap.php';
 
+require_once __DIR__ . '/cron-guard.php';
+
 $pdo = db();
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -565,3 +567,11 @@ foreach ($leavers as $leaver) {
 }
 
 leavers_log("=== Leavers Notification complete: {$notified} notified, {$errors} errors ===");
+
+// Unified audit log entry for this cron run
+audit_log(AUDIT_CRON_LEAVERS_RUN, null, null, null, [
+    'status' => $errors > 0 ? 'completed_with_errors' : 'success',
+    'total_leavers_found' => $total,
+    'notified' => $notified,
+    'errors' => $errors,
+]);
