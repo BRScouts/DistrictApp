@@ -15,6 +15,8 @@ function portal_role_options(): array
         'Cub Section Team Member',
         'Scout Section Team Leader',
         'Scout Section Team Member',
+        'Explorer Team Leader',
+        'Explorer Team Member',
         'Group Chair',
         'Group Treasurer',
         'Group Trustee',
@@ -63,6 +65,14 @@ function portal_membership_role_from_title(string $roleTitle): string
 
     if (str_contains($roleTitle, 'scout section') && str_contains($roleTitle, 'member')) {
         return 'scout_section_team_member';
+    }
+
+    if (str_contains($roleTitle, 'explorer') && str_contains($roleTitle, 'leader')) {
+        return 'explorer_team_leader';
+    }
+
+    if (str_contains($roleTitle, 'explorer') && str_contains($roleTitle, 'member')) {
+        return 'explorer_team_member';
     }
 
     if (str_contains($roleTitle, 'group chair')) {

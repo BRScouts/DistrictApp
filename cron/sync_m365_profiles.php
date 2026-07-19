@@ -284,6 +284,8 @@ function sync_role_to_job_title(string $membershipRole): string
         'cub_section_team_member' => 'Cub Section Team Member',
         'scout_section_team_leader' => 'Scout Section Team Leader',
         'scout_section_team_member' => 'Scout Section Team Member',
+        'explorer_team_leader' => 'Explorer Team Leader',
+        'explorer_team_member' => 'Explorer Team Member',
         'group_chair' => 'Group Chair',
         'group_treasurer' => 'Group Treasurer',
         'group_trustee' => 'Group Trustee',
@@ -465,7 +467,7 @@ function sync_fetch_people_to_sync(): array
     // If is_primary column exists, prefer it for sorting (primary first).
     $hasPrimaryCol = sync_column_exists('group_memberships', 'is_primary');
     $primaryOrder = $hasPrimaryCol ? 'gm.is_primary DESC, ' : '';
-    $roleFieldOrder = "FIELD(gm.membership_role, 'group_lead_volunteer', 'group_leadership_team_member', 'squirrel_section_team_leader', 'squirrel_section_team_member', 'beaver_section_team_leader', 'beaver_section_team_member', 'cub_section_team_leader', 'cub_section_team_member', 'scout_section_team_leader', 'scout_section_team_member', 'group_chair', 'group_treasurer', 'group_trustee', 'district_lead_volunteer', 'section_leader', 'assistant_section_leader', 'section_assistant', 'trustee', 'district_volunteer', 'other') ASC";
+    $roleFieldOrder = "FIELD(gm.membership_role, 'group_lead_volunteer', 'group_leadership_team_member', 'squirrel_section_team_leader', 'squirrel_section_team_member', 'beaver_section_team_leader', 'beaver_section_team_member', 'cub_section_team_leader', 'cub_section_team_member', 'scout_section_team_leader', 'scout_section_team_member', 'explorer_team_leader', 'explorer_team_member', 'group_chair', 'group_treasurer', 'group_trustee', 'district_lead_volunteer', 'section_leader', 'assistant_section_leader', 'section_assistant', 'trustee', 'district_volunteer', 'other') ASC";
 
     if ($hasPrimaryCol) {
         sync_log('is_primary column detected — will prefer primary memberships.');

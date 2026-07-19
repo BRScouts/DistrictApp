@@ -77,9 +77,15 @@ try {
             $success = 'Person details saved.';
         } elseif ($action === 'update_role') {
             $membershipRole = (string) ($_POST['membership_role'] ?? '');
+            $targetGroupId = (int) ($_POST['target_group_id'] ?? $selectedGroupId);
+
+            // District admins can update roles in any group; others only their own.
+            if ($targetGroupId !== $selectedGroupId && !$isDistrictAdmin) {
+                throw new RuntimeException('You do not have permission to update roles in other groups.');
+            }
 
             $pdo->beginTransaction();
-            gm_update_group_role($personId, $selectedGroupId, $membershipRole, $actorPersonId);
+            gm_update_group_role($personId, $targetGroupId, $membershipRole, $actorPersonId);
             $pdo->commit();
 
             $success = 'Role updated.';
@@ -116,8 +122,10 @@ try {
                 throw new RuntimeException('Only District Administrators can set a primary role.');
             }
 
+            $targetGroupId = (int) ($_POST['group_id'] ?? $selectedGroupId);
+
             $pdo->beginTransaction();
-            gm_set_primary_membership($personId, $selectedGroupId, $actorPersonId);
+            gm_set_primary_membership($personId, $targetGroupId, $actorPersonId);
             $pdo->commit();
 
             $success = 'This membership has been set as the primary role for this person.';
@@ -339,31 +347,98 @@ include __DIR__ . '/app/group-manager-nav.php';
 
     <div class="gm-grid gm-grid-2 mt-4">
         <section class="lt-panel">
-            <h2 class="lt-section-title">Role in this Group</h2>
+            <?php if ($isDistrictAdmin): ?>
+                <?php
+                    // Fetch ALL active memberships for this person across all groups.
+                    $stmtAllMemberships = $pdo->prepare("
+                        SELECT
+                            gm.group_id,
+                            gm.membership_role,
+                            gm.status AS membership_status,
+                            gm.is_primary,
+                            g.group_name
+                        FROM group_memberships gm
+                        INNER JOIN groups g ON g.id = gm.group_id
+                        WHERE gm.person_id = :person_id
+                          AND gm.status = 'active'
+                        ORDER BY gm.is_primary DESC, g.group_name ASC
+                    ");
+                    $stmtAllMemberships->execute(['person_id' => $personId]);
+                    $allMemberships = $stmtAllMemberships->fetchAll(PDO::FETCH_ASSOC);
+                ?>
+                <h2 class="lt-section-title">All roles <small style="font-weight:normal;color:#555;">(District Admin)</small></h2>
 
-            <form method="post">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="update_role">
-                <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-                <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+                <?php if (count($allMemberships) === 0): ?>
+                    <p class="gm-muted">No active memberships found.</p>
+                <?php else: ?>
+                    <?php foreach ($allMemberships as $membership):
+                        $mGroupId = (int) $membership['group_id'];
+                        $mGroupName = (string) $membership['group_name'];
+                        $mRole = (string) $membership['membership_role'];
+                        $mIsPrimary = (int) ($membership['is_primary'] ?? 0) === 1;
+                        $mRoleOptions = gm_membership_role_options($mGroupId);
+                    ?>
+                        <form method="post" class="mb-3" style="border:1px solid #e5e5e5;padding:.75rem;border-radius:4px;<?= $mIsPrimary ? 'border-left:4px solid #4d0b93;' : '' ?>">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="update_role">
+                            <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                            <input type="hidden" name="target_group_id" value="<?= (int) $mGroupId ?>">
+                            <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
 
-                <div class="form-group">
-                    <label for="membership_role">Role</label>
-                    <select class="form-control" id="membership_role" name="membership_role" required>
-                        <?php foreach ($roleOptions as $value => $label): ?>
-                            <option value="<?= e($value) ?>" <?= (string) $person['membership_role'] === $value ? 'selected' : '' ?>>
-                                <?= e($label) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+                            <div class="form-group mb-2">
+                                <label class="mb-1" style="font-weight:bold;">
+                                    <?= e($mGroupName) ?>
+                                    <?php if ($mIsPrimary): ?>
+                                        <span class="gm-badge gm-badge-active" style="font-size:.7rem;vertical-align:middle;">Primary</span>
+                                    <?php endif; ?>
+                                </label>
+                                <select class="form-control form-control-sm" name="membership_role" required>
+                                    <?php foreach ($mRoleOptions as $value => $label): ?>
+                                        <option value="<?= e($value) ?>" <?= $mRole === $value ? 'selected' : '' ?>>
+                                            <?= e($label) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
 
-                <p class="gm-muted">
-                    Group Lead Volunteer gives this person Group Admin access for this Group. Other roles are normal member access.
-                </p>
+                            <button class="btn btn-sm btn-primary lt-btn" type="submit">Save</button>
+                            <?php if (!$mIsPrimary): ?>
+                                <a href="javascript:void(0)" class="btn btn-sm btn-outline-secondary lt-btn"
+                                   onclick="if(confirm('Set this as the primary role?')){let f=document.createElement('form');f.method='post';f.innerHTML='<?= csrf_field() ?><input type=hidden name=action value=set_primary><input type=hidden name=group_id value=<?= (int) $mGroupId ?>><input type=hidden name=person_id value=<?= (int) $personId ?>>';document.body.appendChild(f);f.submit();}">
+                                    Set as primary
+                                </a>
+                            <?php endif; ?>
+                        </form>
+                    <?php endforeach; ?>
+                <?php endif; ?>
 
-                <button class="btn btn-primary lt-btn" type="submit">Update role</button>
-            </form>
+            <?php else: ?>
+                <h2 class="lt-section-title">Role in this Group</h2>
+
+                <form method="post">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="update_role">
+                    <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
+                    <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
+
+                    <div class="form-group">
+                        <label for="membership_role">Role</label>
+                        <select class="form-control" id="membership_role" name="membership_role" required>
+                            <?php foreach ($roleOptions as $value => $label): ?>
+                                <option value="<?= e($value) ?>" <?= (string) $person['membership_role'] === $value ? 'selected' : '' ?>>
+                                    <?= e($label) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <p class="gm-muted">
+                        Group Lead Volunteer gives this person Group Admin access for this Group. Other roles are normal member access.
+                    </p>
+
+                    <button class="btn btn-primary lt-btn" type="submit">Update role</button>
+                </form>
+            <?php endif; ?>
         </section>
 
         <aside class="lt-panel-grey">
@@ -392,43 +467,10 @@ include __DIR__ . '/app/group-manager-nav.php';
         </aside>
     </div>
 
-    <?php if ($isDistrictAdmin): ?>
-    <?php
-        // Check if this membership is currently the primary one.
-        $isPrimary = false;
-        if (gm_column_exists('group_memberships', 'is_primary')) {
-            $stmtPrimary = $pdo->prepare("
-                SELECT is_primary
-                FROM group_memberships
-                WHERE person_id = :person_id
-                  AND group_id = :group_id
-                  AND status = 'active'
-                LIMIT 1
-            ");
-            $stmtPrimary->execute(['person_id' => $personId, 'group_id' => $selectedGroupId]);
-            $isPrimary = (int) $stmtPrimary->fetchColumn() === 1;
-        }
-    ?>
-    <section class="lt-panel mt-4">
-        <h2 class="lt-section-title">Primary role <small style="font-weight:normal;color:#555;">(District Admin only)</small></h2>
-
-        <?php if ($isPrimary): ?>
-            <p><span class="gm-badge gm-badge-active">Primary</span> This is currently set as this person's primary role. Their Microsoft 365 profile (job title and department) reflects this membership.</p>
-        <?php else: ?>
-            <p class="gm-muted">
-                If this person has roles in multiple groups, you can mark this membership as their primary role.
-                Their Microsoft 365 job title and department will be set based on their primary membership.
-            </p>
-
-            <form method="post" onsubmit="return confirm('Set this as the primary role for this person? This will replace any existing primary.');">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="set_primary">
-                <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
-                <input type="hidden" name="person_id" value="<?= (int) $personId ?>">
-                <button class="btn btn-primary lt-btn" type="submit">Set as primary role</button>
-            </form>
-        <?php endif; ?>
-    </section>
+    <?php if ($isDistrictAdmin && count($allMemberships ?? []) > 0): ?>
+    <p class="gm-muted mt-2" style="font-size:.85rem;">
+        The <span class="gm-badge gm-badge-active" style="font-size:.65rem;">Primary</span> role determines this person's Microsoft 365 job title and department.
+    </p>
     <?php endif; ?>
 
     <section class="lt-panel mt-4">
