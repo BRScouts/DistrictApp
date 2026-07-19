@@ -304,7 +304,7 @@ function sa_export_audit_csv(array $filters = []): void
 function sa_entity_link(string $entityType, int $entityId): ?string
 {
     return match ($entityType) {
-        'person' => '/system-admin.php?target_person_id=' . $entityId,
+        'person' => '/system-admin-person.php?person_id=' . $entityId,
         'calendar_event' => '/dc/manage-event.php?id=' . $entityId,
         'group' => '/district-admin-group.php?group_id=' . $entityId,
         'risk_assessment' => '/dc/download-risk-assessment.php?id=' . $entityId,

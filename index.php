@@ -458,7 +458,7 @@ $modules = [
     [
         'title' => 'System Admin',
         'description' => 'Manage system settings, audit logs, cron jobs and platform-wide configuration.',
-        'url' => '/system-admin.php',
+        'url' => '/system-admin-dashboard.php',
         'status' => 'available',
         'image' => '/assets/img/cubs-crate-stacking-jpg.jpg',
         'visible' => $isSystemAdmin,

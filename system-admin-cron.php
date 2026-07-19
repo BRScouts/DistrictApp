@@ -338,11 +338,13 @@ include __DIR__ . '/header.php';
 
 <nav class="sa-service-bar" aria-label="System Admin navigation">
     <div class="sa-service-bar-inner">
+        <a class="sa-nav-link" href="/system-admin-dashboard.php">Dashboard</a>
         <a class="sa-nav-link" href="/system-admin.php">Audit Log</a>
         <a class="sa-nav-link" href="/system-admin-cron.php" aria-current="page">Cron Jobs</a>
-        <a class="sa-nav-link" href="/system-admin-gdpr.php">GDPR Reports</a>
+        <a class="sa-nav-link" href="/system-admin-gdpr.php">GDPR</a>
         <a class="sa-nav-link" href="/system-admin-permissions.php">Permissions</a>
-        <a class="sa-nav-link" href="/system-admin-kb.php">Knowledge Base</a>
+        <a class="sa-nav-link" href="/system-admin-person.php">Person Lookup</a>
+        <a class="sa-nav-link" href="/system-admin-kb.php">KB</a>
     </div>
 </nav>
 
