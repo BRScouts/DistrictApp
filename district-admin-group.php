@@ -361,6 +361,16 @@ include __DIR__ . '/header.php';
 
                     <hr>
 
+                    <label class="lt-check mb-3">
+                        <input type="checkbox" name="disable_district_email" value="1">
+                        <span>Disable District email creation for this Group</span>
+                    </label>
+                    <p class="da-muted" style="margin-top:-.5rem;margin-bottom:1rem;font-size:.85rem;">
+                        Enable this if the Group has their own Office 365 tenant. Members will be told they can sign in via B2B SSO using their group email instead.
+                    </p>
+
+                    <hr>
+
                     <div class="form-group">
                         <label for="lead_person_id">First person who can edit this Group</label>
                         <select class="form-control" id="lead_person_id" name="lead_person_id">
@@ -430,6 +440,16 @@ include __DIR__ . '/header.php';
                             <input class="form-control" type="text" id="postcode" name="postcode" value="<?= e($group['postcode'] ?? '') ?>">
                         </div>
                     </div>
+
+                    <hr>
+
+                    <label class="lt-check mb-3">
+                        <input type="checkbox" name="disable_district_email" value="1" <?= (int) ($group['disable_district_email'] ?? 0) === 1 ? 'checked' : '' ?>>
+                        <span>Disable District email creation for this Group</span>
+                    </label>
+                    <p class="da-muted" style="margin-top:-.5rem;margin-bottom:1rem;font-size:.85rem;">
+                        Enable this if the Group has their own Office 365 tenant. Members will be told they can sign in via B2B SSO using their group email instead.
+                    </p>
 
                     <button class="btn btn-primary lt-btn" type="submit">Save Group details</button>
                 </form>

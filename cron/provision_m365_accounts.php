@@ -740,6 +740,37 @@ function m365_try_lock_request(int $requestId): bool
     return $stmt->rowCount() === 1;
 }
 
+/**
+ * Check if a person belongs to any group that has district email disabled.
+ *
+ * Returns true if the person has an active membership in a group where
+ * `disable_district_email = 1`.
+ */
+function m365_person_group_email_disabled(int $personId): bool
+{
+    if (!m365_column_exists('groups', 'disable_district_email')) {
+        return false;
+    }
+
+    try {
+        $stmt = db()->prepare("
+            SELECT 1
+            FROM group_memberships gm
+            JOIN groups g ON g.id = gm.group_id
+            WHERE gm.person_id = :person_id
+              AND gm.status = 'active'
+              AND g.is_active = 1
+              AND g.disable_district_email = 1
+            LIMIT 1
+        ");
+        $stmt->execute(['person_id' => $personId]);
+
+        return (bool) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
 function m365_fetch_pending_requests(int $limit): array
 {
     $maxAttempts = m365_config_int('M365_PROVISIONING_MAX_ATTEMPTS', 5);
@@ -1001,6 +1032,17 @@ $failed = 0;
 
 foreach ($requests as $request) {
     $requestId = (int) $request['id'];
+
+    // Skip requests for people whose group has district email disabled.
+    $personIdForCheck = (int) ($request['person_id'] ?? 0);
+    if ($personIdForCheck > 0 && m365_person_group_email_disabled($personIdForCheck)) {
+        m365_mark_request($requestId, [
+            'provision_status' => 'skipped',
+            'provision_error' => 'District email creation is disabled for this person\'s group (own Office 365 tenant).',
+        ]);
+        m365_stdout("Skipped request {$requestId}: group has district email disabled.");
+        continue;
+    }
 
     if (!m365_try_lock_request($requestId)) {
         continue;

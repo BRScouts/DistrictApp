@@ -161,8 +161,16 @@ try {
                 throw new RuntimeException('Person not found.');
             }
 
+            if (!gm_group_allows_district_email($selectedGroupId)) {
+                throw new RuntimeException('District email creation is disabled for this Group. This Group has its own Office 365 tenant — members should sign in using their group email via B2B SSO.');
+            }
+
             if ((int) ($person['has_microsoft_account'] ?? 0) > 0) {
                 throw new RuntimeException('This person already has a Microsoft 365 account.');
+            }
+
+            if (gm_person_has_district_email($personId, (string) $person['primary_email'])) {
+                throw new RuntimeException('This person already has a District email address. They do not need a new account.');
             }
 
             if (gm_person_has_pending_account_request($personId, (string) $person['primary_email'])) {
@@ -581,6 +589,12 @@ include __DIR__ . '/app/group-manager-nav.php';
                         <button class="btn btn-secondary lt-btn btn-block" type="submit">Send calendar link meanwhile</button>
                     </form>
                 <?php else: ?>
+                    <?php if (!gm_group_allows_district_email($selectedGroupId)): ?>
+                        <div class="alert alert-info mb-3" style="font-size:.85rem;">
+                            <strong>District email not available for this Group.</strong><br>
+                            This Group has its own Office 365 tenant. Members can sign in to the District App using their group email address via B2B SSO.
+                        </div>
+                    <?php else: ?>
                     <form method="post" class="mb-3" onsubmit="return confirm('Request a Microsoft 365 account? Login details will be sent to <?= e($person['primary_email']) ?>.');">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="request_m365_account">
@@ -589,6 +603,7 @@ include __DIR__ . '/app/group-manager-nav.php';
                         <button class="btn btn-primary lt-btn btn-block" type="submit">Request Microsoft 365 account</button>
                     </form>
                     <p class="gmp-muted" style="font-size:.82rem;">Credentials sent to <strong><?= e($person['primary_email']) ?></strong>.</p>
+                    <?php endif; ?>
                     <hr style="margin:.75rem 0;">
                     <form method="post" class="mb-2">
                         <?= csrf_field() ?>

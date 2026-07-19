@@ -79,6 +79,7 @@ function gm_add_access_route_label(string $route): string
         'calendar_link_only' => 'Calendar link only',
         'existing_district_email' => 'Existing District Microsoft 365 account',
         'district_account_requested' => 'District Microsoft 365 account requested',
+        'b2b_sso' => 'Group Office 365 (B2B SSO)',
         default => 'Microsoft 365 sign-in',
     };
 }
@@ -215,6 +216,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $accessRoute = 'microsoft';
             }
 
+            /*
+             * If the group has district email creation disabled (own O365 tenant),
+             * force the access route away from microsoft provisioning.
+             * The person will get B2B SSO instructions instead.
+             */
+            $groupEmailDisabled = !gm_group_allows_district_email($selectedGroupId);
+
+            if ($groupEmailDisabled && $accessRoute === 'microsoft') {
+                $accessRoute = 'b2b_sso';
+            }
+
             $useCalendarLinkOnly = $accessRoute === 'calendar_link_only';
             $personalEmailIsDistrict = $personalEmail !== ''
                 && filter_var($personalEmail, FILTER_VALIDATE_EMAIL)
@@ -245,7 +257,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $errors[] = 'Choose a valid role.';
             }
 
-            if (!$useCalendarLinkOnly) {
+            if (!$useCalendarLinkOnly && $accessRoute !== 'b2b_sso') {
                 if ($personalEmailIsDistrict) {
                     /*
                      * They already have a District email, so do not create another request.
@@ -399,7 +411,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $ssoUrl = gm_absolute_url('/auth/microsoft-start.php');
 
-                if ($useCalendarLinkOnly) {
+                if ($accessRoute === 'b2b_sso') {
+                    $finalAccessRoute = 'b2b_sso';
+
+                    gm_queue_email_and_log(
+                        $personId,
+                        $personalEmail,
+                        $fullName,
+                        'Welcome to the Irwell Valley District App',
+                        "Hello {$firstName},\n\n"
+                        . "Welcome to Irwell Valley Scout District. Your Group Lead Volunteer has added you to {$selectedGroup['group_name']}.\n\n"
+                        . "\n"
+                        . "SIGNING IN\n\n"
+                        . "Because your Group has its own Office 365, you do not need a separate District email address.\n\n"
+                        . "You can sign in to the District App using your existing group email address via Single Sign-On (SSO).\n\n"
+                        . "\n"
+                        . "HOW TO SIGN IN\n\n"
+                        . "Go to the link below and click \"Sign in with Microsoft\". Use your group Office 365 email address and password.\n\n"
+                        . "{$ssoUrl}\n\n"
+                        . "\n"
+                        . "WHAT YOU CAN ACCESS\n\n"
+                        . "Once signed in you will have access to:\n\n"
+                        . "- The District Dashboard\n"
+                        . "- The District Directory\n"
+                        . "- The District Calendar\n\n"
+                        . "Your group email and OneDrive are managed by your Group, not the District.\n\n"
+                        . "\n"
+                        . "NEED HELP?\n\n"
+                        . "If you have trouble signing in, ask your Group Lead Volunteer.\n\n"
+                        . "\n"
+                        . "Irwell Valley Scout District",
+                        'b2b_sso_welcome'
+                    );
+                } elseif ($useCalendarLinkOnly) {
                     $finalAccessRoute = 'calendar_link_only';
                     $createdInviteUrl = gm_create_unique_invite($actorPersonId, $personId, $selectedGroupId);
 
@@ -547,6 +591,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $success .= ' A Microsoft 365 account request and welcome email have been queued.';
                 } elseif ($finalAccessRoute === 'existing_district_email') {
                     $success .= ' Existing District email detected, so no new Microsoft 365 account request was created. Sign-in instructions have been queued.';
+                } elseif ($finalAccessRoute === 'b2b_sso') {
+                    $success .= ' This Group has its own Office 365, so no District email was created. B2B SSO sign-in instructions have been queued.';
                 } else {
                     $success .= ' A calendar-link-only access email has been queued.';
                 }
@@ -566,6 +612,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 if (
     !$districtEmailSuggestion
+    && !$groupEmailDisabledForUi
     && !empty($posted['first_name'])
     && !empty($posted['last_name'])
     && (string) ($posted['access_route'] ?? 'microsoft') !== 'calendar_link_only'
@@ -593,6 +640,8 @@ if (isset($posted['use_calendar_link_only'])) {
 if (!in_array($selectedAccessRoute, ['microsoft', 'calendar_link_only'], true)) {
     $selectedAccessRoute = 'microsoft';
 }
+
+$groupEmailDisabledForUi = !gm_group_allows_district_email($selectedGroupId);
 
 $gmNavCurrent = 'add';
 
@@ -885,6 +934,22 @@ include __DIR__ . '/app/group-manager-nav.php';
                     <span class="gm-step-kicker">Step 2</span>
                     <h3 class="h5 font-weight-bold">District email and access</h3>
 
+                    <?php if ($groupEmailDisabledForUi): ?>
+                        <div class="gm-access-panel" style="border-left:5px solid #0d6efd;background:#e7f1ff;">
+                            <h4 style="margin-top:0;color:#084298;font-weight:900;">Group Office 365 (B2B SSO)</h4>
+                            <p class="mb-1">
+                                This Group has its own Office 365 tenant, so District email creation is not available.
+                            </p>
+                            <p class="mb-1">
+                                When you add this person, they will be emailed instructions to sign in to the District App using their <strong>existing group email address</strong> via Single Sign-On (B2B federation).
+                            </p>
+                            <p class="mb-0" style="font-size:.9rem;color:#555;">
+                                They will have access to the District Dashboard, Directory, and Calendar. Their email and OneDrive remain managed by their Group.
+                            </p>
+                        </div>
+                        <input type="hidden" name="access_route" value="microsoft">
+                    <?php else: ?>
+
                     <p class="gm-muted mb-3">
                         Does this person need a District Microsoft 365 account? This is optional. Not all leaders need one.
                     </p>
@@ -981,6 +1046,7 @@ include __DIR__ . '/app/group-manager-nav.php';
                             You can set up a District email for them later from their profile if needed.
                         </p>
                     </div>
+                    <?php endif; ?>
                 </div>
 
                 <div class="gm-flow-step">

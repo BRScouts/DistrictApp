@@ -492,6 +492,8 @@ function da_create_group(array $input, int $actorPersonId): int
 
     $slug = da_unique_group_slug($groupName);
 
+    $disableDistrictEmail = isset($input['disable_district_email']) && $input['disable_district_email'] ? 1 : 0;
+
     $inserted = da_insert_flexible('groups', [
         'group_name' => $groupName,
         'name' => $groupName,
@@ -502,6 +504,7 @@ function da_create_group(array $input, int $actorPersonId): int
         'meeting_place' => trim((string) ($input['meeting_place'] ?? '')) ?: null,
         'postcode' => trim((string) ($input['postcode'] ?? '')) ?: null,
         'is_active' => 1,
+        'disable_district_email' => $disableDistrictEmail,
         'created_at' => date('Y-m-d H:i:s'),
         'updated_at' => date('Y-m-d H:i:s'),
     ]);
@@ -534,6 +537,8 @@ function da_update_group_details(int $groupId, array $input, int $actorPersonId)
         throw new RuntimeException('Enter the Group name.');
     }
 
+    $disableDistrictEmail = isset($input['disable_district_email']) && $input['disable_district_email'] ? 1 : 0;
+
     da_update_flexible('groups', 'id', $groupId, [
         'group_name' => $groupName,
         'name' => $groupName,
@@ -543,6 +548,7 @@ function da_update_group_details(int $groupId, array $input, int $actorPersonId)
         'contact_email' => trim((string) ($input['public_email'] ?? '')) ?: null,
         'meeting_place' => trim((string) ($input['meeting_place'] ?? '')) ?: null,
         'postcode' => trim((string) ($input['postcode'] ?? '')) ?: null,
+        'disable_district_email' => $disableDistrictEmail,
         'updated_at' => date('Y-m-d H:i:s'),
     ]);
 

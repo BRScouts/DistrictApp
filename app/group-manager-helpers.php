@@ -167,6 +167,39 @@ function gm_default_district_email_domain(): string
     return (string) app_config('DISTRICT_EMAIL_DOMAIN', 'irvalscouts.org.uk');
 }
 
+/**
+ * Check whether a group allows District email creation.
+ *
+ * Returns FALSE if the group has `disable_district_email = 1` (i.e. the
+ * group has their own Office 365 tenant and uses B2B SSO instead).
+ */
+function gm_group_allows_district_email(int $groupId): bool
+{
+    if ($groupId < 1) {
+        return true;
+    }
+
+    if (!gm_column_exists('groups', 'disable_district_email')) {
+        return true;
+    }
+
+    try {
+        $stmt = db()->prepare("
+            SELECT disable_district_email
+            FROM groups
+            WHERE id = :group_id
+            LIMIT 1
+        ");
+        $stmt->execute(['group_id' => $groupId]);
+
+        $value = $stmt->fetchColumn();
+
+        return $value === false || (int) $value === 0;
+    } catch (Throwable $e) {
+        return true;
+    }
+}
+
 function gm_current_memberships(array $user): array
 {
     if (function_exists('user_group_memberships')) {
@@ -1364,6 +1397,55 @@ function gm_set_person_membership_status(int $personId, int $groupId, string $ne
     ]);
 }
 
+/**
+ * Checks whether a person already has a district email address assigned.
+ *
+ * This looks at the people table columns (district_email, m365_user_principal_name,
+ * microsoft_user_principal_name) and also checks if their primary_email is already
+ * on the district domain.
+ */
+function gm_person_has_district_email(int $personId, ?string $primaryEmail = null): bool
+{
+    $domain = gm_default_district_email_domain();
+
+    // Check if primary_email is already a district email.
+    if ($primaryEmail !== null && $primaryEmail !== '') {
+        $emailDomain = strtolower(trim(substr(strrchr($primaryEmail, '@') ?: '', 1)));
+        if ($emailDomain === strtolower($domain)) {
+            return true;
+        }
+    }
+
+    // Check people table columns that store the provisioned district email.
+    foreach (['district_email', 'm365_user_principal_name', 'microsoft_user_principal_name'] as $column) {
+        if (!gm_column_exists('people', $column)) {
+            continue;
+        }
+
+        try {
+            $quoted = gm_quote_identifier($column);
+            $stmt = db()->prepare("
+                SELECT {$quoted}
+                FROM people
+                WHERE id = :person_id
+                  AND {$quoted} IS NOT NULL
+                  AND {$quoted} != ''
+                LIMIT 1
+            ");
+            $stmt->execute(['person_id' => $personId]);
+            $value = $stmt->fetchColumn();
+
+            if ($value !== false && $value !== null && $value !== '') {
+                return true;
+            }
+        } catch (Throwable $e) {
+            // Column may not exist in some environments; continue.
+        }
+    }
+
+    return false;
+}
+
 function gm_access_status_label(array $person): string
 {
     if ((int) ($person['has_microsoft_account'] ?? 0) > 0) {
@@ -1372,6 +1454,10 @@ function gm_access_status_label(array $person): string
 
     if (gm_person_has_pending_account_request((int) $person['person_id'], (string) $person['primary_email'])) {
         return 'Account requested';
+    }
+
+    if (gm_person_has_district_email((int) $person['person_id'], (string) ($person['primary_email'] ?? ''))) {
+        return 'Microsoft SSO';
     }
 
     return 'No SSO yet';
