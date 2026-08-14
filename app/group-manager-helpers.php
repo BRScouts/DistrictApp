@@ -968,6 +968,11 @@ function gm_create_district_email_request(
         return false;
     }
 
+    // Prevent duplicate requests: skip if there's already an active request for this person or email.
+    if (gm_person_has_pending_account_request($personId, $contactEmail)) {
+        return false;
+    }
+
     $stmt = db()->prepare("
         INSERT INTO m365_account_requests (
             person_id,

@@ -505,47 +505,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $finalAccessRoute = 'district_account_requested';
 
-                    $requestRecorded = gm_create_district_email_request(
-                        $actorPersonId,
-                        $personId,
-                        $selectedGroupId,
-                        $requestedDistrictEmail,
-                        $personalEmail,
-                        $notes
-                    );
+                    // Skip creating a duplicate request if one is already pending for this person.
+                    if (gm_person_has_pending_account_request($personId, $personalEmail)) {
+                        $requestRecorded = false;
+                        $finalAccessRoute = 'existing_district_email';
 
-                    gm_queue_email_and_log(
-                        $personId,
-                        $personalEmail,
-                        $fullName,
-                        'Your Irwell Valley District account is being set up',
-                        "Hello {$firstName},\n\n"
-                        . "Welcome to Irwell Valley Scout District. Your Group Lead Volunteer has requested a District Microsoft 365 account for you.\n\n"
-                        . "\n"
-                        . "YOUR NEW ACCOUNT\n\n"
-                        . "Your District email address will be:\n{$requestedDistrictEmail}\n\n"
-                        . "The account is usually created within a few minutes. You will receive a separate email with your temporary password once it is ready.\n\n"
-                        . "\n"
-                        . "WHAT HAPPENS NEXT\n\n"
-                        . "1. Your account is created automatically.\n"
-                        . "2. You receive your temporary password by email.\n"
-                        . "3. You sign in and set a new password.\n"
-                        . "4. You can then access all District services.\n\n"
-                        . "\n"
-                        . "WHAT YOU WILL BE ABLE TO ACCESS\n\n"
-                        . "Once your account is ready and you sign in, you will have access to:\n\n"
-                        . "- The District Dashboard\n"
-                        . "- The District Directory\n"
-                        . "- The District Calendar\n"
-                        . "- Your Scout email and OneDrive\n\n"
-                        . "\n"
-                        . "HOW TO SIGN IN (once your account is ready)\n\n"
-                        . "Go to the link below and click \"Sign in with Microsoft\". Use your new District email address and password.\n\n"
-                        . "{$ssoUrl}\n\n"
-                        . "\n"
-                        . "Irwell Valley Scout District",
-                        'district_account_requested'
-                    );
+                        gm_queue_email_and_log(
+                            $personId,
+                            $personalEmail,
+                            $fullName,
+                            'Welcome to the Irwell Valley District App',
+                            "Hello {$firstName},\n\n"
+                            . "Welcome to Irwell Valley Scout District. Your Group Lead Volunteer has added you to {$selectedGroup['group_name']}.\n\n"
+                            . "\n"
+                            . "YOUR ACCOUNT\n\n"
+                            . "A District Microsoft 365 account has already been requested for you.\n"
+                            . "Your District email address will be:\n{$requestedDistrictEmail}\n\n"
+                            . "If you have not yet received your temporary password, please ask your Group Lead Volunteer.\n\n"
+                            . "\n"
+                            . "HOW TO SIGN IN\n\n"
+                            . "Go to the link below and click \"Sign in with Microsoft\". Use your District email address and password.\n\n"
+                            . "{$ssoUrl}\n\n"
+                            . "\n"
+                            . "NEED HELP?\n\n"
+                            . "If you have trouble signing in, ask your Group Lead Volunteer.\n\n"
+                            . "\n"
+                            . "Irwell Valley Scout District",
+                            'district_account_existing'
+                        );
+                    } else {
+                        $requestRecorded = gm_create_district_email_request(
+                            $actorPersonId,
+                            $personId,
+                            $selectedGroupId,
+                            $requestedDistrictEmail,
+                            $personalEmail,
+                            $notes
+                        );
+
+                        gm_queue_email_and_log(
+                            $personId,
+                            $personalEmail,
+                            $fullName,
+                            'Your Irwell Valley District account is being set up',
+                            "Hello {$firstName},\n\n"
+                            . "Welcome to Irwell Valley Scout District. Your Group Lead Volunteer has requested a District Microsoft 365 account for you.\n\n"
+                            . "\n"
+                            . "YOUR NEW ACCOUNT\n\n"
+                            . "Your District email address will be:\n{$requestedDistrictEmail}\n\n"
+                            . "The account is usually created within a few minutes. You will receive a separate email with your temporary password once it is ready.\n\n"
+                            . "\n"
+                            . "WHAT HAPPENS NEXT\n\n"
+                            . "1. Your account is created automatically.\n"
+                            . "2. You receive your temporary password by email.\n"
+                            . "3. You sign in and set a new password.\n"
+                            . "4. You can then access all District services.\n\n"
+                            . "\n"
+                            . "WHAT YOU WILL BE ABLE TO ACCESS\n\n"
+                            . "Once your account is ready and you sign in, you will have access to:\n\n"
+                            . "- The District Dashboard\n"
+                            . "- The District Directory\n"
+                            . "- The District Calendar\n"
+                            . "- Your Scout email and OneDrive\n\n"
+                            . "\n"
+                            . "HOW TO SIGN IN (once your account is ready)\n\n"
+                            . "Go to the link below and click \"Sign in with Microsoft\". Use your new District email address and password.\n\n"
+                            . "{$ssoUrl}\n\n"
+                            . "\n"
+                            . "Irwell Valley Scout District",
+                            'district_account_requested'
+                        );
+                    }
                 }
 
                 gm_log_action($actorPersonId, $existingPerson ? 'group_person_linked' : 'group_person_created', 'person', $personId, [
