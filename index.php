@@ -1031,7 +1031,7 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
                         class="form-control"
                         id="shared-mailbox-email"
                         name="mailbox_email"
-                        placeholder="example@irwellvalleyscouts.org.uk"
+                        placeholder="example@irvalscouts.org.uk"
                         autocomplete="email"
                         required
                         <?= $sharedMailboxTableReady ? '' : 'disabled' ?>
