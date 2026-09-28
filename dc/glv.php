@@ -429,7 +429,7 @@ require __DIR__ . '/layout.php';
 <?php if ($showGroupPicker): ?>
     <form method="get" class="lt-panel-grey dc-filter-form" action="/dc/glv.php">
         <label for="group_id">Choose Group</label>
-        <select id="group_id" name="group_id" class="form-control" onchange="this.form.submit()">
+        <select id="group_id" name="group_id" class="form-control" data-autosubmit>
             <?= dc_group_options_html($selectedGroupId) ?>
         </select>
     </form>
@@ -590,7 +590,6 @@ require __DIR__ . '/layout.php';
                                         class="dc-link-output"
                                         value="<?= e($shareUrl) ?>"
                                         readonly
-                                        onclick="this.select();"
                                         aria-label="<?= e($label) ?>"
                                     >
 
@@ -660,6 +659,20 @@ require __DIR__ . '/layout.php';
 
 <script <?= csp_nonce_attr() ?>>
 (function () {
+    // CSP-safe replacement for inline onchange="this.form.submit()".
+    document.querySelectorAll('select[data-autosubmit]').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+            if (sel.form) sel.form.submit();
+        });
+    });
+
+    // CSP-safe replacement for inline onclick="this.select()" on readonly link fields.
+    document.querySelectorAll('.dc-link-output').forEach(function (input) {
+        input.addEventListener('click', function () {
+            input.select();
+        });
+    });
+
     document.querySelectorAll('.dc-copy-link').forEach(function (button) {
         button.addEventListener('click', async function () {
             const input = button.parentElement ? button.parentElement.querySelector('input') : null;

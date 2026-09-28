@@ -344,7 +344,7 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
 <header class="lt-header">
     <div class="lt-header-inner">
         <a class="lt-brand" href="/index.php" aria-label="Irwell Valley District Scouts">
-            <img src="/assets/img/black-ir-logo.png" alt="Irwell Valley District Scouts" onerror="this.style.display='none';">
+            <img src="/assets/img/black-ir-logo.png" alt="Irwell Valley District Scouts" data-hide-on-error>
         </a>
 
         <?php if ($user): ?>
@@ -376,7 +376,7 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
                                 <img
                                     src="<?= e($profilePhotoUrl) ?>"
                                     alt=""
-                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';"
+                                    data-fallback-sibling
                                 >
                                 <span style="display: none;" aria-hidden="true"><?= e($initials) ?></span>
                             <?php else: ?>

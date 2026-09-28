@@ -1604,7 +1604,7 @@ require __DIR__ . '/layout.php';
                     type="submit"
                     name="save_action"
                     value="cancel"
-                    onclick="return confirm('Cancel this event? This will mark it as cancelled.');"
+                    data-confirm="Cancel this event? This will mark it as cancelled."
                 >
                     Cancel event
                 </button>

@@ -480,7 +480,7 @@ include __DIR__ . '/app/group-manager-nav.php';
                                     <button class="btn btn-sm btn-primary lt-btn" type="submit">Save</button>
                                 </form>
                                 <?php if ($isDistrictAdmin && !$mIsPrimary): ?>
-                                    <form method="post" style="display:inline-block;margin-top:.4rem;" onsubmit="return confirm('Set this as the primary role?');">
+                                    <form method="post" style="display:inline-block;margin-top:.4rem;" data-confirm="Set this as the primary role?">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="set_primary">
                                         <input type="hidden" name="group_id" value="<?= (int) $mGroupId ?>">
@@ -595,7 +595,7 @@ include __DIR__ . '/app/group-manager-nav.php';
                             This Group has its own Office 365 tenant. Members can sign in to the District App using their group email address via B2B SSO.
                         </div>
                     <?php else: ?>
-                    <form method="post" class="mb-3" onsubmit="return confirm('Request a Microsoft 365 account? Login details will be sent to <?= e($person['primary_email']) ?>.');">
+                    <form method="post" class="mb-3" data-confirm="Request a Microsoft 365 account? Login details will be sent to <?= e($person['primary_email']) ?>.">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="request_m365_account">
                         <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">
@@ -621,7 +621,7 @@ include __DIR__ . '/app/group-manager-nav.php';
                 <h3 class="gmp-card-title">Membership</h3>
                 <?php if ((string) $person['membership_status'] === 'active'): ?>
                     <p class="gmp-muted">Making someone inactive removes them from Group lists. Their history is preserved.</p>
-                    <form method="post" onsubmit="return confirm('Make this person inactive for this Group?');">
+                    <form method="post" data-confirm="Make this person inactive for this Group?">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="set_status">
                         <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">

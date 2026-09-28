@@ -48,7 +48,7 @@ if ($isLoggedIn) {
                 src="/assets/img/white-ir-logo.png"
                 alt=""
                 style="height: 52px; width: auto;"
-                onerror="this.style.display='none';"
+                data-hide-on-error
             >
             <div style="color: #fff; font-weight: 900; font-size: 1.1rem; line-height: 1.15;">
                 <?= e($appName) ?>

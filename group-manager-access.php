@@ -296,7 +296,7 @@ include __DIR__ . '/app/group-manager-nav.php';
                             <td><?= e($link['created_at'] ?? '—') ?></td>
                             <td>
                                 <?php if (($link['status'] ?? '') === 'active'): ?>
-                                    <form method="post" onsubmit="return confirm('Disable this Group calendar link?');">
+                                    <form method="post" data-confirm="Disable this Group calendar link?">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="disable_group_link">
                                         <input type="hidden" name="group_id" value="<?= (int) $selectedGroupId ?>">

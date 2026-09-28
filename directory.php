@@ -836,7 +836,7 @@ foreach ($people as $person) {
             <?php endforeach; ?>
 
             <label class="font-weight-bold mr-2" for="per_page">Show</label>
-            <select id="per_page" name="per_page" class="form-control" onchange="this.form.submit()">
+            <select id="per_page" name="per_page" class="form-control" data-autosubmit>
                 <option value="10" <?= $perPage === 10 ? 'selected' : '' ?>>10</option>
                 <option value="25" <?= $perPage === 25 ? 'selected' : '' ?>>25</option>
                 <option value="50" <?= $perPage === 50 ? 'selected' : '' ?>>50</option>
@@ -870,7 +870,7 @@ foreach ($people as $person) {
                                 <div class="directory-person-cell">
                                     <span class="directory-avatar" aria-hidden="true">
                                         <?php if ($person['photo_url'] !== ''): ?>
-                                            <img src="<?= e($person['photo_url']) ?>" alt="" onerror="this.src='<?= e($defaultPhotoUrl) ?>'; this.onerror=null;">
+                                            <img src="<?= e($person['photo_url']) ?>" alt="" data-fallback-src="<?= e($defaultPhotoUrl) ?>">
                                         <?php else: ?>
                                             <img src="<?= e($defaultPhotoUrl) ?>" alt="">
                                         <?php endif; ?>
@@ -911,7 +911,7 @@ foreach ($people as $person) {
                     <div class="directory-person-cell">
                         <span class="directory-avatar" aria-hidden="true">
                             <?php if ($person['photo_url'] !== ''): ?>
-                                <img src="<?= e($person['photo_url']) ?>" alt="" onerror="this.src='<?= e($defaultPhotoUrl) ?>'; this.onerror=null;">
+                                <img src="<?= e($person['photo_url']) ?>" alt="" data-fallback-src="<?= e($defaultPhotoUrl) ?>">
                             <?php else: ?>
                                 <img src="<?= e($defaultPhotoUrl) ?>" alt="">
                             <?php endif; ?>
@@ -995,6 +995,13 @@ foreach ($people as $person) {
 
 <script <?= csp_nonce_attr() ?>>
 (function () {
+    // CSP-safe replacement for inline onchange="this.form.submit()".
+    document.querySelectorAll('select[data-autosubmit]').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+            if (sel.form) sel.form.submit();
+        });
+    });
+
     var people = <?= json_encode($directoryPeople, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     var peopleById = {};
 

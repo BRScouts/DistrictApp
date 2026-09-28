@@ -826,7 +826,7 @@ $profileUrl = '/profile.php';
                             class="dc-profile-photo"
                             src="<?= e($profilePhotoUrl) ?>"
                             alt=""
-                            onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';"
+                            data-fallback-sibling
                         >
                         <span class="dc-profile-fallback" style="display: none;" aria-hidden="true">
                             <?= e(strtoupper(substr((string) $displayName, 0, 1))) ?>
@@ -853,7 +853,7 @@ $profileUrl = '/profile.php';
             <img
                 src="/assets/img/black-ir-logo.png"
                 alt="Irwell Valley District Scouts"
-                onerror="this.style.display='none';"
+                data-hide-on-error
             >
             <span>
                 <span class="lt-brand-title">District Calendar</span>

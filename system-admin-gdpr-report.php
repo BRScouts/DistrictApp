@@ -197,7 +197,7 @@ audit_log('admin.gdpr_report_generated', 'person', $personId, $personId, [
 </head>
 <body>
 
-<button class="print-btn no-print" onclick="window.print();">Print / Save as PDF</button>
+<button class="print-btn no-print" data-print>Print / Save as PDF</button>
 
 <div class="report-header">
     <h1>GDPR Audit Report</h1>
@@ -371,6 +371,16 @@ audit_log('admin.gdpr_report_generated', 'person', $personId, $personId, [
         and access to that personal data.
     </p>
 </div>
+
+<script <?= csp_nonce_attr() ?>>
+(function () {
+    document.querySelectorAll('[data-print]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            window.print();
+        });
+    });
+}());
+</script>
 
 </body>
 </html>

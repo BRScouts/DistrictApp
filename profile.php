@@ -725,7 +725,7 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
                         <img
                             src="<?= e($photoUrl) ?>"
                             alt=""
-                            onerror="this.remove(); this.parentElement.textContent='<?= e($initials) ?>';"
+                            data-fallback-initials="<?= e($initials) ?>"
                         >
                     <?php else: ?>
                         <?= e($initials) ?>

@@ -1434,7 +1434,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
 <header class="onboarding-header">
     <div class="onboarding-header-inner">
         <a class="onboarding-brand" href="/index.php">
-            <img src="/assets/img/black-ir-logo.png" alt="Irwell Valley District Scouts" onerror="this.style.display='none';">
+            <img src="/assets/img/black-ir-logo.png" alt="Irwell Valley District Scouts" data-hide-on-error>
             <span>Account setup</span>
         </a>
 
@@ -1473,7 +1473,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
                         <img
                             src="<?= e($photoUrl) ?>"
                             alt=""
-                            onerror="this.remove(); this.parentElement.textContent='<?= e($initials) ?>';"
+                            data-fallback-initials="<?= e($initials) ?>"
                         >
                     <?php else: ?>
                         <?= e($initials) ?>
@@ -1632,7 +1632,7 @@ $pageTitle = 'Complete your profile | ' . $appName;
                                     value="claim_existing_person"
                                     class="btn btn-primary lt-btn"
                                     formnovalidate
-                                    onclick="return confirm('Only continue if the selected existing record is definitely yours.');"
+                                    data-confirm="Only continue if the selected existing record is definitely yours."
                                 >
                                     This is me — link my Microsoft sign-in
                                 </button>

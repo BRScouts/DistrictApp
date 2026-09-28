@@ -154,7 +154,7 @@
                     class="lt-footer-logo"
                     src="/assets/img/white-ir-logo.png"
                     alt="Irwell Valley District Scouts"
-                    onerror="this.style.display='none';"
+                    data-hide-on-error
                 >
             </span>
 
@@ -191,6 +191,65 @@
         </a>
     </div>
 </footer>
+
+<script <?= csp_nonce_attr() ?>>
+(function () {
+    // Shared, CSP-safe handlers replacing inline on* attributes.
+
+    // Confirm dialogs: data-confirm on a <form> guards submit; on any other
+    // element it guards click. Cancelling stops the action.
+    document.querySelectorAll('[data-confirm]').forEach(function (el) {
+        var message = el.getAttribute('data-confirm');
+        if (el.tagName === 'FORM') {
+            el.addEventListener('submit', function (e) {
+                if (!window.confirm(message)) e.preventDefault();
+            });
+        } else {
+            el.addEventListener('click', function (e) {
+                if (!window.confirm(message)) e.preventDefault();
+            });
+        }
+    });
+
+    // Image error fallbacks (replaces inline onerror).
+    document.querySelectorAll('[data-hide-on-error]').forEach(function (img) {
+        img.addEventListener('error', function () { img.style.display = 'none'; });
+    });
+
+    // Hide the image and reveal its next sibling (e.g. initials placeholder).
+    document.querySelectorAll('[data-fallback-sibling]').forEach(function (img) {
+        img.addEventListener('error', function () {
+            img.style.display = 'none';
+            if (img.nextElementSibling) img.nextElementSibling.style.display = 'inline-flex';
+        });
+    });
+
+    // Remove the image and set the parent's text to the given initials.
+    document.querySelectorAll('[data-fallback-initials]').forEach(function (img) {
+        img.addEventListener('error', function () {
+            var parent = img.parentElement;
+            var initials = img.getAttribute('data-fallback-initials');
+            img.remove();
+            if (parent) parent.textContent = initials;
+        });
+    });
+
+    // Swap to a default image if the primary source fails (once).
+    document.querySelectorAll('[data-fallback-src]').forEach(function (img) {
+        img.addEventListener('error', function handler() {
+            img.removeEventListener('error', handler);
+            img.src = img.getAttribute('data-fallback-src');
+        });
+    });
+
+    // Trigger the browser print dialog (replaces inline onclick="window.print()").
+    document.querySelectorAll('[data-print]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            window.print();
+        });
+    });
+}());
+</script>
 
 </body>
 </html>

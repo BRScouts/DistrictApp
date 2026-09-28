@@ -469,7 +469,7 @@ include __DIR__ . '/header.php';
                     Deactivating a Group hides it from normal active Group lists. It does not delete people, events, or audit history.
                 </p>
 
-                <form method="post" onsubmit="return confirm('Change this Group status?');">
+                <form method="post" data-confirm="Change this Group status?">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="set_group_status">
                     <input type="hidden" name="group_id" value="<?= (int) $groupId ?>">
@@ -561,7 +561,7 @@ include __DIR__ . '/header.php';
                                     </span>
                                 </td>
                                 <td>
-                                    <form method="post" onsubmit="return confirm('Remove this person’s edit permission for this Group?');">
+                                    <form method="post" data-confirm="Remove this person’s edit permission for this Group?">
                                         <input type="hidden" name="action" value="remove_group_editor">
                                         <input type="hidden" name="group_id" value="<?= (int) $groupId ?>">
                                         <input type="hidden" name="person_id" value="<?= (int) $editor['id'] ?>">
@@ -635,7 +635,7 @@ include __DIR__ . '/header.php';
                                 <td><?= e($link['created_at'] ?? '—') ?></td>
                                 <td>
                                     <?php if (($link['status'] ?? '') === 'active'): ?>
-                                        <form method="post" onsubmit="return confirm('Disable this Group calendar link?');">
+                                        <form method="post" data-confirm="Disable this Group calendar link?">
                                             <input type="hidden" name="action" value="disable_group_link">
                                             <input type="hidden" name="group_id" value="<?= (int) $groupId ?>">
                                             <input type="hidden" name="link_id" value="<?= (int) $link['id'] ?>">

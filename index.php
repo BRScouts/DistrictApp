@@ -933,7 +933,7 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
                                 src="<?= e($module['image']) ?>"
                                 alt=""
                                 loading="lazy"
-                                onerror="this.style.display='none';"
+                                data-hide-on-error
                             >
                         </div>
 

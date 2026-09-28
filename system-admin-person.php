@@ -308,6 +308,8 @@ include __DIR__ . '/header.php';
     .sap-muted { color: #666; font-size: .82rem; }
     .sap-link { color: #4d0b93; font-weight: 700; text-decoration: none; }
     .sap-link:hover { text-decoration: underline; }
+
+    .sap-access-save--dirty { box-shadow: 0 0 0 3px #ffdd00; }
 </style>
 
 <nav class="sa-service-bar" aria-label="System Admin navigation">
@@ -449,7 +451,7 @@ include __DIR__ . '/header.php';
                     </div>
                     <div class="sap-actions">
                         <?php if ($person['status'] === 'active'): ?>
-                            <form method="post" onsubmit="return confirm('Deactivate this person? All their group memberships will be set to inactive.');">
+                            <form method="post" data-confirm="Deactivate this person? All their group memberships will be set to inactive.">
                                 <input type="hidden" name="_csrf_token" value="<?= e(csrf_token()) ?>">
                                 <input type="hidden" name="person_id" value="<?= (int) $person['id'] ?>">
                                 <input type="hidden" name="action" value="set_status">
@@ -493,7 +495,7 @@ include __DIR__ . '/header.php';
                                                     <option value="<?= $lvl ?>" <?= ($gm['access_level'] ?? 'member') === $lvl ? 'selected' : '' ?>><?= ucwords(str_replace('_', ' ', $lvl)) ?></option>
                                                 <?php endforeach; ?>
                                             </select>
-                                            <button type="submit" class="btn btn-primary lt-btn sap-access-save" style="font-size:.72rem; padding:.15rem .5rem; display:none;">Save</button>
+                                            <button type="submit" class="btn btn-primary lt-btn sap-access-save" style="font-size:.72rem; padding:.15rem .5rem;">Save</button>
                                         </form>
                                     </td>
                                     <td><span class="sap-badge <?= ($gm['status'] ?? '') === 'active' ? 'sap-badge-active' : 'sap-badge-inactive' ?>"><?= e($gm['status'] ?? '') ?></span></td>
@@ -644,15 +646,15 @@ include __DIR__ . '/header.php';
 
 </main>
 
-<script>
-    // Show the "Save" button on an access-level dropdown only once its value changes.
+<script <?= csp_nonce_attr() ?>>
+    // Highlight the Save button when the access level has been changed but not yet saved.
     document.querySelectorAll('.sap-access-form').forEach(function (form) {
         var select = form.querySelector('.sap-access-select');
         var saveBtn = form.querySelector('.sap-access-save');
         if (!select || !saveBtn) return;
         var original = select.value;
         select.addEventListener('change', function () {
-            saveBtn.style.display = select.value !== original ? '' : 'none';
+            saveBtn.classList.toggle('sap-access-save--dirty', select.value !== original);
         });
     });
 </script>

@@ -1556,7 +1556,7 @@ if (!$recipients && in_array($step, ['write', 'preview'], true)) {
                                 type="submit"
                                 name="action"
                                 value="send"
-                                onclick="return confirm('Queue this email to <?= count($recipients) ?> recipient<?= count($recipients) === 1 ? '' : 's' ?>?');"
+                                data-confirm="Queue this email to <?= count($recipients) ?> recipient<?= count($recipients) === 1 ? '' : 's' ?>?"
                             >
                                 Confirm and queue emails
                             </button>

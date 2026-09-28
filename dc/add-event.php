@@ -915,7 +915,7 @@ require __DIR__ . '/layout.php';
                 id="group_id"
                 name="group_id"
                 class="form-control"
-                onchange="window.location='/dc/add-event.php?group_id=' + encodeURIComponent(this.value)"
+                data-navigate-group
             >
                 <?= dc_group_options_html($groupId) ?>
             </select>
@@ -1337,6 +1337,17 @@ const initiallySelectedRiskIds = <?= json_encode(
     array_values($selectedExistingRiskIds),
     JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
 ) ?>;
+</script>
+
+<script <?= csp_nonce_attr() ?>>
+(function () {
+    // CSP-safe replacement for inline onchange group navigation.
+    document.querySelectorAll('select[data-navigate-group]').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+            window.location = '/dc/add-event.php?group_id=' + encodeURIComponent(sel.value);
+        });
+    });
+}());
 </script>
 
 <script <?= csp_nonce_attr() ?>>

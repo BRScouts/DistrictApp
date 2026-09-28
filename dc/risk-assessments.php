@@ -945,7 +945,7 @@ require __DIR__ . '/layout.php';
 
                     <div class="dc-risk-per-page">
                         <label for="per_page">Per page</label>
-                        <select id="per_page" name="per_page" class="form-control" onchange="this.form.submit()">
+                        <select id="per_page" name="per_page" class="form-control" data-autosubmit>
                             <option value="10" <?= $perPage === 10 ? 'selected' : '' ?>>10</option>
                             <option value="25" <?= $perPage === 25 ? 'selected' : '' ?>>25</option>
                             <option value="50" <?= $perPage === 50 ? 'selected' : '' ?>>50</option>
@@ -1074,5 +1074,16 @@ require __DIR__ . '/layout.php';
         </div>
     </section>
 </div>
+
+<script <?= csp_nonce_attr() ?>>
+(function () {
+    // CSP-safe replacement for inline onchange="this.form.submit()".
+    document.querySelectorAll('select[data-autosubmit]').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+            if (sel.form) sel.form.submit();
+        });
+    });
+}());
+</script>
 
 <?php require __DIR__ . '/layout-footer.php'; ?>

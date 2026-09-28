@@ -220,7 +220,7 @@ unset($_SESSION['auth_error']);
             <img
                 src="/assets/img/white-ir-logo.png"
                 alt=""
-                onerror="this.style.display='none';"
+                data-hide-on-error
             >
             <div class="lt-login-header-text">
                 <?= e($appName) ?>
@@ -266,5 +266,13 @@ unset($_SESSION['auth_error']);
         <p>&copy; <?= e(date('Y')) ?> Irwell Valley Scout District. Built by <a href="https://www.ckenterprises.co.uk" target="_blank" rel="noopener noreferrer">CK Enterprises UK</a></p>
         <p><a href="/privacy-notice.php">Privacy Notice</a> &middot; <a href="/terms-of-service.php">Terms of Service</a></p>
     </footer>
+
+<script <?= csp_nonce_attr() ?>>
+(function () {
+    document.querySelectorAll('[data-hide-on-error]').forEach(function (img) {
+        img.addEventListener('error', function () { img.style.display = 'none'; });
+    });
+}());
+</script>
 </body>
 </html>

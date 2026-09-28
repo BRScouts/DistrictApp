@@ -908,7 +908,7 @@ include __DIR__ . '/app/group-manager-nav.php';
             <?php if ($isDistrictAdmin): ?>
                 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
                     <h2 class="lt-section-title" style="margin:0;">Add a person to <?= e($selectedGroup['group_name']) ?></h2>
-                    <button type="button" class="btn btn-secondary lt-btn btn-sm" onclick="document.getElementById('link-existing-modal').style.display='flex';">
+                    <button type="button" class="btn btn-secondary lt-btn btn-sm" data-modal-open="link-existing-modal">
                         Add existing person
                     </button>
                 </div>
@@ -1045,7 +1045,7 @@ include __DIR__ . '/app/group-manager-nav.php';
 
                             <input type="hidden" id="requested_district_email" name="requested_district_email" value="<?= e($districtEmailSuggestion ?: ($posted['requested_district_email'] ?? '')) ?>">
 
-                            <button class="btn btn-secondary lt-btn" type="submit" formnovalidate formaction="?group_id=<?= (int) $selectedGroupId ?>#step-district-email" onclick="document.getElementById('gm-action').value='suggest_email';">
+                            <button class="btn btn-secondary lt-btn" type="submit" formnovalidate formaction="?group_id=<?= (int) $selectedGroupId ?>#step-district-email" data-set-gm-action="suggest_email">
                                 Check availability
                             </button>
 
@@ -1123,7 +1123,7 @@ include __DIR__ . '/app/group-manager-nav.php';
                         </div>
                     <?php endif; ?>
 
-                    <button class="btn btn-primary lt-btn" type="submit" onclick="document.getElementById('gm-action').value='add_person';">
+                    <button class="btn btn-primary lt-btn" type="submit" data-set-gm-action="add_person">
                         Add person and start access setup
                     </button>
                 </div>
@@ -1386,7 +1386,7 @@ include __DIR__ . '/app/group-manager-nav.php';
     <div style="background:#fff;border-radius:8px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);">
         <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #e5e5e5;display:flex;align-items:center;justify-content:space-between;">
             <h3 style="margin:0;font-size:1.1rem;">Add existing person to <?= e($selectedGroup['group_name']) ?></h3>
-            <button type="button" onclick="document.getElementById('link-existing-modal').style.display='none';" style="background:none;border:none;font-size:1.5rem;cursor:pointer;line-height:1;padding:0;">&times;</button>
+            <button type="button" data-modal-close="link-existing-modal" style="background:none;border:none;font-size:1.5rem;cursor:pointer;line-height:1;padding:0;">&times;</button>
         </div>
         <div style="padding:1.5rem;">
             <form method="post">
@@ -1434,5 +1434,35 @@ include __DIR__ . '/app/group-manager-nav.php';
     </div>
 </div>
 <?php endif; ?>
+
+<script <?= csp_nonce_attr() ?>>
+(function () {
+    // CSP-safe replacements for inline onclick handlers.
+
+    // Buttons that set the hidden gm-action value before submitting.
+    document.querySelectorAll('[data-set-gm-action]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var field = document.getElementById('gm-action');
+            if (field) field.value = btn.getAttribute('data-set-gm-action');
+        });
+    });
+
+    // Buttons that open a modal.
+    document.querySelectorAll('[data-modal-open]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var modal = document.getElementById(btn.getAttribute('data-modal-open'));
+            if (modal) modal.style.display = 'flex';
+        });
+    });
+
+    // Buttons that close a modal.
+    document.querySelectorAll('[data-modal-close]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var modal = document.getElementById(btn.getAttribute('data-modal-close'));
+            if (modal) modal.style.display = 'none';
+        });
+    });
+}());
+</script>
 
 <?php include __DIR__ . '/footer.php'; ?>

@@ -436,7 +436,7 @@ include __DIR__ . '/header.php';
                     <form method="post">
                         <?= csrf_field() ?>
                         <input type="hidden" name="run_cron" value="<?= e($key) ?>">
-                        <button class="btn btn-primary lt-btn" type="submit" onclick="return confirm('Run <?= e($job['label']) ?> now?');">
+                        <button class="btn btn-primary lt-btn" type="submit" data-confirm="Run <?= e($job['label']) ?> now?">
                             Run now
                         </button>
                     </form>
