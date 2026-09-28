@@ -1579,7 +1579,7 @@ include __DIR__ . '/header.php';
         <form method="get" class="gwa-toolbar">
             <div class="form-group mb-0">
                 <label for="group_id">Group</label>
-                <select class="form-control" id="group_id" name="group_id" onchange="this.form.submit()">
+                <select class="form-control" id="group_id" name="group_id" data-gwa-autosubmit>
                     <?php foreach ($manageableGroups as $group): ?>
                         <option value="<?= (int) $group['id'] ?>" <?= (int) $group['id'] === $selectedGroupId ? 'selected' : '' ?>>
                             <?= e((string) $group['group_name']) ?>
@@ -2892,6 +2892,21 @@ include __DIR__ . '/header.php';
             switchTab(saved);
         }
     } catch (e) {}
+}());
+</script>
+
+<script <?= csp_nonce_attr() ?>>
+(function () {
+    // The group selector used an inline onchange="this.form.submit()" handler,
+    // which is blocked by the nonce-based CSP (no 'unsafe-inline' in script-src).
+    // Wire the change event here instead so switching groups reloads the page.
+    var selector = document.querySelector('select[data-gwa-autosubmit]');
+
+    if (selector && selector.form) {
+        selector.addEventListener('change', function () {
+            this.form.submit();
+        });
+    }
 }());
 </script>
 
