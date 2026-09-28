@@ -483,16 +483,17 @@ include __DIR__ . '/header.php';
                                     <td><?= e($gm['group_name']) ?><?= !empty($gm['is_primary']) ? ' <strong title="Primary">&starf;</strong>' : '' ?></td>
                                     <td class="sap-muted"><?= e(ucwords(str_replace('_', ' ', (string) ($gm['membership_role'] ?? 'member')))) ?></td>
                                     <td>
-                                        <form method="post" style="display:inline;">
+                                        <form method="post" class="sap-access-form" style="display:flex; gap:.3rem; align-items:center;">
                                             <input type="hidden" name="_csrf_token" value="<?= e(csrf_token()) ?>">
                                             <input type="hidden" name="person_id" value="<?= (int) $person['id'] ?>">
                                             <input type="hidden" name="action" value="update_access_level">
                                             <input type="hidden" name="group_id" value="<?= (int) $gm['group_id'] ?>">
-                                            <select name="access_level" onchange="this.form.submit()" style="font-size:.78rem; padding:.15rem .3rem;">
+                                            <select name="access_level" class="sap-access-select" style="font-size:.78rem; padding:.15rem .3rem;">
                                                 <?php foreach (['member','group_admin','district_reviewer','district_admin','system_admin'] as $lvl): ?>
                                                     <option value="<?= $lvl ?>" <?= ($gm['access_level'] ?? 'member') === $lvl ? 'selected' : '' ?>><?= ucwords(str_replace('_', ' ', $lvl)) ?></option>
                                                 <?php endforeach; ?>
                                             </select>
+                                            <button type="submit" class="btn btn-primary lt-btn sap-access-save" style="font-size:.72rem; padding:.15rem .5rem; display:none;">Save</button>
                                         </form>
                                     </td>
                                     <td><span class="sap-badge <?= ($gm['status'] ?? '') === 'active' ? 'sap-badge-active' : 'sap-badge-inactive' ?>"><?= e($gm['status'] ?? '') ?></span></td>
@@ -642,5 +643,18 @@ include __DIR__ . '/header.php';
     <?php endif; ?>
 
 </main>
+
+<script>
+    // Show the "Save" button on an access-level dropdown only once its value changes.
+    document.querySelectorAll('.sap-access-form').forEach(function (form) {
+        var select = form.querySelector('.sap-access-select');
+        var saveBtn = form.querySelector('.sap-access-save');
+        if (!select || !saveBtn) return;
+        var original = select.value;
+        select.addEventListener('change', function () {
+            saveBtn.style.display = select.value !== original ? '' : 'none';
+        });
+    });
+</script>
 
 <?php include __DIR__ . '/footer.php'; ?>
