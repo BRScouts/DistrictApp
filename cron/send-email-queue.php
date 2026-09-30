@@ -129,6 +129,30 @@ function mailq_update_email(int $id, array $values): void
     $stmt->execute($params);
 }
 
+/**
+ * Heuristic to decide whether a string already contains real HTML markup
+ * (as opposed to being plain text that merely mentions angle brackets).
+ *
+ * We treat the content as HTML if stripping tags actually changes it, i.e.
+ * there is at least one recognised HTML tag present.
+ */
+function mailq_looks_like_html(string $content): bool
+{
+    $content = trim($content);
+
+    if ($content === '') {
+        return false;
+    }
+
+    // Look for a recognisable structural/formatting HTML tag rather than any
+    // stray angle bracket, so that plain text mentioning "<something>" is not
+    // mistaken for markup. These are the tags our email bodies actually use.
+    return (bool) preg_match(
+        '/<\s*\/?\s*(?:div|p|br|h[1-6]|ul|ol|li|table|tr|td|th|a|strong|b|em|i|span|hr|img|blockquote)\b[^>]*>/i',
+        $content
+    );
+}
+
 function mailq_plain_text_from_html(string $html): string
 {
     $html = preg_replace('/<\s*br\s*\/?>/i', "\n", $html) ?? $html;
@@ -563,9 +587,21 @@ function mailq_send_row(Client $client, string $token, array $row): void
     }
 
     if ($needsConversion) {
-        // Use the plain text body as the source for conversion.
-        $source = $body !== '' ? $body : strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $bodyHtml));
-        $bodyHtml = mailq_plain_text_to_html($source);
+        // Determine the source content. When body_html is empty we fall back to
+        // the plain `body` column — but that column may itself contain real HTML
+        // (this happens when a queue row was written without a body_html column).
+        // We must NOT run such HTML through mailq_plain_text_to_html(), because
+        // that escapes every tag and the recipient ends up seeing raw markup as
+        // literal text.
+        $source = $body !== '' ? $body : $bodyHtml;
+
+        if (mailq_looks_like_html($source)) {
+            // Source is already HTML — use it as-is, don't escape it.
+            $bodyHtml = $source;
+        } else {
+            // Source is genuine plain text — build formatted HTML from it.
+            $bodyHtml = mailq_plain_text_to_html($source);
+        }
     }
 
     if (trim($bodyHtml) === '') {
