@@ -265,6 +265,12 @@ function home_remove_shared_mailbox(int $personId, int $mailboxId): void
 
 function home_shared_mailbox_json_response(array $payload): void
 {
+    // Always return the current CSRF token so the client can stay in sync
+    // after csrf_validate() rotates it on each successful request.
+    if (!array_key_exists('csrf_token', $payload)) {
+        $payload['csrf_token'] = csrf_token();
+    }
+
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     exit;
@@ -1050,6 +1056,7 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
 (function () {
     var sharedMailboxTableReady = <?= $sharedMailboxTableReady ? 'true' : 'false' ?>;
     var sharedMailboxes = <?= $sharedMailboxesJson ?>;
+    var sharedMailboxCsrfToken = <?= json_encode(csrf_token(), JSON_UNESCAPED_SLASHES) ?>;
 
     var tile = document.getElementById('open-shared-mailbox-tile');
     var modal = document.getElementById('shared-mailbox-modal');
@@ -1080,6 +1087,7 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
     function postSharedMailboxAction(action, data) {
         var body = new FormData();
         body.append('shared_mailbox_action', action);
+        body.append('_csrf_token', sharedMailboxCsrfToken);
 
         Object.keys(data || {}).forEach(function (key) {
             body.append(key, data[key]);
@@ -1095,6 +1103,14 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
             }
         }).then(function (response) {
             return response.json();
+        }).then(function (payload) {
+            // csrf_validate() rotates the token on every successful request,
+            // so keep the client copy in sync for the next call.
+            if (payload && payload.csrf_token) {
+                sharedMailboxCsrfToken = payload.csrf_token;
+            }
+
+            return payload;
         });
     }
 
