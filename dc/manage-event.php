@@ -1369,8 +1369,7 @@ require __DIR__ . '/layout.php';
 
                 <p class="form-text">
                     This is the leader responsible for running the event. If you are editing on behalf of
-                    another leader, select their name here — the event stays in their name while the audit
-                    history records that you made the change.
+                    another leader, select their name here.
                 </p>
             <?php endif; ?>
         </section>

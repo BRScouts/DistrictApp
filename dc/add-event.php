@@ -989,8 +989,7 @@ require __DIR__ . '/layout.php';
 
             <p class="form-text">
                 This defaults to you. If you are raising this event on behalf of another leader, select
-                their name — the event is recorded in their name while the audit history still shows that
-                you created it. If the person is not listed, ask a Group Lead Volunteer to add them.
+                their name. If the person is not listed, ask a Group Lead Volunteer to add them.
                 Group-link users cannot add new people.
             </p>
         <?php endif; ?>
