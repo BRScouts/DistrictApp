@@ -46,49 +46,11 @@ if (!function_exists('dc_event_bar_class')) {
 if (!function_exists('dc_index_user_can_manage_event_group')) {
     function dc_index_user_can_manage_event_group(array $ctx, int $groupId): bool
     {
-        $accessLevels = array_filter(array_map(
-            'strval',
-            (array) ($ctx['access_levels'] ?? [])
-        ));
-
-        $membershipRoles = array_filter(array_map(
-            'strval',
-            (array) ($ctx['membership_roles'] ?? [])
-        ));
-
-        foreach (['access_level', 'role', 'membership_role'] as $key) {
-            if (!empty($ctx[$key])) {
-                $value = (string) $ctx[$key];
-
-                if ($key === 'access_level') {
-                    $accessLevels[] = $value;
-                } else {
-                    $membershipRoles[] = $value;
-                }
-            }
-        }
-
-        $accessLevels = array_values(array_unique($accessLevels));
-        $membershipRoles = array_values(array_unique($membershipRoles));
-
-        if (
-            in_array('system_admin', $accessLevels, true)
-            || in_array('district_admin', $accessLevels, true)
-            || in_array('district_reviewer', $accessLevels, true)
-            || !empty($ctx['is_reviewer'])
-        ) {
-            return true;
-        }
-
-        $groupIds = array_map('intval', (array) ($ctx['group_ids'] ?? []));
-
-        if (!in_array($groupId, $groupIds, true)) {
-            return false;
-        }
-
-        return in_array('group_admin', $accessLevels, true)
-            || in_array('group_lead_volunteer', $accessLevels, true)
-            || in_array('group_lead_volunteer', $membershipRoles, true);
+        // Single source of truth for who may manage a group's events.
+        // Any active member of the group (or the group-link user for their own
+        // group, or a district reviewer/admin) can manage it — membership role
+        // is no longer required.
+        return dc_user_can_manage_group($groupId);
     }
 }
 

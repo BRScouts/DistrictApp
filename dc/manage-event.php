@@ -15,7 +15,7 @@ if ($eventId <= 0) {
 
 $event = dc_get_event($eventId);
 
-if (!$event || !dc_user_can_access_group((int) $event['group_id'])) {
+if (!$event || !dc_user_can_manage_group((int) $event['group_id'])) {
     require __DIR__ . '/404.php';
     exit;
 }

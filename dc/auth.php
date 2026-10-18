@@ -811,6 +811,33 @@ function dc_user_can_access_group(int $groupId): bool
         || in_array($groupId, array_map('intval', (array) $ctx['group_ids']), true);
 }
 
+/**
+ * Can this user MANAGE (create/edit/cancel) events for a specific group?
+ *
+ * Unlike viewing, managing is scoped to the user's own group — not every
+ * group they can see on the district calendar. Any active member of the
+ * group may manage its events regardless of membership role; a group-link
+ * user may manage only the single group their link belongs to. District
+ * reviewers/admins may manage any group.
+ */
+function dc_user_can_manage_group(int $groupId): bool
+{
+    $ctx = dc_context(false);
+
+    if (dc_context_has_reviewer_access($ctx)) {
+        return true;
+    }
+
+    // Group-link users can view the whole calendar but only manage their own
+    // link group's events.
+    if (($ctx['actor_type'] ?? '') === 'group_link') {
+        return (int) ($ctx['group_id'] ?? 0) === $groupId;
+    }
+
+    // Any signed-in member of the event's group can manage it.
+    return in_array($groupId, array_map('intval', (array) $ctx['group_ids']), true);
+}
+
 function dc_accessible_groups(): array
 {
     $ctx = dc_require_access();

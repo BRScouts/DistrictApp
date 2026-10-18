@@ -200,11 +200,8 @@ function dc_map_fetch_event_risks(array $eventIds): array
 
 function dc_map_user_can_manage_event(array $ctx, int $groupId): bool
 {
-    if (!empty($ctx['is_reviewer'])) {
-        return true;
-    }
-
-    return in_array($groupId, array_map('intval', (array) ($ctx['group_ids'] ?? [])), true);
+    // Single source of truth for who may manage a group's events.
+    return dc_user_can_manage_group($groupId);
 }
 
 function dc_map_compact(?string $value, int $limit = 140): string
