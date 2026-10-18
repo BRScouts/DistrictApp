@@ -213,27 +213,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $selectedLeader = null;
 
-        if ($isSsoUser) {
+        // The leader responsible for the event is chosen from the Group's
+        // people and may be someone other than the person editing. Editing
+        // on behalf of another leader must not silently reassign the event to
+        // the editor. The audit log separately records who performed the edit.
+        $leaderPersonId = (int) ($_POST['leader_person_id'] ?? 0);
+
+        foreach ($people as $person) {
+            if ((int) $person['id'] === $leaderPersonId) {
+                $selectedLeader = $person;
+                break;
+            }
+        }
+
+        // For signed-in users, fall back to themselves when no explicit
+        // selection was made (e.g. the dropdown was left blank).
+        if (!$selectedLeader && $isSsoUser) {
             $selectedLeader = $currentPerson;
+        }
 
-            if (!$selectedLeader) {
-                $errors[] = 'We could not find your user profile. Please complete onboarding before editing this event.';
-            } elseif (empty($selectedLeader['primary_email'])) {
-                $errors[] = 'Your profile needs an email address before editing this event.';
-            }
-        } else {
-            $leaderPersonId = (int) ($_POST['leader_person_id'] ?? 0);
-
-            foreach ($people as $person) {
-                if ((int) $person['id'] === $leaderPersonId) {
-                    $selectedLeader = $person;
-                    break;
-                }
-            }
-
-            if (!$selectedLeader) {
-                $errors[] = 'Choose the leader responsible for this event.';
-            }
+        if (!$selectedLeader) {
+            $errors[] = 'Choose the leader responsible for this event.';
+        } elseif (empty($selectedLeader['primary_email'])) {
+            $errors[] = 'The selected leader needs an email address before this event can be saved.';
         }
 
         $title = trim((string) ($_POST['title'] ?? ''));
@@ -372,6 +374,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $previousStatus = (string) ($event['status'] ?? '');
                 $newStatus = $isDraft ? 'draft' : 'submitted';
+
+                // Record whether the signed-in editor is acting on behalf of a
+                // different leader, so the audit trail distinguishes the person
+                // who performed the edit from the leader named on the event.
+                $actingOnBehalf = false;
+
+                if ($isSsoUser && $selectedLeader && isset($selectedLeader['id'])) {
+                    $actingOnBehalf = (int) $selectedLeader['id'] !== (int) $ctx['person_id'];
+                }
 
                 $stmt = $pdo->prepare("
                     UPDATE calendar_events
@@ -545,6 +556,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'previous_status' => $previousStatus,
                         'new_status' => $newStatus,
                         'approval_reset' => $statusReset,
+                        'leader_name' => (string) ($selectedLeader['full_name'] ?? ''),
+                        'leader_person_id' => isset($selectedLeader['id']) ? (int) $selectedLeader['id'] : null,
+                        'acting_on_behalf' => $actingOnBehalf,
                     ],
                     $groupId
                 );
@@ -553,11 +567,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $isDraft ? AUDIT_EVENT_DRAFT_CREATED : AUDIT_EVENT_UPDATED,
                     'calendar_event',
                     $eventId,
-                    null,
+                    isset($selectedLeader['id']) ? (int) $selectedLeader['id'] : null,
                     [
                         'previous_status' => $previousStatus,
                         'new_status' => $newStatus,
                         'title' => $title,
+                        'leader_name' => (string) ($selectedLeader['full_name'] ?? ''),
+                        'acting_on_behalf' => $actingOnBehalf,
                     ],
                     $groupId
                 );
@@ -1303,49 +1319,59 @@ require __DIR__ . '/layout.php';
         <section class="lt-panel">
             <h2 class="lt-section-title">Who is leading this?</h2>
 
-            <?php if ($isSsoUser): ?>
-                <?php if ($currentPerson): ?>
-                    <p class="mb-1">You are editing this event as:</p>
+            <?php if ($isSsoUser && $currentPerson): ?>
+                <p class="mb-1">
+                    You are signed in as <strong><?= e((string) $currentPerson['full_name']) ?></strong>.
+                    Your account is recorded in the audit history for this change.
+                </p>
+            <?php endif; ?>
 
-                    <div class="dc-selected-location">
-                        <strong><?= e((string) $currentPerson['full_name']) ?></strong>
-
-                        <?php if (!empty($currentPerson['primary_email'])): ?>
-                            <br>
-                            <span><?= e((string) $currentPerson['primary_email']) ?></span>
-                        <?php endif; ?>
-
-                        <?php if (!empty($currentPerson['phone'])): ?>
-                            <br>
-                            <span><?= e((string) $currentPerson['phone']) ?></span>
-                        <?php endif; ?>
-                    </div>
-                <?php else: ?>
-                    <p class="dc-warning">
-                        We could not find your profile. Please complete onboarding before editing events.
-                    </p>
-                <?php endif; ?>
+            <?php if (!$people): ?>
+                <p class="dc-warning">
+                    No leaders have been added to this Group yet. Ask a Group Lead Volunteer to add leaders before editing events.
+                </p>
             <?php else: ?>
-                <?php if (!$people): ?>
-                    <p class="dc-warning">
-                        No leaders have been added to this Group yet. Ask a Group Lead Volunteer to add leaders before editing events.
-                    </p>
-                <?php else: ?>
-                    <label for="leader_person_id">Leader responsible</label>
-                    <select id="leader_person_id" name="leader_person_id" class="form-control" required>
-                        <option value="">Select a leader</option>
+                <?php
+                    // Default the selected leader to whatever the form posted,
+                    // otherwise the event's current leader, otherwise (for a
+                    // signed-in user creating/editing) the signed-in person.
+                    $postedLeaderId = ($_SERVER['REQUEST_METHOD'] === 'POST')
+                        ? (int) ($_POST['leader_person_id'] ?? 0)
+                        : 0;
 
-                        <?php foreach ($people as $person): ?>
-                            <option
-                                value="<?= (int) $person['id'] ?>"
-                                <?= strtolower((string) $person['primary_email']) === strtolower((string) $event['leader_email']) ? 'selected' : '' ?>
-                            >
-                                <?= e((string) $person['full_name']) ?>
-                                <?= !empty($person['primary_email']) ? ' — ' . e((string) $person['primary_email']) : '' ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                <?php endif; ?>
+                    $currentLeaderEmail = strtolower((string) ($event['leader_email'] ?? ''));
+                    $currentPersonId = $isSsoUser ? (int) ($currentPerson['id'] ?? 0) : 0;
+                ?>
+
+                <label for="leader_person_id">Leader responsible</label>
+                <select id="leader_person_id" name="leader_person_id" class="form-control" required>
+                    <option value="">Select a leader</option>
+
+                    <?php foreach ($people as $person): ?>
+                        <?php
+                            $personId = (int) $person['id'];
+
+                            if ($postedLeaderId > 0) {
+                                $selected = $personId === $postedLeaderId;
+                            } elseif ($currentLeaderEmail !== '') {
+                                $selected = strtolower((string) $person['primary_email']) === $currentLeaderEmail;
+                            } else {
+                                // New/unset leader: default a signed-in user to themselves.
+                                $selected = $currentPersonId > 0 && $personId === $currentPersonId;
+                            }
+                        ?>
+                        <option value="<?= $personId ?>" <?= $selected ? 'selected' : '' ?>>
+                            <?= e((string) $person['full_name']) ?>
+                            <?= !empty($person['primary_email']) ? ' — ' . e((string) $person['primary_email']) : '' ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+
+                <p class="form-text">
+                    This is the leader responsible for running the event. If you are editing on behalf of
+                    another leader, select their name here — the event stays in their name while the audit
+                    history records that you made the change.
+                </p>
             <?php endif; ?>
         </section>
 
@@ -1583,7 +1609,7 @@ require __DIR__ . '/layout.php';
                 type="submit"
                 name="save_action"
                 value="draft"
-                <?= (!$isSsoUser && !$people) || ($isSsoUser && !$currentPerson) ? 'disabled' : '' ?>
+                <?= !$people ? 'disabled' : '' ?>
             >
                 Save as draft
             </button>
@@ -1593,7 +1619,7 @@ require __DIR__ . '/layout.php';
                 type="submit"
                 name="save_action"
                 value="submit"
-                <?= (!$isSsoUser && !$people) || ($isSsoUser && !$currentPerson) ? 'disabled' : '' ?>
+                <?= !$people ? 'disabled' : '' ?>
             >
                 Submit for review
             </button>

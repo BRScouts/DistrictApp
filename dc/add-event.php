@@ -149,28 +149,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $selectedLeader = null;
 
-    if ($isSsoUser) {
-        $selectedLeader = $currentPerson;
+    // The responsible leader is selected from the Group's people. A signed-in
+    // user defaults to themselves but may raise an event on behalf of another
+    // leader by choosing a different name. The person creating the event is
+    // recorded separately in the audit history, so this never misattributes
+    // who performed the action.
+    $leaderPersonId = (int) ($_POST['leader_person_id'] ?? 0);
 
-        if (!$selectedLeader) {
-            $errors[] = 'We could not find your user profile. Please complete onboarding before saving this event.';
-        } elseif (empty($selectedLeader['primary_email'])) {
-            $errors[] = 'Your profile needs an email address before you can save this event.';
-        }
-    } else {
-        $leaderPersonId = (int) ($_POST['leader_person_id'] ?? 0);
-
-        foreach ($people as $person) {
-            if ((int) $person['id'] === $leaderPersonId) {
-                $selectedLeader = $person;
-                break;
-            }
-        }
-
-        if (!$selectedLeader) {
-            $errors[] = 'Choose the leader responsible for this event. If they are missing, ask a Group Lead Volunteer to add them.';
+    foreach ($people as $person) {
+        if ((int) $person['id'] === $leaderPersonId) {
+            $selectedLeader = $person;
+            break;
         }
     }
+
+    if (!$selectedLeader && $isSsoUser) {
+        $selectedLeader = $currentPerson;
+    }
+
+    if (!$selectedLeader) {
+        $errors[] = 'Choose the leader responsible for this event. If they are missing, ask a Group Lead Volunteer to add them.';
+    } elseif (empty($selectedLeader['primary_email'])) {
+        $errors[] = 'The selected leader needs an email address before you can save this event.';
+    }
+
+    $actingOnBehalf = $isSsoUser
+        && $selectedLeader
+        && isset($selectedLeader['id'])
+        && (int) $selectedLeader['id'] !== (int) $ctx['person_id'];
 
     $title = trim((string) ($_POST['title'] ?? ''));
     $description = trim((string) ($_POST['description'] ?? ''));
@@ -458,7 +464,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $isDraft ? 'calendar_event.draft_created' : 'calendar_event.created',
                 'calendar_event',
                 $eventId,
-                ['status' => $eventStatus],
+                [
+                    'status' => $eventStatus,
+                    'leader_name' => (string) ($selectedLeader['full_name'] ?? ''),
+                    'leader_person_id' => isset($selectedLeader['id']) ? (int) $selectedLeader['id'] : null,
+                    'acting_on_behalf' => $actingOnBehalf,
+                ],
                 $groupId
             );
 
@@ -466,8 +477,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $isDraft ? AUDIT_EVENT_DRAFT_CREATED : AUDIT_EVENT_CREATED,
                 'calendar_event',
                 $eventId,
-                null,
-                ['title' => $title, 'status' => $eventStatus, 'event_type' => $eventType],
+                isset($selectedLeader['id']) ? (int) $selectedLeader['id'] : null,
+                [
+                    'title' => $title,
+                    'status' => $eventStatus,
+                    'event_type' => $eventType,
+                    'leader_name' => (string) ($selectedLeader['full_name'] ?? ''),
+                    'acting_on_behalf' => $actingOnBehalf,
+                ],
                 $groupId
             );
 
@@ -927,58 +944,55 @@ require __DIR__ . '/layout.php';
     <section class="lt-panel">
         <h2 class="lt-section-title">Who is leading this?</h2>
 
-        <?php if ($isSsoUser): ?>
-            <?php if ($currentPerson): ?>
-                <p class="mb-1">You are submitting this event as:</p>
+        <?php if ($isSsoUser && $currentPerson): ?>
+            <p class="mb-1">
+                You are signed in as <strong><?= e((string) $currentPerson['full_name']) ?></strong>.
+                Your account is recorded in the audit history for this event.
+            </p>
+        <?php endif; ?>
 
-                <div class="dc-selected-location">
-                    <strong><?= e((string) $currentPerson['full_name']) ?></strong>
-
-                    <?php if (!empty($currentPerson['primary_email'])): ?>
-                        <br>
-                        <span><?= e((string) $currentPerson['primary_email']) ?></span>
-                    <?php endif; ?>
-
-                    <?php if (!empty($currentPerson['phone'])): ?>
-                        <br>
-                        <span><?= e((string) $currentPerson['phone']) ?></span>
-                    <?php endif; ?>
-                </div>
-
-                <p class="form-text mt-2">
-                    Because you are signed in, the event will be linked to your profile.
-                </p>
-            <?php else: ?>
-                <p class="dc-warning">
-                    We could not find your profile. Please complete onboarding before submitting events.
-                </p>
-            <?php endif; ?>
+        <?php if (!$people): ?>
+            <p class="dc-warning">
+                No leaders have been added to this Group yet. Ask a Group Lead Volunteer to add leaders before submitting events.
+            </p>
         <?php else: ?>
-            <?php if (!$people): ?>
-                <p class="dc-warning">
-                    No leaders have been added to this Group yet. Ask a Group Lead Volunteer to add leaders before submitting events.
-                </p>
-            <?php else: ?>
-                <label for="leader_person_id">Leader responsible</label>
-                <select id="leader_person_id" name="leader_person_id" class="form-control" required>
-                    <option value="">Select a leader</option>
+            <?php
+                // Default the responsible leader to any posted value, otherwise
+                // the signed-in person when creating. Group-link users must pick
+                // explicitly.
+                $currentPersonId = $isSsoUser ? (int) ($currentPerson['id'] ?? 0) : 0;
+                $postedLeaderId = old_value('leader_person_id') !== ''
+                    ? (int) old_value('leader_person_id')
+                    : 0;
+            ?>
 
-                    <?php foreach ($people as $person): ?>
-                        <?php
-                            $selected = old_value('leader_person_id') !== ''
-                                && (int) old_value('leader_person_id') === (int) $person['id'];
-                        ?>
-                        <option value="<?= (int) $person['id'] ?>" <?= $selected ? 'selected' : '' ?>>
-                            <?= e((string) $person['full_name']) ?>
-                            <?= !empty($person['primary_email']) ? ' — ' . e((string) $person['primary_email']) : '' ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+            <label for="leader_person_id">Leader responsible</label>
+            <select id="leader_person_id" name="leader_person_id" class="form-control" required>
+                <option value="">Select a leader</option>
 
-                <p class="form-text">
-                    If the person is not listed, ask a Group Lead Volunteer to add them. Group-link users cannot add new people.
-                </p>
-            <?php endif; ?>
+                <?php foreach ($people as $person): ?>
+                    <?php
+                        $personId = (int) $person['id'];
+
+                        if ($postedLeaderId > 0) {
+                            $selected = $personId === $postedLeaderId;
+                        } else {
+                            $selected = $currentPersonId > 0 && $personId === $currentPersonId;
+                        }
+                    ?>
+                    <option value="<?= $personId ?>" <?= $selected ? 'selected' : '' ?>>
+                        <?= e((string) $person['full_name']) ?>
+                        <?= !empty($person['primary_email']) ? ' — ' . e((string) $person['primary_email']) : '' ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+
+            <p class="form-text">
+                This defaults to you. If you are raising this event on behalf of another leader, select
+                their name — the event is recorded in their name while the audit history still shows that
+                you created it. If the person is not listed, ask a Group Lead Volunteer to add them.
+                Group-link users cannot add new people.
+            </p>
         <?php endif; ?>
     </section>
 
@@ -1251,7 +1265,7 @@ require __DIR__ . '/layout.php';
             type="submit"
             name="save_action"
             value="draft"
-            <?= (!$isSsoUser && !$people) || ($isSsoUser && !$currentPerson) ? 'disabled' : '' ?>
+            <?= !$people ? 'disabled' : '' ?>
         >
             Save as draft
         </button>
@@ -1261,7 +1275,7 @@ require __DIR__ . '/layout.php';
             type="submit"
             name="save_action"
             value="submit"
-            <?= (!$isSsoUser && !$people) || ($isSsoUser && !$currentPerson) ? 'disabled' : '' ?>
+            <?= !$people ? 'disabled' : '' ?>
         >
             Submit for review
         </button>
