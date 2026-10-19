@@ -135,8 +135,12 @@ function dc_index_render_event_tile(array $event, array $options = []): string
             . '</a>';
     }
 
-    $html = '<button type="button" class="' . e($eventClass) . ' ' . ($canManage ? '' : 'is-locked') . '" '
-        . 'data-event-id="' . (int) ($event['id'] ?? 0) . '" ' . $styleAttr . '>'
+    // Group events are now direct, shareable links to their own view page
+    // rather than an in-page modal.
+    $href = '/dc/event.php?id=' . (int) ($event['id'] ?? 0);
+
+    $html = '<a class="' . e($eventClass) . ' ' . ($canManage ? '' : 'is-locked') . '" '
+        . 'href="' . e($href) . '" ' . $styleAttr . '>'
         . '<span class="dc-cal-event-title">' . $title . '</span>'
         . '<span class="dc-cal-event-meta">' . $meta . '</span>';
 
@@ -144,7 +148,7 @@ function dc_index_render_event_tile(array $event, array $options = []): string
         $html .= '<span class="dc-cal-event-status">' . e(str_replace('_', ' ', $eventStatus)) . '</span>';
     }
 
-    $html .= '</button>';
+    $html .= '</a>';
 
     return $html;
 }

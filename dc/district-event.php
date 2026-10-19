@@ -124,18 +124,6 @@ require __DIR__ . '/layout.php';
         }
     }
 
-    .dce-view-banner {
-        height: 10px;
-        margin-bottom: 0;
-        background-image: repeating-linear-gradient(
-            45deg,
-            var(--dc-scouts-purple-dark, #4d0b93),
-            var(--dc-scouts-purple-dark, #4d0b93) 7px,
-            var(--dc-scouts-purple, #7413dc) 7px,
-            var(--dc-scouts-purple, #7413dc) 14px
-        );
-    }
-
     .dce-view-back {
         display: inline-block;
         margin-bottom: 1.25rem;
@@ -247,16 +235,13 @@ require __DIR__ . '/layout.php';
 
 <a class="dce-view-back" href="/dc/">&larr; Back to the calendar</a>
 
-<div class="dce-view-banner" aria-hidden="true"></div>
-
-<div class="dce-view" style="margin-top:1.25rem;">
+<div class="dce-view">
     <div class="dce-view-main">
         <div class="dce-view-meta">
             <div><strong>When</strong> <span><?= e($whenLabel) ?></span></div>
             <?php if ($locationName !== '' || $locationAddress !== ''): ?>
                 <div><strong>Where</strong> <span><?= e($locationName !== '' ? $locationName : $locationAddress) ?></span></div>
             <?php endif; ?>
-            <div><strong>Audience</strong> <span>Open to all groups across the District</span></div>
         </div>
 
         <?php if ($description !== ''): ?>

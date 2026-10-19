@@ -564,6 +564,60 @@ function dc_strip_query_param_from_current_url(string $param): string
     return $path . ($newQuery !== '' ? '?' . $newQuery : '');
 }
 
+/**
+ * Build an absolute URL for the app from a relative path. Uses APP_URL when
+ * defined (set in config.php), otherwise falls back to the current host. Used
+ * for links in emails, which must be absolute.
+ */
+function dc_absolute_url(string $path): string
+{
+    $path = '/' . ltrim($path, '/');
+
+    if (defined('APP_URL') && APP_URL !== '') {
+        return rtrim((string) APP_URL, '/') . $path;
+    }
+
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'app.irvalscouts.org.uk';
+
+    return $scheme . '://' . $host . $path;
+}
+
+/**
+ * Validate and normalise a post-login "return to" path.
+ *
+ * Only same-site relative paths are allowed (must start with a single "/",
+ * must not start with "//" or contain a scheme, and must contain no control
+ * characters). Returns null if the value is not safe to redirect to — callers
+ * then fall back to the default landing page. This mirrors the open-redirect
+ * protection in redirect().
+ */
+function dc_safe_return_path(string $url): ?string
+{
+    $url = trim($url);
+
+    if ($url === '' || $url[0] !== '/' || str_starts_with($url, '//')) {
+        return null;
+    }
+
+    // Reject control characters / header-injection attempts.
+    if (preg_match('/[\x00-\x1f\x7f]/', $url)) {
+        return null;
+    }
+
+    // Reject anything that looks like it carries a scheme or host.
+    if (str_contains($url, '://') || preg_match('/^\/\\\\/', $url)) {
+        return null;
+    }
+
+    // Do not bother returning the user to the login page itself.
+    if (str_starts_with($url, '/dc/login.php') || str_starts_with($url, '/login.php')) {
+        return null;
+    }
+
+    return $url;
+}
+
 function dc_context(bool $redirectIfMissing = true): array
 {
     static $context = null;
@@ -747,6 +801,14 @@ function dc_context(bool $redirectIfMissing = true): array
     }
 
     if ($redirectIfMissing) {
+        // Remember where the user was trying to go so they can be returned
+        // there after signing in. Only same-site relative paths are kept.
+        $returnTo = dc_safe_return_path($_SERVER['REQUEST_URI'] ?? '');
+
+        if ($returnTo !== null) {
+            redirect('/dc/login.php?return=' . rawurlencode($returnTo));
+        }
+
         redirect('/dc/login.php');
     }
 
@@ -1348,8 +1410,10 @@ function dc_queue_district_event_notifications(
         $bodyLines[] = 'More information: ' . (string) $event['info_url'];
     }
 
+    $eventUrl = dc_absolute_url('/dc/district-event.php?id=' . $eventId);
+
     $bodyLines[] = '';
-    $bodyLines[] = 'Open the District Calendar to see the full details.';
+    $bodyLines[] = 'View the event: ' . $eventUrl;
 
     $body = implode("\n", $bodyLines);
 

@@ -57,7 +57,21 @@ try {
         ]
     );
 
-    redirect(user_needs_group_onboarding() ? '/onboarding.php' : '/index.php');
+    // Return the user to the page they originally requested, if one was
+    // stashed (and validated) at the start of the sign-in flow. Onboarding
+    // always takes priority for brand-new users.
+    $postLoginRedirect = $_SESSION['post_login_redirect'] ?? null;
+    unset($_SESSION['post_login_redirect']);
+
+    if (user_needs_group_onboarding()) {
+        redirect('/onboarding.php');
+    }
+
+    if (is_string($postLoginRedirect) && $postLoginRedirect !== '') {
+        redirect($postLoginRedirect);
+    }
+
+    redirect('/index.php');
 } catch (Throwable $e) {
     error_log('Microsoft sign-in failed: ' . $e->getMessage());
 

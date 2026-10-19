@@ -4,12 +4,23 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
 
+// Where to send the user after a successful sign-in (same-site paths only).
+$returnTo = dc_safe_return_path((string) ($_GET['return'] ?? ''));
+
 /*
  * Signed-in users should not see the Group-link landing page.
- * They already have a personal account context, so send them straight to the calendar.
+ * They already have a personal account context, so send them straight to the
+ * page they were trying to reach, or the calendar.
  */
 if (current_user()) {
-    redirect('/dc/');
+    redirect($returnTo ?? '/dc/');
+}
+
+// Carry the return target onto the Microsoft sign-in start URL.
+$microsoftStartUrl = '/auth/microsoft-start.php';
+
+if ($returnTo !== null) {
+    $microsoftStartUrl .= '?return=' . rawurlencode($returnTo);
 }
 
 /*
@@ -27,7 +38,7 @@ if (isset($_GET['token'])) {
  */
 if (isset($_GET['continue']) && $_GET['continue'] === 'group-link') {
     if (!empty($_SESSION['dc_group_link'])) {
-        redirect('/dc/');
+        redirect($returnTo ?? '/dc/');
     }
 
     redirect('/dc/login.php');
@@ -271,19 +282,6 @@ require __DIR__ . '/layout.php';
         line-height: 1.5;
     }
 
-    .dc-code {
-        display: block;
-        margin: 1rem 0;
-        padding: 0.85rem;
-        background: #2f005c;
-        color: #ffffff;
-        border-radius: 0;
-        overflow-x: auto;
-        font-size: 0.95rem;
-        font-weight: 800;
-        line-height: 1.4;
-    }
-
     .dc-login-warning {
         margin-top: 1rem;
         padding: 1rem;
@@ -313,19 +311,19 @@ require __DIR__ . '/layout.php';
                 <h2>Open District Calendar</h2>
 
                 <p class="lt-lede dc-login-lede">
-                    Choose how you'd like to access the District Calendar.
+                    If you have a District Microsoft 365 account, sign in below to continue.
                 </p>
 
                 <div class="dc-login-recommend-box">
                     <span class="dc-login-recommend-badge">Recommended</span>
                     <h3>Sign in with Microsoft</h3>
                     <p>
-                        If you have a District Microsoft 365 account, sign in for personal access,
+                        Sign in with your District Microsoft 365 account for personal access,
                         stronger security and the full calendar experience.
                     </p>
                     <div class="dc-login-actions">
-                        <a class="btn lt-btn dc-login-primary" href="/auth/microsoft-start.php">
-                            Sign in with Microsoft
+                        <a class="btn lt-btn dc-login-primary" href="<?= e($microsoftStartUrl) ?>">
+                            Continue with Microsoft
                         </a>
                     </div>
                 </div>
@@ -344,7 +342,7 @@ require __DIR__ . '/layout.php';
                 </p>
 
                 <div class="dc-login-actions">
-                    <a class="btn lt-btn dc-login-secondary" href="/dc/login.php?continue=group-link">
+                    <a class="btn lt-btn dc-login-secondary" href="/dc/login.php?continue=group-link<?= $returnTo !== null ? '&amp;return=' . rawurlencode($returnTo) : '' ?>">
                         Continue with Group link
                     </a>
                 </div>
@@ -356,14 +354,14 @@ require __DIR__ . '/layout.php';
                 </p>
 
                 <div class="dc-login-actions">
-                    <a class="btn lt-btn dc-login-primary" href="/auth/microsoft-start.php">
+                    <a class="btn lt-btn dc-login-primary" href="<?= e($microsoftStartUrl) ?>">
                         Sign in with Microsoft
                     </a>
                 </div>
 
                 <div class="dc-login-help">
                     <p>
-                        If you were sent a Group calendar link, open that link directly. It should include a secure token.
+                        If you were sent a Group calendar link, open that link directly to access your Group’s calendar.
                     </p>
                 </div>
             <?php endif; ?>
@@ -392,10 +390,9 @@ require __DIR__ . '/layout.php';
                 <h2>Using a Group link?</h2>
 
                 <p>
-                    Open the link shared with your Group. It will look like:
+                    Open the secure link that was shared with your Group to access its calendar area.
+                    Use the link exactly as it was sent to you.
                 </p>
-
-                <pre class="dc-code">/dc/login.php?token=...</pre>
 
                 <p>
                     A Group link gives access to that Group’s calendar area. It is not a personal account.
