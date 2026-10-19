@@ -357,6 +357,114 @@ function help_parse_body_source(string $source): array
 }
 
 /**
+ * Build Rich_Body blocks from the structured POST shape the GUI block editor
+ * submits.
+ *
+ * Expected shape (order preserved by the numeric outer keys, which this
+ * function re-sorts numerically before processing):
+ *
+ *   blocks[0][type]              = 'paragraph'|'heading'|'steps'|'action'
+ *   blocks[0][text]              paragraph / heading text
+ *   blocks[0][level]             heading level (2..6)
+ *   blocks[0][items][]           one string per step
+ *   blocks[0][actions][0][label] button label
+ *   blocks[0][actions][0][url]   button URL (http(s):// => external)
+ *   blocks[0][actions][0][style] 'primary'|'secondary'
+ *
+ * Empty blocks are dropped: a paragraph/heading with no text, a steps block
+ * with no non-empty items, and an action block with no complete actions all
+ * produce nothing. This keeps a stray empty editor row from persisting.
+ *
+ * The output matches help_render_body()/help_parse_body_source() exactly, so
+ * it is interchangeable with the text format and safe for the renderer.
+ *
+ * @param mixed $raw the raw $_POST['blocks'] value
+ * @return array<int, array<string, mixed>>
+ */
+function help_blocks_from_post($raw): array
+{
+    if (!is_array($raw)) {
+        return [];
+    }
+
+    // Preserve the submitted order (numeric keys), tolerating gaps.
+    $keys = array_keys($raw);
+    sort($keys, SORT_NUMERIC);
+
+    $blocks = [];
+
+    foreach ($keys as $key) {
+        $b = $raw[$key];
+        if (!is_array($b)) {
+            continue;
+        }
+
+        $type = (string) ($b['type'] ?? '');
+
+        switch ($type) {
+            case 'paragraph':
+                $text = trim((string) ($b['text'] ?? ''));
+                if ($text !== '') {
+                    $blocks[] = ['type' => 'paragraph', 'text' => $text];
+                }
+                break;
+
+            case 'heading':
+                $text = trim((string) ($b['text'] ?? ''));
+                if ($text !== '') {
+                    $level = (int) ($b['level'] ?? 2);
+                    $level = max(2, min(6, $level));
+                    $blocks[] = ['type' => 'heading', 'level' => $level, 'text' => $text];
+                }
+                break;
+
+            case 'steps':
+                $rawItems = is_array($b['items'] ?? null) ? $b['items'] : [];
+                $items = [];
+                foreach ($rawItems as $item) {
+                    $item = trim((string) $item);
+                    if ($item !== '') {
+                        $items[] = $item;
+                    }
+                }
+                if ($items) {
+                    $blocks[] = ['type' => 'steps', 'items' => $items];
+                }
+                break;
+
+            case 'action':
+                $rawActions = is_array($b['actions'] ?? null) ? $b['actions'] : [];
+                $actions = [];
+                foreach ($rawActions as $a) {
+                    if (!is_array($a)) {
+                        continue;
+                    }
+                    $label = trim((string) ($a['label'] ?? ''));
+                    $url = trim((string) ($a['url'] ?? ''));
+                    if ($label === '' || $url === '') {
+                        continue;
+                    }
+                    $style = in_array($a['style'] ?? '', ['primary', 'secondary'], true)
+                        ? (string) $a['style']
+                        : 'primary';
+                    $actions[] = [
+                        'label' => $label,
+                        'url' => $url,
+                        'external' => (bool) preg_match('#^https?://#i', $url),
+                        'style' => $style,
+                    ];
+                }
+                if ($actions) {
+                    $blocks[] = ['type' => 'action', 'actions' => $actions];
+                }
+                break;
+        }
+    }
+
+    return $blocks;
+}
+
+/**
  * Turn stored Rich_Body blocks back into the plain-text authoring format, so
  * the editor can round-trip an existing article. Inverse of
  * help_parse_body_source() for the block types it produces.

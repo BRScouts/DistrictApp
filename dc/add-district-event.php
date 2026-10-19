@@ -916,6 +916,56 @@ require __DIR__ . '/layout.php';
 
     sync();
 
+    // Keep the end date/time on or after the start date/time.
+    var startsAt = document.getElementById('starts_at');
+    var endsAt = document.getElementById('ends_at');
+
+    if (startsAt && endsAt) {
+        var syncEndMin = function () {
+            if (startsAt.value) {
+                endsAt.min = startsAt.value;
+
+                // If the current end is now before the start, clear it so the
+                // user has to re-pick a valid value.
+                if (endsAt.value && endsAt.value < startsAt.value) {
+                    endsAt.value = '';
+                }
+            } else {
+                endsAt.removeAttribute('min');
+            }
+        };
+
+        var checkEndAfterStart = function () {
+            if (startsAt.value && endsAt.value && endsAt.value <= startsAt.value) {
+                endsAt.setCustomValidity('The end date and time must be after the start date and time.');
+            } else {
+                endsAt.setCustomValidity('');
+            }
+        };
+
+        startsAt.addEventListener('change', function () {
+            syncEndMin();
+            checkEndAfterStart();
+        });
+        endsAt.addEventListener('change', checkEndAfterStart);
+        endsAt.addEventListener('input', checkEndAfterStart);
+
+        // Apply constraints on load (covers repopulated values after an error).
+        syncEndMin();
+        checkEndAfterStart();
+
+        var dceForm = document.querySelector('.dce-form');
+        if (dceForm) {
+            dceForm.addEventListener('submit', function (event) {
+                checkEndAfterStart();
+                if (!endsAt.checkValidity()) {
+                    event.preventDefault();
+                    endsAt.reportValidity();
+                }
+            });
+        }
+    }
+
     // Confirm before deleting.
     var deleteForm = document.querySelector('[data-delete-form]');
     if (deleteForm) {
