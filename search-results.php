@@ -229,12 +229,18 @@ include __DIR__ . '/header.php';
         color: #1e6b36;
         border-color: #c7e6d1;
     }
+
+    .search-badge--help {
+        background: #e0f2f1;
+        color: #00695c;
+        border-color: #b2dfdb;
+    }
 </style>
 
 <main class="search-page">
     <div class="search-head">
         <h1>Search the District App</h1>
-        <p>Find modules, events you can access, risk assessments and people. This does not search the calendar grid itself.</p>
+        <p>Find modules, events you can access, risk assessments, people and help articles.</p>
     </div>
 
     <form class="search-form" method="get" action="/search-results.php" role="search">

@@ -413,14 +413,17 @@ $profileUrl = '/profile.php';
         }
 
         .lt-brand img {
-            width: 52px;
-            max-height: 52px;
+            width: auto;
+            height: 72px;
+            max-height: 72px;
+            max-width: 260px;
             flex: 0 0 auto;
             object-fit: contain;
         }
 
+        /* Match the main app header: show the logo only, hide the brand text. */
         .lt-brand > span {
-            display: block;
+            display: none;
             min-width: 0;
         }
 
@@ -738,16 +741,10 @@ $profileUrl = '/profile.php';
             }
 
             .lt-brand img {
-                width: 40px;
-                max-height: 40px;
-            }
-
-            .lt-brand-title {
-                font-size: 1rem;
-            }
-
-            .lt-brand-subtitle {
-                font-size: 0.8rem;
+                width: auto;
+                height: 58px;
+                max-height: 58px;
+                max-width: 190px;
             }
 
             .lt-hero-inner {

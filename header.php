@@ -439,6 +439,7 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
         .search-badge--calendar { background: #e3f0fb; color: #11508a; border-color: #c3dcf2; }
         .search-badge--risk { background: #fff3e0; color: #9a5600; border-color: #f3dcb8; }
         .search-badge--person { background: #e6f4ea; color: #1e6b36; border-color: #c7e6d1; }
+        .search-badge--help { background: #e0f2f1; color: #00695c; border-color: #b2dfdb; }
 
         @media (max-width: 575.98px) {
             .lt-search-panel {
@@ -678,12 +679,13 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
     var resultsBox = document.getElementById('lt-search-results');
     var seeAll = document.getElementById('lt-search-all');
 
-    var CATEGORY_ORDER = ['module', 'calendar', 'risk', 'person'];
+    var CATEGORY_ORDER = ['module', 'calendar', 'risk', 'person', 'help'];
     var CATEGORY_LABELS = {
         module: 'Modules',
         calendar: 'Calendar',
         risk: 'Risk Assessments',
-        person: 'People'
+        person: 'People',
+        help: 'Help'
     };
 
     var debounceTimer = null;

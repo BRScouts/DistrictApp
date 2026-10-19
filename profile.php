@@ -180,7 +180,8 @@ $existingGroupIds = array_map(static fn(array $m): int => (int) $m['group_id'], 
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_validate();
-    $fullName = trim((string) ($_POST['full_name'] ?? ''));
+    // Users may not edit their own name; it is managed by their Group Admin or District leader.
+    $fullName = trim((string) ($profile['full_name'] ?? ''));
     $phone = trim((string) ($_POST['phone'] ?? ''));
     $roleTitle = trim((string) ($profile['role_title'] ?? ''));
     $aboutMe = trim((string) ($_POST['about_me'] ?? ''));
@@ -205,9 +206,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $accreditationsJson = json_encode($cleanAccreditations, JSON_UNESCAPED_UNICODE) ?: '[]';
 
-    if ($fullName === '') {
-        $error = 'Enter your name.';
-    } elseif (!$hasActiveGroup && !$groupIds) {
+    if (!$hasActiveGroup && !$groupIds) {
         $error = 'Choose your Group.';
     } elseif (!$hasActiveGroup && $groupIds) {
         $stmt = $pdo->prepare("
@@ -778,10 +777,10 @@ $breadcrumb = '<a href="/index.php">Home</a> / Profile';
                             class="form-control"
                             type="text"
                             id="full_name"
-                            name="full_name"
                             value="<?= e($formFullName) ?>"
-                            required
+                            disabled
                         >
+                        <small class="form-text text-muted">Your name is managed by your Group Admin or District leader.</small>
                     </div>
 
                     <div class="form-group">
