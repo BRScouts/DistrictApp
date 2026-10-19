@@ -534,11 +534,11 @@ include __DIR__ . '/header.php';
                                         <?php foreach ($parsedDetails as $dKey => $dVal): ?>
                                             <?php if ($dVal === null || $dVal === '') continue; ?>
                                             <?php
-                                                $displayVal = is_scalar($dVal) ? (string) $dVal : json_encode($dVal, JSON_PRETTY_PRINT);
+                                                [$detailLabel, $displayVal] = audit_format_detail((string) $dKey, $dVal);
                                                 $isLong = strlen($displayVal) > 60;
                                             ?>
                                             <div class="sa-detail-item <?= $isLong ? 'sa-detail-value-long' : '' ?>">
-                                                <span class="sa-detail-key"><?= e(ucwords(str_replace('_', ' ', (string) $dKey))) ?></span>
+                                                <span class="sa-detail-key"><?= e($detailLabel) ?></span>
                                                 <span class="sa-detail-value"><?= e($displayVal) ?></span>
                                             </div>
                                         <?php endforeach; ?>

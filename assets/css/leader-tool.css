@@ -331,11 +331,19 @@ a:focus, button:focus, input:focus, select:focus, textarea:focus {
 
 .lt-help-article {
     border-top: 1px solid var(--iv-grey-300);
-    padding: 1rem 0;
+    padding: 1rem;
+    margin: 0 -1rem;
+    transition: background .12s;
 }
 
 .lt-help-article:last-child {
     border-bottom: 1px solid var(--iv-grey-300);
+}
+
+/* Soft hover across the whole row so the clickable article reads as a target,
+   not just the title link. */
+.lt-help-article:hover {
+    background: var(--iv-grey-100);
 }
 
 .lt-help-article-title {
@@ -375,13 +383,14 @@ a:focus, button:focus, input:focus, select:focus, textarea:focus {
    the generated paragraphs, headings and ordered step lists readable without
    affecting the rest of the app. */
 .lt-help-article-body {
-    max-width: 760px;
+    max-width: 720px;
     font-size: 1.05rem;
-    line-height: 1.6;
+    line-height: 1.65;
+    color: var(--iv-grey-900);
 }
 
 .lt-help-article-body p {
-    margin: 0 0 1rem;
+    margin: 0 0 1.1rem;
     font-weight: 700;
 }
 
@@ -392,12 +401,19 @@ a:focus, button:focus, input:focus, select:focus, textarea:focus {
 .lt-help-article-body h6 {
     font-weight: 900;
     line-height: 1.2;
-    margin: 1.75rem 0 .75rem;
+    color: var(--iv-black);
+    margin: 2rem 0 .65rem;
 }
 
-.lt-help-article-body h2 { font-size: 1.5rem; }
-.lt-help-article-body h3 { font-size: 1.25rem; }
-.lt-help-article-body h4 { font-size: 1.1rem; }
+/* The viewer renders the title in the hero, so the body's first block sits
+   directly under it — drop its top margin so there is no awkward double gap. */
+.lt-help-article-body > :first-child {
+    margin-top: 0;
+}
+
+.lt-help-article-body h2 { font-size: 1.45rem; }
+.lt-help-article-body h3 { font-size: 1.2rem; }
+.lt-help-article-body h4 { font-size: 1.05rem; }
 .lt-help-article-body h5,
 .lt-help-article-body h6 { font-size: 1rem; }
 
@@ -405,20 +421,33 @@ a:focus, button:focus, input:focus, select:focus, textarea:focus {
    sequence reads clearly; assistive tech gets the order from the <ol>. */
 .lt-help-article-body ol {
     margin: 0 0 1.25rem;
-    padding-left: 1.5rem;
+    padding-left: 1.6rem;
 }
 
 .lt-help-article-body ol li {
-    margin: 0 0 .5rem;
+    margin: 0 0 .6rem;
     font-weight: 700;
-    padding-left: .25rem;
+    padding-left: .35rem;
+}
+
+.lt-help-article-body ol li:last-child {
+    margin-bottom: 0;
+}
+
+/* Action buttons sit at the foot of an article; give the group a little air
+   above it so the call-to-action is clearly separated from the prose. */
+.lt-help-article-body .lt-help-action:first-of-type {
+    margin-top: 1.25rem;
 }
 
 /* ─── Back link and not-found state ───
    The back links already include a literal "←" glyph in the markup, so we do
    NOT add a ::before arrow here (that would double the arrow). */
 .lt-help-back {
-    margin-top: 2rem;
+    max-width: 720px;
+    margin-top: 2.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--iv-grey-300);
 }
 
 .lt-help-back a {
@@ -455,18 +484,26 @@ a:focus, button:focus, input:focus, select:focus, textarea:focus {
 /* ─── Help Centre on-page search + support fallback (Req 7) ───
    The Help_Search_Box is a GET form on the index; results reuse the
    .lt-help-article-list styling above. The no-results block offers a
-   deep-link to technical support carrying the search term. */
+   deep-link to technical support carrying the search term.
+
+   The search sits inside a soft grey "search banner" panel so it reads as a
+   distinct, self-contained tool and is clearly separated from the topic
+   listing that follows it. */
 .lt-help-search {
     max-width: 820px;
-    margin: 0 0 2rem;
+    margin: 0 0 2.5rem;
+    padding: 1.5rem;
+    background: var(--iv-grey-100);
+    border: 1px solid var(--iv-grey-300);
+    border-left: 4px solid var(--iv-purple);
 }
 
 .lt-help-search-label {
     display: block;
     font-weight: 900;
-    font-size: .9rem;
-    margin: 0 0 .4rem;
-    color: var(--iv-grey-700);
+    font-size: 1.05rem;
+    margin: 0 0 .6rem;
+    color: var(--iv-black);
 }
 
 .lt-help-search-row {
@@ -480,10 +517,17 @@ a:focus, button:focus, input:focus, select:focus, textarea:focus {
     flex: 1 1 260px;
     min-width: 0;
     padding: .75rem .85rem;
-    border: 2px solid var(--iv-grey-300);
+    border: 2px solid var(--iv-grey-700);
     border-radius: 0;
+    background: var(--iv-white);
     font-weight: 700;
     font-size: 1rem;
+    line-height: 1.3;
+}
+
+.lt-help-search-input::placeholder {
+    color: var(--iv-grey-700);
+    opacity: .8;
 }
 
 .lt-help-search-input:focus {
@@ -497,10 +541,24 @@ a:focus, button:focus, input:focus, select:focus, textarea:focus {
 }
 
 /* The search Submit reuses .lt-help-action--primary; keep it from stretching
-   oddly on its own row on narrow screens. */
+   oddly on its own row on narrow screens, and make its height match the
+   input so the row reads as one control. */
 .lt-help-search-row .lt-help-action {
     margin: 0;
     flex: 0 0 auto;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+/* On very narrow screens let the button fill the width beneath the input so
+   it stays an easy tap target rather than a cramped box on its own line. */
+@media (max-width: 479.98px) {
+    .lt-help-search-row .lt-help-action {
+        flex: 1 1 100%;
+        justify-content: center;
+        padding-top: .75rem;
+        padding-bottom: .75rem;
+    }
 }
 
 .lt-help-results-count {

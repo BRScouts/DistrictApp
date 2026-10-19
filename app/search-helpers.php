@@ -60,6 +60,7 @@ function search_module_catalogue(array $flags): array
         ['title' => 'Risk Assessments',    'description' => 'Browse and download shared District risk assessments.',             'url' => '/dc/risk-assessments.php',   'visible' => true],
         ['title' => 'Technical Support',   'description' => 'Report a problem or request a dashboard change.',                   'url' => '/technical-support.php',     'visible' => true],
         ['title' => 'My District Email / OneDrive', 'description' => 'Microsoft 365 email, OneDrive and apps.',                  'url' => 'https://outlook.cloud.microsoft/', 'visible' => true, 'external' => true],
+        ['title' => 'Roll of Honour',      'description' => 'Nominate a volunteer for the District Roll of Honour.',             'url' => 'https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=o0n0PQcw006x9bzynIL4rBErZYBckIpEmBAYxB6OaWlUN1FDRDI2NlhEQzJFSVQ0N1FTMU9QSE9SSS4u', 'visible' => true, 'external' => true],
         ['title' => 'Group Manager',       'description' => 'Manage leaders in your Group and request M365 accounts.',           'url' => '/group-manager.php',         'visible' => $isGroupAdmin],
         ['title' => 'District Admin',      'description' => 'Create Groups, assign GLVs and manage permissions.',                'url' => '/district-admin.php',        'visible' => $isDistrictAdmin],
         ['title' => 'Comms Tool',          'description' => 'Prepare District communications and targeted messages.',            'url' => '/comms-tool.php',            'visible' => $isDistrictAdmin],

@@ -439,6 +439,15 @@ $modules = [
         'external' => true,
     ],
     [
+        'title' => 'Roll of Honour',
+        'description' => 'Nominate a volunteer for the District Roll of Honour and celebrate outstanding contributions.',
+        'url' => 'https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=o0n0PQcw006x9bzynIL4rBErZYBckIpEmBAYxB6OaWlUN1FDRDI2NlhEQzJFSVQ0N1FTMU9QSE9SSS4u',
+        'status' => 'available',
+        'image' => '/assets/img/roll-of-honour.png',
+        'visible' => true,
+        'external' => true,
+    ],
+    [
         'title' => 'Group Manager',
         'description' => 'Manage leaders in your Group and request District Microsoft 365 accounts.',
         'url' => '/group-manager.php',

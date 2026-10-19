@@ -333,7 +333,8 @@ audit_log('admin.gdpr_report_generated', 'person', $personId, $personId, [
                         $parts = [];
                         foreach ($details as $k => $v) {
                             if ($v === null || $v === '' || $k === 'status') continue;
-                            $parts[] = ucwords(str_replace('_', ' ', $k)) . ': ' . (is_scalar($v) ? $v : json_encode($v));
+                            [$detailLabel, $detailValue] = audit_format_detail((string) $k, $v);
+                            $parts[] = $detailLabel . ': ' . $detailValue;
                         }
                         $detailSummary = implode('; ', array_slice($parts, 0, 4));
                     }

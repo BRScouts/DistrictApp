@@ -106,6 +106,7 @@ include __DIR__ . '/header.php';
         <a class="btn btn-primary lt-btn" href="/district-admin-group.php">Add Group</a>
         <a class="btn btn-secondary lt-btn" href="/group-manager.php">Open Group Manager</a>
         <a class="btn btn-secondary lt-btn" href="/directory.php">Open Directory</a>
+        <a class="btn btn-secondary lt-btn" href="/help-admin.php">Manage Help Centre</a>
     </div>
 
     <div class="da-stats">
