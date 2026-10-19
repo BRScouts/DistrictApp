@@ -2319,11 +2319,7 @@ const initiallySelectedRiskIds = <?= json_encode(
         resultsElement.innerHTML = '';
 
         try {
-            const url = new URL('https://nominatim.openstreetmap.org/search');
-            url.searchParams.set('format', 'json');
-            url.searchParams.set('addressdetails', '1');
-            url.searchParams.set('limit', '5');
-            url.searchParams.set('countrycodes', 'gb');
+            const url = new URL('/dc/geocode-search.php', window.location.origin);
             url.searchParams.set('q', query);
 
             const response = await fetch(url.toString(), {
