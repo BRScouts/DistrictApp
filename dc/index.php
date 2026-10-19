@@ -155,6 +155,8 @@ if (
     $isDistrictLevelUser = true;
 }
 
+$hasDistrictEventColumn = dc_table_has_column('calendar_events', 'is_district_event');
+
 $where = [];
 $params = [];
 
@@ -169,7 +171,15 @@ if (!$isDistrictLevelUser) {
         $allowedGroupIds = [0];
     }
 
-    $where[] = 'ce.group_id IN (' . implode(',', array_fill(0, count($allowedGroupIds), '?')) . ')';
+    // Regular users are limited to their own groups, but District Events are
+    // visible to everyone by default — so allow either.
+    $groupClause = 'ce.group_id IN (' . implode(',', array_fill(0, count($allowedGroupIds), '?')) . ')';
+
+    if ($hasDistrictEventColumn) {
+        $groupClause = '(' . $groupClause . ' OR ce.is_district_event = 1)';
+    }
+
+    $where[] = $groupClause;
 
     foreach ($allowedGroupIds as $allowedGroupId) {
         $params[] = $allowedGroupId;
@@ -177,7 +187,14 @@ if (!$isDistrictLevelUser) {
 }
 
 if ($selectedGroupId > 0) {
-    $where[] = 'ce.group_id = ?';
+    // District Events always show, even when the calendar is filtered to a
+    // single group, so leaders viewing their own group still see them.
+    if ($hasDistrictEventColumn) {
+        $where[] = '(ce.group_id = ? OR ce.is_district_event = 1)';
+    } else {
+        $where[] = 'ce.group_id = ?';
+    }
+
     $params[] = $selectedGroupId;
 }
 
@@ -280,6 +297,9 @@ foreach ($events as $event) {
         'risks' => $risksByEventId[$eventId] ?? [],
         'can_manage' => $canManage,
         'manage_url' => $canManage ? '/dc/manage-event.php?id=' . $eventId : null,
+        'is_district_event' => dc_event_is_district($event),
+        'booking_url' => (string) ($event['booking_url'] ?? ''),
+        'info_url' => (string) ($event['info_url'] ?? ''),
     ];
 }
 
@@ -307,6 +327,12 @@ $groupColorsMap = []; // group_id => color hex
 $groupsInCalendar = []; // group_id => group_name (only groups that have events this month)
 
 foreach ($events as $event) {
+    // District Events have their own distinct styling and should not appear
+    // as a coloured group in the legend/palette.
+    if (dc_event_is_district($event)) {
+        continue;
+    }
+
     $gId = (int) ($event['group_id'] ?? 0);
     if ($gId && !isset($groupsInCalendar[$gId])) {
         $groupsInCalendar[$gId] = (string) ($event['group_name'] ?? 'Unknown');
@@ -358,6 +384,23 @@ if ($selectedGroupId > 0) {
     $addEventUrl .= '?group_id=' . $selectedGroupId;
 }
 
+// District / system admins can add District Events that every group sees.
+$canAddDistrictEvent = dc_context_has_admin_access($ctx);
+
+// The hidden "District Events" group should not show in the group filter.
+$districtEventsGroupId = dc_district_events_group_id();
+
+// Flash messages after adding a District Event.
+$districtEventFlash = '';
+
+if (($_GET['district_event'] ?? '') === 'created') {
+    $districtEventFlash = 'District Event added. It is now visible to every group on the calendar.';
+
+    if (($_GET['notified'] ?? '') === '1') {
+        $districtEventFlash .= ' Notification emails have been added to the queue.';
+    }
+}
+
 
 
 $pageTitle = 'District Calendar';
@@ -369,6 +412,15 @@ require __DIR__ . '/layout.php';
 ?>
 
 <style>
+    /* Give the calendar more breathing room on desktop than the standard
+       1120px content column, without going as wide as the old full-bleed
+       calendar. Only widens the page the calendar lives on. */
+    @media (min-width: 1200px) {
+        .dc-main:has(.dc-calendar-page) {
+            width: min(1440px, calc(100% - 3rem));
+        }
+    }
+
     .dc-calendar-page {
         display: grid;
         gap: 1.5rem;
@@ -730,6 +782,38 @@ require __DIR__ . '/layout.php';
         text-decoration: line-through;
     }
 
+    /* ─── District Events ───────────────────────────────────────────────
+       Distinct from group events: an Outlook "out of office" style hatched
+       header sits across the top of the tile so they stand out. */
+    .dc-cal-event-district {
+        position: relative;
+        padding-top: 0.85rem;
+        background: #f5efff;
+        border-left-color: var(--dc-scouts-purple, #7413dc);
+    }
+
+    .dc-cal-event-district:hover,
+    .dc-cal-event-district:focus {
+        background: #ece0fb;
+        outline-color: var(--dc-scouts-purple-dark, #4d0b93);
+    }
+
+    .dc-cal-event-ooo {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        display: block;
+        height: 9px;
+        background-image: repeating-linear-gradient(
+            45deg,
+            var(--dc-scouts-purple-dark, #4d0b93),
+            var(--dc-scouts-purple-dark, #4d0b93) 5px,
+            var(--dc-scouts-purple, #7413dc) 5px,
+            var(--dc-scouts-purple, #7413dc) 10px
+        );
+    }
+
     .dc-calendar-empty {
         margin-bottom: 1.25rem;
         padding: 1.25rem;
@@ -737,6 +821,35 @@ require __DIR__ . '/layout.php';
         border: 1px dashed var(--dc-border, #e2e8f0);
         border-radius: 0;
         color: var(--dc-muted, #64748b);
+        font-weight: 600;
+    }
+
+    .dc-district-flash {
+        margin-bottom: 1.25rem;
+        padding: 0.85rem 1.1rem;
+        background: #f0fdf9;
+        border: 1px solid var(--dc-scouts-teal, #00a794);
+        border-left-width: 4px;
+        color: var(--dc-ink, #1d2939);
+        font-weight: 700;
+    }
+
+    .dc-district-add {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem 1rem;
+        margin-top: 1rem;
+        padding: 1rem 1.25rem;
+        background: #f5efff;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        border-left: 4px solid var(--dc-scouts-purple, #7413dc);
+    }
+
+    .dc-district-add-note {
+        margin: 0;
+        color: var(--dc-muted, #64748b);
+        font-size: 0.85rem;
         font-weight: 600;
     }
 
@@ -910,6 +1023,16 @@ require __DIR__ . '/layout.php';
             border-top-color: var(--dc-group-color, #94a3b8);
         }
 
+        .dc-cal-event-district {
+            border-top: 0;
+            border-left: 0;
+            padding-top: 0.75rem;
+        }
+
+        .dc-cal-event-ooo {
+            height: 8px;
+        }
+
         .dc-cal-event-title {
             font-size: 0.8rem;
         }
@@ -955,6 +1078,23 @@ require __DIR__ . '/layout.php';
             display: none;
         }
 
+        /* On mobile the bare day number ("21") is confusing on its own, so
+           hide it and promote the full date ("Wed 21 Oct") to the heading. */
+        .dc-calendar-day-heading {
+            display: block;
+        }
+
+        .dc-calendar-day-heading strong {
+            display: none;
+        }
+
+        .dc-calendar-day-heading span {
+            display: block;
+            color: var(--dc-ink, #1d2939);
+            font-size: 0.95rem;
+            font-weight: 800;
+        }
+
         .dc-calendar-month-nav {
             display: grid;
             grid-template-columns: 1fr;
@@ -995,6 +1135,7 @@ require __DIR__ . '/layout.php';
                 <select id="group_id" name="group_id" class="form-control">
                     <option value="0">All Groups</option>
                     <?php foreach ($allGroups as $group): ?>
+                        <?php if ($districtEventsGroupId && (int) $group['id'] === $districtEventsGroupId) { continue; } ?>
                         <option value="<?= (int) $group['id'] ?>" <?= $selectedGroupId === (int) $group['id'] ? 'selected' : '' ?>>
                             <?= e((string) $group['group_name']) ?>
                         </option>
@@ -1060,6 +1201,10 @@ require __DIR__ . '/layout.php';
             </div>
         </div>
 
+        <?php if ($districtEventFlash !== ''): ?>
+            <div class="dc-district-flash" role="status"><?= e($districtEventFlash) ?></div>
+        <?php endif; ?>
+
         <?php if (!$events): ?>
             <div class="dc-calendar-empty">No events match the selected filters for this month.</div>
         <?php endif; ?>
@@ -1124,12 +1269,21 @@ require __DIR__ . '/layout.php';
                                             <?php
                                             $event = $dayEvent['event'];
                                             $eventStatus = (string) $event['status'];
+                                            $isDistrictEvent = dc_event_is_district($event);
                                             $eventClass = dc_event_bar_class($eventStatus);
+
+                                            if ($isDistrictEvent) {
+                                                $eventClass .= ' dc-cal-event-district';
+                                            }
+
                                             $canManage = dc_index_user_can_manage_event_group($ctx, (int) $event['group_id']);
                                             $timeLabel = date('H:i', strtotime((string) $event['starts_at']));
                                             $continuationPrefix = $dayEvent['continues_before'] ? '← ' : '';
                                             $continuationSuffix = $dayEvent['continues_after'] ? ' →' : '';
                                             $groupColor = $groupColorsMap[(int) $event['group_id']] ?? '#7413dc';
+                                            $metaLabel = $isDistrictEvent
+                                                ? 'District event'
+                                                : (string) $event['group_name'];
                                             ?>
                                             <button
                                                 type="button"
@@ -1137,9 +1291,14 @@ require __DIR__ . '/layout.php';
                                                 data-event-id="<?= (int) $event['id'] ?>"
                                                 style="--dc-group-color: <?= e($groupColor) ?>;"
                                             >
+                                                <?php if ($isDistrictEvent): ?>
+                                                    <span class="dc-cal-event-ooo" aria-hidden="true"></span>
+                                                <?php endif; ?>
                                                 <span class="dc-cal-event-title"><?= e($continuationPrefix . (string) $event['title'] . $continuationSuffix) ?></span>
-                                                <span class="dc-cal-event-meta"><?= e($timeLabel) ?> · <?= e((string) $event['group_name']) ?></span>
-                                                <span class="dc-cal-event-status"><?= e(str_replace('_', ' ', $eventStatus)) ?></span>
+                                                <span class="dc-cal-event-meta"><?= e($timeLabel) ?> · <?= e($metaLabel) ?></span>
+                                                <?php if (!$isDistrictEvent): ?>
+                                                    <span class="dc-cal-event-status"><?= e(str_replace('_', ' ', $eventStatus)) ?></span>
+                                                <?php endif; ?>
                                             </button>
                                         <?php endforeach; ?>
                                     </div>
@@ -1150,6 +1309,15 @@ require __DIR__ . '/layout.php';
                 </div>
             <?php endforeach; ?>
         </div>
+
+        <?php if ($canAddDistrictEvent): ?>
+            <div class="dc-district-add">
+                <a class="btn btn-primary lt-btn" href="/dc/add-district-event.php">+ Add District Event</a>
+                <p class="dc-district-add-note">
+                    District Events appear for every group with a distinct hatched header.
+                </p>
+            </div>
+        <?php endif; ?>
     </section>
 </div>
 
@@ -1177,8 +1345,40 @@ require __DIR__ . '/layout.php';
         });
     }
 
+    function linkHtml(url, label) {
+        var safe = String(url || '');
+        if (!/^https?:\/\//i.test(safe)) return '';
+        return '<a href="' + escapeHtml(safe) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(label) + '</a>';
+    }
+
     function eventHtml(event) {
         var location = event.location_name || event.location_address || 'Location not named';
+
+        if (event.is_district_event) {
+            // District Events are informational and shared with every group.
+            var dRows = '<dl>' +
+                '<dt>Type</dt><dd>District Event (visible to all groups)</dd>' +
+                '<dt>When</dt><dd>' + escapeHtml(event.starts_at) + (event.ends_at ? '<br>to ' + escapeHtml(event.ends_at) : '') + '</dd>' +
+                '<dt>Where</dt><dd>' + escapeHtml(location) + (event.location_address && event.location_address !== event.location_name ? '<br>' + escapeHtml(event.location_address) : '') + '</dd>' +
+                (event.description ? '<dt>Details</dt><dd>' + escapeHtml(event.description).replace(/\n/g, '<br>') + '</dd>' : '');
+
+            var dLinks = [];
+            if (event.booking_url) dLinks.push(linkHtml(event.booking_url, 'Book onto this event'));
+            if (event.info_url) dLinks.push(linkHtml(event.info_url, 'More information'));
+            dLinks = dLinks.filter(function (l) { return l; });
+
+            if (dLinks.length) {
+                dRows += '<dt>Links</dt><dd>' + dLinks.join('<br>') + '</dd>';
+            }
+
+            dRows += '</dl>';
+
+            var dAction = event.can_manage && event.manage_url
+                ? '<div class="dc-event-modal-actions"><a class="btn btn-primary lt-btn" href="' + escapeHtml(event.manage_url) + '">Open event</a></div>'
+                : '';
+
+            return dRows + dAction;
+        }
 
         var risks = event.risks && event.risks.length
             ? '<ul class="dc-event-modal-risk-list">' + event.risks.map(function (risk) {

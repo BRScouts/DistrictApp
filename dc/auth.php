@@ -1181,8 +1181,9 @@ function dc_queue_event_notifications(int $eventId, string $eventAction): void
         }
 
         /*
-         * Notify district_reviewer and district_admin members (not system_admin).
-         * These are the people who can review events across the whole district.
+         * Notify District Lead Volunteers. They review events across every
+         * group in the district, so they are notified regardless of their
+         * access level (reviewer/admin or otherwise).
          */
         $stmt = db()->query("
             SELECT DISTINCT
@@ -1191,7 +1192,7 @@ function dc_queue_event_notifications(int $eventId, string $eventAction): void
             FROM group_memberships gm
             JOIN people p
               ON p.id = gm.person_id
-            WHERE gm.access_level IN ('district_reviewer', 'district_admin')
+            WHERE gm.membership_role = 'district_lead_volunteer'
               AND gm.status = 'active'
               AND p.status = 'active'
               AND p.primary_email IS NOT NULL
@@ -1222,5 +1223,246 @@ function dc_queue_event_notifications(int $eventId, string $eventAction): void
             'calendar_event',
             $eventId
         );
+    }
+}
+
+/**
+ * Resolve the dedicated "District Events" group id.
+ *
+ * District events still need a group_id (calendar_events.group_id is NOT NULL
+ * and the calendar INNER JOINs `groups`). Migration 004 seeds a hidden
+ * "District Events" group and records its id in app_settings. We resolve it
+ * here, falling back to a slug lookup, and caching the result for the request.
+ */
+function dc_district_events_group_id(): ?int
+{
+    static $cached = null;
+
+    if ($cached !== null) {
+        return $cached ?: null;
+    }
+
+    $fromSetting = dc_setting('district_events_group_id', '');
+
+    if ($fromSetting !== null && $fromSetting !== '' && ctype_digit((string) $fromSetting)) {
+        $cached = (int) $fromSetting;
+        return $cached;
+    }
+
+    try {
+        $stmt = db()->prepare("SELECT id FROM groups WHERE slug = 'district-events' LIMIT 1");
+        $stmt->execute();
+        $id = $stmt->fetchColumn();
+
+        $cached = $id !== false ? (int) $id : 0;
+    } catch (Throwable $e) {
+        $cached = 0;
+    }
+
+    return $cached ?: null;
+}
+
+/**
+ * Is this calendar_events row a District Event?
+ *
+ * Reads the is_district_event flag defensively so the app keeps working on
+ * databases that have not yet run migration 004.
+ */
+function dc_event_is_district(array $event): bool
+{
+    return array_key_exists('is_district_event', $event)
+        && (int) $event['is_district_event'] === 1;
+}
+
+/**
+ * Queue notification emails when a District Event is created.
+ *
+ * $audience controls who is emailed:
+ *   'glvs'    — every active Group Lead Volunteer across the District
+ *   'leaders' — every active member of every group (all leaders)
+ *   'custom'  — only the person ids supplied in $personIds
+ *   'none'    — no one (the admin chose not to notify)
+ *
+ * Groups with disable_district_email = 1 are skipped for the glvs/leaders
+ * audiences (honouring each group's opt-out, mirroring existing behaviour).
+ */
+function dc_queue_district_event_notifications(
+    int $eventId,
+    string $audience = 'none',
+    array $personIds = []
+): void {
+    $audience = strtolower(trim($audience));
+
+    if ($audience === 'none' || $audience === '') {
+        return;
+    }
+
+    $event = dc_get_event($eventId);
+
+    if (!$event) {
+        return;
+    }
+
+    $subject = 'New District Event: ' . $event['title'];
+
+    $whenLine = '';
+
+    if (!empty($event['starts_at'])) {
+        $whenLine = date('j M Y H:i', strtotime((string) $event['starts_at']));
+
+        if (!empty($event['ends_at'])) {
+            $whenLine .= ' to ' . date('j M Y H:i', strtotime((string) $event['ends_at']));
+        }
+    }
+
+    $bodyLines = [
+        'A new District Event has been added to the calendar.',
+        '',
+        'Event: ' . $event['title'],
+    ];
+
+    if ($whenLine !== '') {
+        $bodyLines[] = 'When: ' . $whenLine;
+    }
+
+    $locationParts = array_filter([
+        (string) ($event['location_name'] ?? ''),
+        (string) ($event['location_address'] ?? ''),
+    ]);
+
+    if ($locationParts) {
+        $bodyLines[] = 'Where: ' . implode(', ', $locationParts);
+    }
+
+    if (!empty($event['description'])) {
+        $bodyLines[] = '';
+        $bodyLines[] = (string) $event['description'];
+    }
+
+    if (!empty($event['booking_url'])) {
+        $bodyLines[] = '';
+        $bodyLines[] = 'Booking: ' . (string) $event['booking_url'];
+    }
+
+    if (!empty($event['info_url'])) {
+        $bodyLines[] = 'More information: ' . (string) $event['info_url'];
+    }
+
+    $bodyLines[] = '';
+    $bodyLines[] = 'Open the District Calendar to see the full details.';
+
+    $body = implode("\n", $bodyLines);
+
+    $recipients = [];
+
+    $honourOptOut = dc_table_has_column('groups', 'disable_district_email');
+
+    if ($audience === 'glvs' || $audience === 'leaders') {
+        $where = [
+            "gm.status = 'active'",
+            "p.status = 'active'",
+            "p.primary_email IS NOT NULL",
+        ];
+
+        if ($audience === 'glvs') {
+            $where[] = "gm.membership_role = 'group_lead_volunteer'";
+        }
+
+        if ($honourOptOut) {
+            $where[] = "COALESCE(g.disable_district_email, 0) = 0";
+        }
+
+        $sql = "
+            SELECT DISTINCT
+                p.full_name,
+                p.primary_email
+            FROM group_memberships gm
+            JOIN people p
+              ON p.id = gm.person_id
+            JOIN groups g
+              ON g.id = gm.group_id
+            WHERE " . implode("\n              AND ", $where);
+
+        try {
+            $stmt = db()->query($sql);
+
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $recipients[strtolower((string) $row['primary_email'])] = [
+                    'email' => (string) $row['primary_email'],
+                    'name' => (string) $row['full_name'],
+                ];
+            }
+        } catch (Throwable $e) {
+            // Membership role column may differ on older schemas — skip gracefully.
+        }
+    } elseif ($audience === 'custom') {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $personIds))));
+
+        if ($ids) {
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+            $stmt = db()->prepare("
+                SELECT DISTINCT
+                    p.full_name,
+                    p.primary_email
+                FROM people p
+                WHERE p.id IN ({$placeholders})
+                  AND p.status = 'active'
+                  AND p.primary_email IS NOT NULL
+            ");
+
+            $stmt->execute($ids);
+
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $recipients[strtolower((string) $row['primary_email'])] = [
+                    'email' => (string) $row['primary_email'],
+                    'name' => (string) $row['full_name'],
+                ];
+            }
+        }
+    }
+
+    foreach ($recipients as $recipient) {
+        dc_queue_email(
+            $recipient['email'],
+            $recipient['name'],
+            $subject,
+            $body,
+            'district_event_created',
+            'calendar_event',
+            $eventId
+        );
+    }
+}
+
+/**
+ * Fetch all active people across the District for the "notify specific people"
+ * picker on the add-district-event form. Returns id, full_name, primary_email
+ * and a representative group name, ordered by name.
+ */
+function dc_fetch_all_district_people(): array
+{
+    try {
+        $stmt = db()->query("
+            SELECT
+                p.id,
+                p.full_name,
+                p.primary_email,
+                MIN(g.group_name) AS group_name
+            FROM people p
+            JOIN group_memberships gm
+              ON gm.person_id = p.id
+             AND gm.status = 'active'
+            JOIN groups g
+              ON g.id = gm.group_id
+            WHERE p.status = 'active'
+              AND p.primary_email IS NOT NULL
+            GROUP BY p.id, p.full_name, p.primary_email
+            ORDER BY p.full_name ASC
+        ");
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return [];
     }
 }
