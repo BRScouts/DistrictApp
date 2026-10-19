@@ -1035,6 +1035,30 @@ require __DIR__ . '/layout.php';
         setLocation(lat, lng, nameInput.value, addressInput.value);
     });
 
+    // Build a tidy "Location name" from a Nominatim result rather than echoing
+    // the raw search query (e.g. a bare postcode) back into the field.
+    function buildLocationName(result) {
+        var a = result.address || {};
+        var primary = a.amenity || a.building || a.leisure || a.tourism
+            || a.village || a.hamlet || a.suburb || a.town || a.city || result.name;
+        if (primary) return primary;
+        if (result.display_name) return result.display_name.split(',')[0].trim();
+        return '';
+    }
+
+    // The user has explicitly chosen a search result, so overwrite the fields
+    // (setLocation only fills blanks to preserve manual edits).
+    function applyResult(result) {
+        if (!result) return;
+        var lat = Number(parseFloat(result.lat).toFixed(7));
+        var lng = Number(parseFloat(result.lon).toFixed(7));
+        var name = buildLocationName(result);
+        var address = result.display_name || name;
+        if (name) nameInput.value = name;
+        if (address) addressInput.value = address;
+        setLocation(lat, lng, name, address);
+    }
+
     function searchLocation() {
         var query = searchInput.value.trim();
         if (!query) { searchInput.focus(); return; }
@@ -1059,17 +1083,17 @@ require __DIR__ . '/layout.php';
                     return;
                 }
 
+                // Apply the best match straight away so a postcode search fills
+                // the address fields without a second click. The list still lets
+                // the user pick a different result if the top one is wrong.
+                applyResult(results[0]);
+
                 results.forEach(function (result) {
                     var button = document.createElement('button');
                     button.type = 'button';
                     button.textContent = result.display_name || 'Unnamed location';
                     button.addEventListener('click', function () {
-                        var lat = Number(parseFloat(result.lat).toFixed(7));
-                        var lng = Number(parseFloat(result.lon).toFixed(7));
-                        var displayName = result.name || result.display_name || query;
-                        if (!nameInput.value) nameInput.value = displayName;
-                        if (!addressInput.value) addressInput.value = result.display_name || displayName;
-                        setLocation(lat, lng, displayName, result.display_name || displayName);
+                        applyResult(result);
                         resultsElement.hidden = true;
                     });
                     resultsElement.appendChild(button);

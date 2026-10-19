@@ -1945,6 +1945,37 @@ const initiallySelectedRiskIds = <?= json_encode(
         );
     });
 
+    // Build a tidy "Location name" from a Nominatim result rather than echoing
+    // the raw search query (e.g. a bare postcode) back into the field.
+    function buildLocationName(result) {
+        const a = result.address || {};
+        const primary = a.amenity || a.building || a.leisure || a.tourism
+            || a.village || a.hamlet || a.suburb || a.town || a.city || result.name;
+
+        if (primary) {
+            return primary;
+        }
+
+        if (result.display_name) {
+            return result.display_name.split(',')[0].trim();
+        }
+
+        return '';
+    }
+
+    function applyResult(result) {
+        if (!result) {
+            return;
+        }
+
+        const lat = Number(parseFloat(result.lat).toFixed(7));
+        const lng = Number(parseFloat(result.lon).toFixed(7));
+        const name = buildLocationName(result);
+        const address = result.display_name || name;
+
+        setSelectedLocation(lat, lng, name, address);
+    }
+
     async function searchLocation() {
         const query = searchInput.value.trim();
 
@@ -1980,6 +2011,11 @@ const initiallySelectedRiskIds = <?= json_encode(
                 return;
             }
 
+            // Apply the best match straight away so a postcode search fills the
+            // address fields without needing a second click. The list below still
+            // lets the user pick a different result if the top one is wrong.
+            applyResult(results[0]);
+
             results.forEach(function (result) {
                 const button = document.createElement('button');
                 button.type = 'button';
@@ -1987,11 +2023,7 @@ const initiallySelectedRiskIds = <?= json_encode(
                 button.textContent = result.display_name || 'Unnamed location';
 
                 button.addEventListener('click', function () {
-                    const lat = Number(parseFloat(result.lat).toFixed(7));
-                    const lng = Number(parseFloat(result.lon).toFixed(7));
-                    const displayName = result.name || result.display_name || query;
-
-                    setSelectedLocation(lat, lng, displayName, result.display_name || displayName);
+                    applyResult(result);
                     resultsElement.hidden = true;
                 });
 
