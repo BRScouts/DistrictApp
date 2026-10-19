@@ -1287,9 +1287,10 @@ require __DIR__ . '/layout.php';
                             <div class="mt-2">
                                 <?php foreach ($details as $key => $value): ?>
                                     <?php if ($value === null || $value === '') continue; ?>
+                                    <?php [$detailLabel, $detailValue] = audit_format_detail((string) $key, $value); ?>
                                     <div>
-                                        <strong><?= e(ucwords(str_replace('_', ' ', (string) $key))) ?>:</strong>
-                                        <?= e(is_scalar($value) ? (string) $value : json_encode($value)) ?>
+                                        <strong><?= e($detailLabel) ?>:</strong>
+                                        <?= e($detailValue) ?>
                                     </div>
                                 <?php endforeach; ?>
                             </div>

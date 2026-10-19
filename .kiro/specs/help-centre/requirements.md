@@ -123,3 +123,26 @@ This document defines the requirements for: the article data model and migration
 4. WHEN the Article_Viewer renders a step-list block, THE Article_Viewer SHALL render it using an ordered-list element so that assistive technology conveys the sequence and position of each step.
 5. WHEN the Article_Viewer renders an interactive link or button, THE Article_Viewer SHALL ensure the element is reachable and operable by keyboard.
 6. WHERE an Action_Block action opens in a new browsing context, THE Article_Viewer SHALL convey to assistive technology that the link opens in a new context.
+
+### Requirement 7 — Help Centre on-page search with support fallback
+
+**User Story:** As a signed-in leader, I want to search the Help Centre from the Help Centre itself, and if I can't find an answer, be taken to technical support with my search already filled in, so that I can either self-serve or ask for help without re-typing what I was looking for.
+
+#### Glossary additions
+
+- **Help_Search_Box**: The search form rendered on the Help_Centre_Index that submits a `q` query-string term back to `/help-centre.php`.
+- **Help_Search_Results**: The view rendered on the Help_Centre_Index when a non-empty `q` is present, listing the published Help_Article entries that match the term.
+- **Support_Fallback**: The message and link shown when Help_Search_Results has no matches, pointing to `/technical-support.php` with the search term carried over.
+
+#### Acceptance Criteria
+
+1. THE Help_Centre_Index SHALL render a Help_Search_Box that submits a `q` term to `/help-centre.php` using an HTTP GET request.
+2. WHEN a Signed_In_User opens `/help-centre.php` with a non-empty `q` parameter, THE Help_Centre SHALL render Help_Search_Results in place of the topic-grouped listing.
+3. WHEN the Help_Centre renders Help_Search_Results, THE Help_Centre SHALL list only Help_Article entries whose `status` is `published` that match `q` against `title`, `summary` or `keywords`, reusing the same matching the Search_Engine applies.
+4. WHEN the Help_Centre renders a Help_Search_Results entry, THE Help_Centre SHALL display the article's `title` and `summary` and a link to the Article_Viewer URL for that article's `slug`.
+5. WHEN a Signed_In_User opens `/help-centre.php` with an empty or absent `q` parameter, THE Help_Centre_Index SHALL render the topic-grouped listing as defined in Requirement 2.
+6. IF Help_Search_Results has no matching Help_Article, THEN THE Help_Centre SHALL render the Support_Fallback.
+7. WHEN the Help_Centre renders the Support_Fallback, THE Support_Fallback SHALL link to `/technical-support.php` with the search term passed so that the support form's details field is pre-populated with a message that includes the search term.
+8. WHEN the Help_Centre renders a value that originates from the `q` parameter, THE Help_Centre SHALL escape it so that the term is rendered as text rather than executable markup and is safely encoded in any URL it is placed into.
+9. WHEN `/technical-support.php` is opened with a details term in the query string on a first (non-submitting) request, THE technical support page SHALL pre-populate its details field with that term.
+10. WHEN `/technical-support.php` processes a submitted request, THE technical support page SHALL use the submitted form values rather than the query-string pre-fill.

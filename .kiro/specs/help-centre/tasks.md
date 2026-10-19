@@ -153,6 +153,28 @@ The design uses concrete PHP throughout, so no implementation-language choice is
 - [x] 8. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass and the Help Centre renders (index, viewer, not-found) and appears in search; ask the user if questions arise.
 
+- [ ] 9. Add Help Centre on-page search with technical-support fallback
+  - [ ] 9.1 Add the Help_Search_Box and search results to `/help-centre.php` index mode
+    - Read `$q` from `$_GET[q]` (trimmed string); render a GET search form (Help_Search_Box) posting back to `/help-centre.php`
+    - WHEN `$q` is non-empty: call `search_help_articles($q, 50)` (reuse the existing Search_Engine helper via `app/search-helpers.php`) and render the matches (title, summary, link to `?slug=`), instead of the topic-grouped listing
+    - WHEN `$q` is empty/absent: render the existing topic-grouped listing unchanged
+    - Escape all `$q`-derived output with `e()` and encode it with `rawurlencode()` where placed in URLs
+    - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.8_
+
+  - [ ] 9.2 Render the Support_Fallback on no results
+    - WHEN a non-empty `$q` yields no matches, render a "cant find what youre looking for?" message linking to `/technical-support.php?details={prefill}` where the prefill is a short sentence including the search term
+    - Build the href by `rawurlencode()`-ing the prefill sentence; escape with `e()` in the attribute
+    - _Requirements: 7.6, 7.7, 7.8_
+
+  - [ ] 9.3 Pre-fill the technical support details field from the query string
+    - In `technical-support.php`, seed `$form[details]` from `$_GET[details]` on a first (non-POST) request, keeping the `$_POST` value on submit
+    - Trim and cap the length defensively; the existing `e()` escaping in the textarea is unchanged
+    - _Requirements: 7.9, 7.10_
+
+  - [ ] 9.4 Style the Help_Search_Box and Support_Fallback
+    - Add CSS in `assets/css/leader-tool.css` for the search form and the no-results/support-fallback block, consistent with existing `.lt-help-*` styles and brand tokens; keep keyboard focus-visible states
+    - _Requirements: 7.1, 7.6_
+
 ## Notes
 
 - Tasks marked with `*` are optional (tests) and can be skipped for a faster MVP, but they validate the design's correctness properties and are recommended.

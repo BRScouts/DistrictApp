@@ -427,3 +427,84 @@ function audit_fetch_by_actor(int $actorPersonId, int $limit = 50): array
         return [];
     }
 }
+
+// ─── Helper: Resolve a person's full name from their ID ──────────────────────
+
+/**
+ * Look up a person's full name by ID, caching results for the request.
+ * Returns null if the person can't be found.
+ */
+function audit_person_name(?int $personId): ?string
+{
+    static $cache = [];
+
+    if ($personId === null || $personId <= 0) {
+        return null;
+    }
+
+    if (array_key_exists($personId, $cache)) {
+        return $cache[$personId];
+    }
+
+    try {
+        $stmt = db()->prepare("SELECT full_name FROM people WHERE id = :id LIMIT 1");
+        $stmt->execute(['id' => $personId]);
+        $name = $stmt->fetchColumn();
+
+        $cache[$personId] = $name !== false ? (string) $name : null;
+    } catch (Throwable $e) {
+        $cache[$personId] = null;
+    }
+
+    return $cache[$personId];
+}
+
+// ─── Helper: Format an audit detail key/value pair for display ───────────────
+
+/**
+ * Turn a raw audit detail key/value pair into a human-friendly
+ * [label, value] pair for rendering in an audit trail.
+ *
+ * Handles the awkward cases where the stored value is a raw identifier or a
+ * boolean flag:
+ *   - *_person_id keys are resolved to the person's name (falling back to
+ *     "#<id>" if the person can't be found).
+ *   - acting_on_behalf (and other boolean flags) are shown as Yes / No.
+ *
+ * @return array{0:string,1:string} [humanLabel, displayValue]
+ */
+function audit_format_detail(string $key, $value): array
+{
+    $label = ucwords(str_replace('_', ' ', $key));
+
+    // Person ID references → resolve to a name.
+    if (preg_match('/_person_id$/', $key) || $key === 'person_id') {
+        $id = (int) $value;
+        $name = audit_person_name($id);
+        $display = $name ?? ('#' . $id);
+
+        // Tidy the label: "Leader Person Id" → "Leader".
+        $label = trim(preg_replace('/\s*Person Id$/i', '', $label));
+        if ($label === '') {
+            $label = 'Person';
+        }
+
+        return [$label, $display];
+    }
+
+    // Boolean flags → Yes / No.
+    if (is_bool($value)) {
+        return [$label, $value ? 'Yes' : 'No'];
+    }
+
+    // Numeric 0/1 stored for known boolean flags.
+    if (in_array($key, ['acting_on_behalf', 'approval_reset', 'is_draft'], true)
+        && ($value === 0 || $value === 1 || $value === '0' || $value === '1')
+    ) {
+        return [$label, ((int) $value) === 1 ? 'Yes' : 'No'];
+    }
+
+    $display = is_scalar($value) ? (string) $value : json_encode($value);
+
+    return [$label, (string) $display];
+}

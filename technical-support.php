@@ -399,7 +399,17 @@ $form = [
     'on_behalf_person_id' => (int) ($_POST['on_behalf_person_id'] ?? 0),
     'issue_type' => (string) ($_POST['issue_type'] ?? ''),
     'summary' => trim((string) ($_POST['summary'] ?? '')),
-    'details' => trim((string) ($_POST['details'] ?? '')),
+    // Pre-fill `details` from the query string on a first (non-POST) load so a
+    // Help Centre "get support" deep-link carries the search term over (Req 7.9,
+    // 7.10). On submit, the POST value is authoritative. Capped defensively; the
+    // textarea escapes via e() on output.
+    'details' => trim(mb_substr(
+        (string) ($_SERVER['REQUEST_METHOD'] === 'POST'
+            ? ($_POST['details'] ?? '')
+            : ($_GET['details'] ?? '')),
+        0,
+        5000
+    )),
     'affected_url' => trim((string) ($_POST['affected_url'] ?? '')),
 ];
 

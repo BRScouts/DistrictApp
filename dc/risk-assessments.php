@@ -290,9 +290,9 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-results-head {
         display: grid;
-        gap: 1rem;
-        margin-bottom: 1.75rem;
-        padding-bottom: 1.25rem;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.85rem;
         border-bottom: 1px solid var(--dc-border, #e2e8f0);
     }
 
@@ -322,8 +322,8 @@ require __DIR__ . '/layout.php';
     }
 
     .dc-risk-search {
-        margin-bottom: 1.75rem;
-        padding: 1.5rem;
+        margin-bottom: 1rem;
+        padding: 1rem 1.15rem;
         background: var(--dc-canvas, #f8fafc);
         border: 1px solid var(--dc-border, #e2e8f0);
         border-radius: 0.5rem;
@@ -481,17 +481,17 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-list {
         display: grid;
-        gap: 0.75rem;
+        gap: 0.4rem;
     }
 
     .dc-risk-row {
         display: grid;
-        gap: 1rem;
-        padding: 1.25rem;
+        gap: 0.6rem;
+        padding: 0.7rem 0.9rem;
         background: #ffffff;
         border: 1px solid var(--dc-border, #e2e8f0);
         border-left: 4px solid var(--dc-scouts-purple, #7413dc);
-        border-radius: 0.5rem;
+        border-radius: 0.4rem;
         transition: box-shadow 0.15s ease, border-color 0.15s ease;
     }
 
@@ -505,16 +505,16 @@ require __DIR__ . '/layout.php';
         .dc-risk-row {
             grid-template-columns: minmax(0, 1fr) auto;
             align-items: center;
-            padding: 1.35rem 1.5rem;
+            padding: 0.75rem 1.1rem;
         }
     }
 
     .dc-risk-title {
         margin: 0;
         color: var(--dc-ink, #1d2939);
-        font-size: clamp(1.05rem, 1.8vw, 1.2rem);
+        font-size: clamp(0.98rem, 1.5vw, 1.08rem);
         font-weight: 700;
-        line-height: 1.3;
+        line-height: 1.25;
         letter-spacing: -0.01em;
     }
 
@@ -531,15 +531,15 @@ require __DIR__ . '/layout.php';
     }
 
     .dc-risk-meta {
-        margin: 0.45rem 0 0;
+        margin: 0.25rem 0 0;
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 0.15rem 0.5rem;
+        gap: 0.1rem 0.5rem;
         color: var(--dc-muted, #64748b);
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         font-weight: 600;
-        line-height: 1.5;
+        line-height: 1.4;
     }
 
     .dc-risk-meta strong {
@@ -553,25 +553,25 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-desc {
         max-width: 760px;
-        margin: 0.6rem 0 0;
+        margin: 0.3rem 0 0;
         color: var(--dc-muted, #64748b);
-        font-size: 0.92rem;
+        font-size: 0.85rem;
         font-weight: 500;
-        line-height: 1.55;
+        line-height: 1.45;
     }
 
     .dc-risk-badges {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.4rem;
-        margin-top: 0.75rem;
+        gap: 0.35rem;
+        margin-top: 0.4rem;
     }
 
     .dc-risk-badge {
         display: inline-flex;
         align-items: center;
-        min-height: 24px;
-        padding: 0.2rem 0.55rem;
+        min-height: 22px;
+        padding: 0.15rem 0.5rem;
         background: var(--dc-canvas, #f8fafc);
         border: 1px solid var(--dc-border, #e2e8f0);
         border-radius: 1rem;
@@ -590,15 +590,16 @@ require __DIR__ . '/layout.php';
 
     .dc-risk-actions {
         display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 0.4rem;
         justify-content: flex-start;
     }
 
     @media (min-width: 760px) {
         .dc-risk-actions {
-            justify-content: center;
-            align-items: flex-end;
+            justify-content: flex-end;
+            align-items: center;
         }
     }
 
@@ -607,8 +608,8 @@ require __DIR__ . '/layout.php';
         align-items: center;
         justify-content: center;
         gap: 0.4rem;
-        min-height: 40px;
-        padding: 0.55rem 1rem;
+        min-height: 34px;
+        padding: 0.4rem 0.85rem;
         background: var(--dc-scouts-purple, #7413dc);
         border: 1px solid var(--dc-scouts-purple, #7413dc);
         border-radius: 0.35rem;
@@ -636,8 +637,8 @@ require __DIR__ . '/layout.php';
         align-items: center;
         justify-content: center;
         gap: 0.4rem;
-        min-height: 36px;
-        padding: 0.4rem 0.85rem;
+        min-height: 34px;
+        padding: 0.4rem 0.8rem;
         background: #ffffff;
         border: 1px solid var(--dc-border, #e2e8f0);
         border-radius: 0.35rem;

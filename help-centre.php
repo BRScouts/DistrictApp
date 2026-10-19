@@ -7,6 +7,7 @@ require_once __DIR__ . '/app/bootstrap.php';
 require_login();
 
 require_once __DIR__ . '/app/help-helpers.php';
+require_once __DIR__ . '/app/search-helpers.php';
 
 $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
 
@@ -23,9 +24,17 @@ $breadcrumb = '<a href="/index.php">Home</a> / Help Centre';
 $isIndexMode = ($slug === '');
 
 if ($isIndexMode) {
-    // Index mode (Req 2.4-2.9): list published articles grouped by topic.
-    $articles = help_published_articles();
-    $grouped  = help_group_by_topic($articles);
+    // On-page Help search (Req 7): a `q` term filters the index via the
+    // shared Search_Engine helper; empty `q` shows the topic-grouped listing.
+    $q = isset($_GET['q']) ? trim((string) $_GET['q']) : '';
+    $isSearchMode  = ($q !== '');
+    $searchResults = $isSearchMode ? search_help_articles($q, 50) : [];
+
+    if (!$isSearchMode) {
+        // Index mode (Req 2.4-2.9): list published articles grouped by topic.
+        $articles = help_published_articles();
+        $grouped  = help_group_by_topic($articles);
+    }
 } else {
     // Viewer mode (Req 3.x): a single published article, or null => not found.
     $article = help_find_published_article($slug);
@@ -51,6 +60,63 @@ if ($isIndexMode) {
 
 <main class="lt-main">
     <?php if ($isIndexMode): ?>
+        <?php // On-page Help search (Req 7.1): GET form submitting `q` back here. ?>
+        <form class="lt-help-search" method="get" action="/help-centre.php" role="search">
+            <label class="lt-help-search-label" for="lt-help-q">Search the Help Centre</label>
+            <div class="lt-help-search-row">
+                <input
+                    type="search"
+                    id="lt-help-q"
+                    name="q"
+                    class="lt-help-search-input"
+                    value="<?= e($q) ?>"
+                    placeholder="Search help articles, e.g. add an event, shared mailbox…"
+                    autocomplete="off"
+                >
+                <button type="submit" class="lt-help-action lt-help-action--primary">Search</button>
+            </div>
+        </form>
+
+        <?php if ($isSearchMode): ?>
+            <?php // Search results (Req 7.2-7.4) or support fallback (Req 7.6, 7.7). ?>
+            <section class="lt-help-index lt-help-results">
+                <?php if (empty($searchResults)): ?>
+                    <?php
+                    // Support_Fallback: pre-fill the support details box with a short
+                    // sentence that includes the search term (Req 7.7, 7.8).
+                    $prefill = 'I was looking for help with "' . $q . '" in the Help Centre but could not find an answer.';
+                    $supportHref = '/technical-support.php?details=' . rawurlencode($prefill);
+                    ?>
+                    <div class="lt-help-nofind">
+                        <h2 class="lt-help-nofind-title">No help articles matched &ldquo;<?= e($q) ?>&rdquo;</h2>
+                        <p>We could not find a help article for that. You can try a different word, or ask our team for help &mdash; we will pre-fill your search so you do not have to type it again.</p>
+                        <p class="lt-help-nofind-actions">
+                            <a class="lt-help-action lt-help-action--primary" href="<?= e($supportHref) ?>">Get technical support</a>
+                            <a class="lt-help-action lt-help-action--secondary" href="/help-centre.php">Back to all help topics</a>
+                        </p>
+                    </div>
+                <?php else: ?>
+                    <p class="lt-help-results-count">
+                        <?= (int) count($searchResults) ?> result<?= count($searchResults) === 1 ? '' : 's' ?> for &ldquo;<?= e($q) ?>&rdquo;
+                        &middot; <a href="/help-centre.php">clear search</a>
+                    </p>
+                    <ul class="lt-help-article-list">
+                        <?php foreach ($searchResults as $result): ?>
+                            <li class="lt-help-article">
+                                <h2 class="lt-help-article-title">
+                                    <a class="lt-help-article-link" href="<?= e((string) ($result['url'] ?? '#')) ?>">
+                                        <?= e((string) ($result['title'] ?? '')) ?>
+                                    </a>
+                                </h2>
+                                <?php if (!empty($result['subtitle'])): ?>
+                                    <p class="lt-help-article-summary"><?= e((string) $result['subtitle']) ?></p>
+                                <?php endif; ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </section>
+        <?php else: ?>
         <?php // Index mode body (Req 2.4-2.9): published articles grouped by topic. ?>
         <section class="lt-help-index">
             <?php if (empty($grouped)): ?>
@@ -83,6 +149,7 @@ if ($isIndexMode) {
                 <?php endforeach; ?>
             <?php endif; ?>
         </section>
+        <?php endif; ?>
     <?php elseif (isset($article) && $article !== null): ?>
         <?php
         // Viewer mode body (Req 3.1, 3.2, 6.1). The article title is already the
