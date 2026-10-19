@@ -7,6 +7,14 @@
     "2.4 Write property and example tests for published-only viewer lookup": {
       "status": "passed",
       "lastRunTimestamp": 1792431272103
+    },
+    "3.6 Write property test for heading-level discipline": {
+      "status": "passed",
+      "lastRunTimestamp": 1792431445142
+    },
+    "6.4 Write property test for help search result shape and published-only filtering": {
+      "status": "passed",
+      "lastRunTimestamp": 1792431953725
     }
   },
   "executionHistory": {
@@ -190,6 +198,11 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792431338421
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431469684
       }
     ],
     "3.4 Write property test for block render order": [
@@ -202,6 +215,11 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792431339432
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431470703
       }
     ],
     "3.5 Write property test for steps rendering as an ordered list": [
@@ -214,6 +232,11 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792431340750
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431472045
       }
     ],
     "3.6 Write property test for heading-level discipline": [
@@ -226,6 +249,11 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792431341703
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431468251
       }
     ],
     "3.7 Write property test for safe external-action rendering": [
@@ -238,6 +266,11 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792431342667
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431472853
       }
     ],
     "3.8 Write property test for descriptive action link text": [
@@ -245,6 +278,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881926
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431476463
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431553550
       }
     ],
     "4. Checkpoint - Ensure all tests pass": [
@@ -252,6 +295,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881957
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792432018318
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792432033384
       }
     ],
     "5.1 Scaffold the page: bootstrap, auth, routing, and App_Root_Layout": [
@@ -259,6 +312,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881984
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431477551
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431630858
       }
     ],
     "5.2 Render index mode (grouped by topic)": [
@@ -266,6 +329,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429882013
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431634257
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431690468
       }
     ],
     "5.3 Render viewer mode and not-found state": [
@@ -273,6 +346,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429882036
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431693174
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431737671
       }
     ],
     "6.1 Add the `help` category to `search_categories()`": [
@@ -280,6 +363,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429882068
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431741101
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431775273
       }
     ],
     "6.2 Implement `search_help_articles($query, $limit)`": [
@@ -287,6 +380,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429882107
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431779283
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431817726
       }
     ],
     "6.3 Wire the `help` category into `search_run()`": [
@@ -294,6 +397,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429882133
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431820993
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431846488
       }
     ],
     "6.4 Write property test for help search result shape and published-only filtering": [
@@ -301,6 +414,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429882158
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431851977
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792432012420
       }
     ],
     "6.5 Write property test for the search result limit": [
@@ -308,6 +431,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429882191
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431853374
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792432010949
       }
     ],
     "6.6 Write example/edge tests for search gating": [
@@ -315,6 +448,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429882215
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431854159
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792432013268
       }
     ],
     "7.1 Style the action buttons and help layout": [
@@ -322,6 +465,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429882242
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431851097
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792432014168
       }
     ],
     "8. Final checkpoint - Ensure all tests pass": [
@@ -329,6 +482,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429882267
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792432036848
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792432046789
       }
     ],
     "1. Create the Help_Article_Store migration with schema and seed content": [
@@ -343,6 +506,34 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792431290770
+      }
+    ],
+    "3. Implement the Rich_Body renderer and per-block helpers": [
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431553583
+      }
+    ],
+    "5. Build the `/help-centre.php` page": [
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431737704
+      }
+    ],
+    "6. Integrate Help articles into global search in `app/search-helpers.php`": [
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792432013309
+      }
+    ],
+    "7. Add Help Centre styling to `assets/css/leader-tool.css`": [
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792432014204
       }
     ]
   }

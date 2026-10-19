@@ -8,8 +8,8 @@ declare(strict_types=1);
  *
  * Every result is returned in a normalised shape:
  *   [
- *     'category' => 'module'|'calendar'|'risk'|'person',
- *     'badge'    => 'Module'|'Calendar'|'Risk Assessment'|'Person',
+ *     'category' => 'module'|'calendar'|'risk'|'person'|'help',
+ *     'badge'    => 'Module'|'Calendar'|'Risk Assessment'|'Person'|'Help',
  *     'title'    => string,
  *     'subtitle' => string,   // group / date / email etc.
  *     'url'      => string,    // where the result opens
@@ -39,6 +39,7 @@ function search_categories(): array
         'calendar' => 'Calendar',
         'risk'     => 'Risk Assessment',
         'person'   => 'Person',
+        'help'     => 'Help',
     ];
 }
 
@@ -122,6 +123,7 @@ function search_run(string $query, array $categories = [], int $perCategory = 25
             'calendar' => search_calendar_events($query, $perCategory),
             'risk'     => search_risk_assessments($query, $perCategory),
             'person'   => search_people($query, $perCategory),
+            'help'     => search_help_articles($query, $perCategory),
             default    => [],
         };
 
@@ -341,6 +343,54 @@ function search_risk_assessments(string $query, int $limit): array
             'title'    => (string) ($row['title'] ?? 'Risk assessment'),
             'subtitle' => $scope,
             'url'      => '/dc/risk-assessments.php?q=' . rawurlencode((string) ($row['title'] ?? '')),
+            'external' => false,
+        ];
+    }
+
+    return $out;
+}
+
+/**
+ * Search published help centre articles (title + summary + keywords).
+ * Visible to any signed-in user; returns nothing if the table is absent.
+ */
+function search_help_articles(string $query, int $limit): array
+{
+    if ($query === '') {
+        return [];
+    }
+
+    $ctx = dc_context(false);
+    if (empty($ctx['is_signed_in'])) {
+        return [];
+    }
+
+    $like = '%' . $query . '%';
+    $sql = "
+        SELECT slug, title, summary
+        FROM help_articles
+        WHERE status = 'published'
+          AND (title LIKE ? OR summary LIKE ? OR keywords LIKE ?)
+        ORDER BY title ASC
+        LIMIT " . (int) $limit;
+
+    try {
+        $stmt = db()->prepare($sql);
+        $stmt->execute([$like, $like, $like]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return [];
+    }
+
+    $out = [];
+
+    foreach ($rows as $row) {
+        $out[] = [
+            'category' => 'help',
+            'badge'    => 'Help',
+            'title'    => (string) ($row['title'] ?? ''),
+            'subtitle' => (string) ($row['summary'] ?? ''),
+            'url'      => '/help-centre.php?slug=' . rawurlencode((string) ($row['slug'] ?? '')),
             'external' => false,
         ];
     }

@@ -55,7 +55,7 @@ The design uses concrete PHP throughout, so no implementation-language choice is
     - Example test: a draft slug and an unknown slug both return `null` (drives the not-found state)
     - **Validates: Requirements 3.1, 3.7, 3.8**
 
-- [ ] 3. Implement the Rich_Body renderer and per-block helpers
+- [x] 3. Implement the Rich_Body renderer and per-block helpers
   - [x] 3.1 Implement `help_render_body()` and block helpers in `app/help-helpers.php`
     - `help_render_body(array $blocks): string` — iterate blocks, defensively skip non-array/typeless blocks, dispatch on `type` via `match`, skip unknown types; render blocks in stored order
     - `help_render_paragraph()` → `<p>` with `htmlspecialchars(..., ENT_QUOTES, 'UTF-8')`
@@ -69,88 +69,88 @@ The design uses concrete PHP throughout, so no implementation-language choice is
     - Keep links as native `<a>` elements so they stay keyboard-reachable and operable
     - _Requirements: 3.5, 6.5, 6.6_
 
-  - [-] 3.3 Write property test for escaping of stored content
+  - [x] 3.3 Write property test for escaping of stored content
     - **Property 1: Stored content is always escaped**
     - **Validates: Requirements 3.6**
 
-  - [-] 3.4 Write property test for block render order
+  - [x] 3.4 Write property test for block render order
     - **Property 4: Blocks render in stored order**
     - **Validates: Requirements 3.2**
 
-  - [-] 3.5 Write property test for steps rendering as an ordered list
+  - [x] 3.5 Write property test for steps rendering as an ordered list
     - **Property 5: Steps render as an ordered list**
     - **Validates: Requirements 3.3, 6.4**
 
-  - [-] 3.6 Write property test for heading-level discipline
+  - [x] 3.6 Write property test for heading-level discipline
     - **Property 6: Heading levels never skip and stay below the title**
     - **Validates: Requirements 6.1, 6.2**
 
-  - [-] 3.7 Write property test for safe external-action rendering
+  - [x] 3.7 Write property test for safe external-action rendering
     - **Property 7: External actions open safely in a new context**
     - **Validates: Requirements 3.5, 6.6**
 
-  - [~] 3.8 Write property test for descriptive action link text
+  - [x] 3.8 Write property test for descriptive action link text
     - **Property 8: Action links use descriptive text**
     - **Validates: Requirements 3.4, 6.3**
 
-- [~] 4. Checkpoint - Ensure all tests pass
+- [x] 4. Checkpoint - Ensure all tests pass
   - Ensure all data-access and renderer tests pass, ask the user if questions arise.
 
-- [ ] 5. Build the `/help-centre.php` page
-  - [~] 5.1 Scaffold the page: bootstrap, auth, routing, and App_Root_Layout
+- [x] 5. Build the `/help-centre.php` page
+  - [x] 5.1 Scaffold the page: bootstrap, auth, routing, and App_Root_Layout
     - Create `/help-centre.php` with `declare(strict_types=1)`, `require_once __DIR__ . '/app/bootstrap.php'`, then `require_login()` (redirects when no session)
     - `require_once` the `app/help-helpers.php` module from task 2/3
     - Read `$slug` from `$_GET['slug']`; set `$pageTitle`, `$heroTitle`, `$heroText`, `$breadcrumb`
     - Branch into index mode (no slug) vs viewer mode (slug present); render between `include __DIR__ . '/header.php'` and `include __DIR__ . '/footer.php'` — do NOT use `dc/layout.php`
     - _Requirements: 2.1, 2.2, 2.3_
 
-  - [~] 5.2 Render index mode (grouped by topic)
+  - [x] 5.2 Render index mode (grouped by topic)
     - Call `help_published_articles()` then `help_group_by_topic()`; render each Topic as a heading with its articles beneath
     - For each article render its `title`, `summary`, and a link to `/help-centre.php?slug={slug}` (escaped)
     - When no published article exists, render a "no help articles are available" message
     - _Requirements: 2.4, 2.5, 2.6, 2.7, 2.8, 2.9_
 
-  - [~] 5.3 Render viewer mode and not-found state
+  - [x] 5.3 Render viewer mode and not-found state
     - Call `help_find_published_article($slug)`; when found, render the `title` as the page's top-level `<h1>` and the Rich_Body via `help_render_body()`, plus a link back to the Help_Centre_Index
     - When `null` (missing or draft), render the not-found state with explanatory text and a link back to the index, inside the normal layout
     - _Requirements: 3.1, 3.2, 3.7, 3.8, 3.9, 6.1_
 
-- [ ] 6. Integrate Help articles into global search in `app/search-helpers.php`
-  - [~] 6.1 Add the `help` category to `search_categories()`
+- [x] 6. Integrate Help articles into global search in `app/search-helpers.php`
+  - [x] 6.1 Add the `help` category to `search_categories()`
     - Add `'help' => 'Help'` to the array returned by `search_categories()`
     - _Requirements: 4.1_
 
-  - [~] 6.2 Implement `search_help_articles($query, $limit)`
+  - [x] 6.2 Implement `search_help_articles($query, $limit)`
     - Shape after `search_risk_assessments()`: return `[]` on empty query; return `[]` when `dc_context(false)['is_signed_in']` is falsy
     - Prepared LIKE query matching `title`, `summary`, `keywords`; `WHERE status='published'`; `ORDER BY title ASC`; `LIMIT (int) $limit`
     - `try/catch (Throwable)` returning `[]` when the table is missing
     - Map each row to a Search_Result_Row: `category='help'`, `badge='Help'`, `title`, `subtitle=summary`, `url='/help-centre.php?slug=' . rawurlencode($slug)`, `external=false`
     - _Requirements: 4.2, 4.3, 4.4, 4.6, 4.7, 4.8, 4.9, 4.10_
 
-  - [~] 6.3 Wire the `help` category into `search_run()`
+  - [x] 6.3 Wire the `help` category into `search_run()`
     - Add `'help' => search_help_articles($query, $perCategory)` to the `match()` expression in `search_run()`
     - _Requirements: 4.5_
 
-  - [~] 6.4 Write property test for help search result shape and published-only filtering
+  - [x] 6.4 Write property test for help search result shape and published-only filtering
     - **Property 10: Help search rows are well-formed and published-only**
     - **Validates: Requirements 4.3, 4.4, 4.8**
 
-  - [~] 6.5 Write property test for the search result limit
+  - [x] 6.5 Write property test for the search result limit
     - **Property 11: Help search respects the result limit**
     - **Validates: Requirements 4.6**
 
-  - [~] 6.6 Write example/edge tests for search gating
+  - [x] 6.6 Write example/edge tests for search gating
     - Empty query returns no matches; no authenticated session returns no matches; missing table returns no matches instead of erroring
     - **Validates: Requirements 4.7, 4.9, 4.10**
 
-- [ ] 7. Add Help Centre styling to `assets/css/leader-tool.css`
-  - [~] 7.1 Style the action buttons and help layout
+- [x] 7. Add Help Centre styling to `assets/css/leader-tool.css`
+  - [x] 7.1 Style the action buttons and help layout
     - Add styles for `.lt-help-action`, `.lt-help-action--primary`, `.lt-help-action--secondary`, the external `.lt-help-ext` icon, and a `.visually-hidden` utility if not already present
     - Add layout styles for the index topic groups and the article viewer content blocks (paragraphs, headings, ordered step lists)
     - Ensure focus-visible states keep links/buttons keyboard-operable and visible
     - _Requirements: 6.5_
 
-- [~] 8. Final checkpoint - Ensure all tests pass
+- [x] 8. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass and the Help Centre renders (index, viewer, not-found) and appears in search; ask the user if questions arise.
 
 ## Notes

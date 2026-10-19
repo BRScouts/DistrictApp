@@ -207,3 +207,247 @@ a:focus, button:focus, input:focus, select:focus, textarea:focus {
     color: var(--iv-grey-700);
     margin-top: .2rem;
 }
+
+/* ===================================================================== */
+/* Help Centre (/help-centre.php + app/help-helpers.php renderer)        */
+/* --------------------------------------------------------------------- */
+/* Styles the Help_Centre_Index (topic-grouped article listing), the     */
+/* Article_Viewer (Rich_Body content blocks + action buttons) and the    */
+/* not-found state. Reuses the existing --iv-* brand tokens and matches   */
+/* the squared, high-contrast conventions used elsewhere in this file    */
+/* (e.g. .lt-btn / .lt-panel). Appended as a self-contained block; no     */
+/* existing rules are modified.                                          */
+/* ===================================================================== */
+
+/* ─── Visually-hidden utility ───
+   The Help Centre markup specifically uses the class name `visually-hidden`
+   for the assistive-technology-only "(opens in a new tab)" affordance that
+   accompanies external action buttons (the visible glyph is .lt-help-ext,
+   aria-hidden). A `.sr-only` utility already exists above with the same
+   semantics, but the renderer emits `visually-hidden`, so we define that
+   exact name here (kept identical to the established sr-only pattern so the
+   two stay in sync). */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ─── Action buttons (Rich_Body Action_Block) ───
+   Rendered by help_render_action_link() as:
+     <a class="lt-help-action lt-help-action--primary" href="…">
+       Label
+       <span class="lt-help-ext" aria-hidden="true">↗</span>
+       <span class="visually-hidden"> (opens in a new tab)</span>
+     </a>
+   Base class carries the shared button shape (squared, bold, inline-block so
+   several actions can sit side by side); the --primary / --secondary
+   modifiers supply the colour treatment, mirroring .lt-btn-primary /
+   .lt-btn-secondary. */
+.lt-help-action {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    margin: .25rem .5rem .25rem 0;
+    padding: .75rem 1.1rem;
+    border-radius: 0;
+    font-weight: 900;
+    text-decoration: none;
+    line-height: 1.2;
+    border: 2px solid transparent;
+}
+
+.lt-help-action:hover {
+    text-decoration: none;
+}
+
+/* Primary: solid brand purple, matching .lt-btn-primary. */
+.lt-help-action--primary {
+    background: var(--iv-purple);
+    border-color: var(--iv-purple);
+    color: var(--iv-white);
+}
+
+.lt-help-action--primary:hover {
+    background: var(--iv-purple-dark);
+    border-color: var(--iv-purple-dark);
+    color: var(--iv-white);
+}
+
+/* Secondary: outlined, matching .lt-btn-secondary. */
+.lt-help-action--secondary {
+    background: var(--iv-white);
+    border-color: var(--iv-blue);
+    color: var(--iv-blue);
+}
+
+.lt-help-action--secondary:hover {
+    background: var(--iv-blue);
+    color: var(--iv-white);
+}
+
+/* External "opens in a new tab" glyph (aria-hidden). The adjacent
+   .visually-hidden span carries the text for assistive technology. */
+.lt-help-ext {
+    font-weight: 900;
+    font-size: .9em;
+    line-height: 1;
+}
+
+/* ─── Index: topic groups and article entries ───
+   Markup: .lt-help-index > .lt-help-topic (section)
+             > .lt-help-topic-title (h2)
+             > .lt-help-article-list (ul)
+                 > .lt-help-article (li)
+                     > .lt-help-article-title (h3 > .lt-help-article-link)
+                     > .lt-help-article-summary (p) */
+.lt-help-index {
+    max-width: 820px;
+}
+
+.lt-help-topic {
+    margin: 0 0 2.5rem;
+}
+
+.lt-help-topic-title {
+    font-size: 1.45rem;
+    font-weight: 900;
+    margin: 0 0 1rem;
+    padding-bottom: .5rem;
+    border-bottom: 3px solid var(--iv-purple);
+}
+
+.lt-help-article-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.lt-help-article {
+    border-top: 1px solid var(--iv-grey-300);
+    padding: 1rem 0;
+}
+
+.lt-help-article:last-child {
+    border-bottom: 1px solid var(--iv-grey-300);
+}
+
+.lt-help-article-title {
+    font-size: 1.15rem;
+    font-weight: 900;
+    margin: 0 0 .35rem;
+}
+
+.lt-help-article-link {
+    color: var(--iv-blue);
+    text-decoration: none;
+    font-weight: 900;
+}
+
+.lt-help-article-link:hover {
+    text-decoration: underline;
+}
+
+.lt-help-article-summary {
+    margin: 0;
+    font-weight: 700;
+    color: var(--iv-grey-700);
+}
+
+/* Empty state (Req 2.9): shown when no published article exists. */
+.lt-help-empty {
+    padding: 1.25rem;
+    background: var(--iv-grey-100);
+    border-left: 4px solid var(--iv-purple);
+    font-weight: 800;
+    color: var(--iv-grey-700);
+}
+
+/* ─── Article viewer (Rich_Body content blocks) ───
+   The viewer renders the article title as the page <h1> via the hero, then
+   emits the Rich_Body inside .lt-help-article-body. Scoped typography keeps
+   the generated paragraphs, headings and ordered step lists readable without
+   affecting the rest of the app. */
+.lt-help-article-body {
+    max-width: 760px;
+    font-size: 1.05rem;
+    line-height: 1.6;
+}
+
+.lt-help-article-body p {
+    margin: 0 0 1rem;
+    font-weight: 700;
+}
+
+.lt-help-article-body h2,
+.lt-help-article-body h3,
+.lt-help-article-body h4,
+.lt-help-article-body h5,
+.lt-help-article-body h6 {
+    font-weight: 900;
+    line-height: 1.2;
+    margin: 1.75rem 0 .75rem;
+}
+
+.lt-help-article-body h2 { font-size: 1.5rem; }
+.lt-help-article-body h3 { font-size: 1.25rem; }
+.lt-help-article-body h4 { font-size: 1.1rem; }
+.lt-help-article-body h5,
+.lt-help-article-body h6 { font-size: 1rem; }
+
+/* Ordered step lists (help_render_steps): keep the numbers visible so the
+   sequence reads clearly; assistive tech gets the order from the <ol>. */
+.lt-help-article-body ol {
+    margin: 0 0 1.25rem;
+    padding-left: 1.5rem;
+}
+
+.lt-help-article-body ol li {
+    margin: 0 0 .5rem;
+    font-weight: 700;
+    padding-left: .25rem;
+}
+
+/* ─── Back link and not-found state ───
+   The back links already include a literal "←" glyph in the markup, so we do
+   NOT add a ::before arrow here (that would double the arrow). */
+.lt-help-back {
+    margin-top: 2rem;
+}
+
+.lt-help-back a {
+    font-weight: 900;
+    color: var(--iv-grey-700);
+    text-decoration: none;
+}
+
+.lt-help-back a:hover {
+    color: var(--iv-black);
+    text-decoration: underline;
+}
+
+.lt-help-notfound {
+    max-width: 760px;
+    font-weight: 700;
+    color: var(--iv-grey-700);
+}
+
+/* ─── Keyboard focus visibility ───
+   Keep every Help Centre link and action button keyboard-operable with a
+   clearly visible focus ring. Matches the app convention (3px solid yellow
+   with a 2px offset, per header.php). The global a:focus rule above already
+   applies a yellow outline; this :focus-visible rule adds the offset and
+   covers the action buttons explicitly. */
+.lt-help-action:focus-visible,
+.lt-help-article-link:focus-visible,
+.lt-help-back a:focus-visible,
+.lt-help-article-body a:focus-visible {
+    outline: 3px solid var(--iv-yellow);
+    outline-offset: 2px;
+}
