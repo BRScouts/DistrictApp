@@ -431,7 +431,7 @@ $modules = [
     ],
     [
         'title' => 'Roll of Honour',
-        'description' => 'Nominate a volunteer for the District Roll of Honour and celebrate outstanding contributions.',
+        'description' => 'Record an award so they can appear on the District Roll of Honour, adn so we can celebrate outstanding contributions.',
         'url' => 'https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=o0n0PQcw006x9bzynIL4rBErZYBckIpEmBAYxB6OaWlUN1FDRDI2NlhEQzJFSVQ0N1FTMU9QSE9SSS4u',
         'status' => 'available',
         'image' => '/assets/img/roll-of-honour.png',
