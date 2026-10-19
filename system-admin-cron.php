@@ -340,6 +340,7 @@ include __DIR__ . '/header.php';
     <div class="sa-service-bar-inner">
         <a class="sa-nav-link" href="/system-admin-dashboard.php">Dashboard</a>
         <a class="sa-nav-link" href="/system-admin.php">Audit Log</a>
+        <a class="sa-nav-link" href="/system-admin-emails.php">Email Queue</a>
         <a class="sa-nav-link" href="/system-admin-cron.php" aria-current="page">Cron Jobs</a>
         <a class="sa-nav-link" href="/system-admin-gdpr.php">GDPR</a>
         <a class="sa-nav-link" href="/system-admin-permissions.php">Permissions</a>

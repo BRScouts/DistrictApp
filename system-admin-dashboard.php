@@ -299,6 +299,7 @@ include __DIR__ . '/header.php';
     <div class="sa-service-bar-inner">
         <a class="sa-nav-link" href="/system-admin-dashboard.php" <?= $saNavCurrent === 'dashboard' ? 'aria-current="page"' : '' ?>>Dashboard</a>
         <a class="sa-nav-link" href="/system-admin.php" <?= $saNavCurrent === 'audit-log' ? 'aria-current="page"' : '' ?>>Audit Log</a>
+        <a class="sa-nav-link" href="/system-admin-emails.php" <?= $saNavCurrent === 'emails' ? 'aria-current="page"' : '' ?>>Email Queue</a>
         <a class="sa-nav-link" href="/system-admin-cron.php" <?= $saNavCurrent === 'cron' ? 'aria-current="page"' : '' ?>>Cron Jobs</a>
         <a class="sa-nav-link" href="/system-admin-gdpr.php" <?= $saNavCurrent === 'gdpr' ? 'aria-current="page"' : '' ?>>GDPR</a>
         <a class="sa-nav-link" href="/system-admin-permissions.php" <?= $saNavCurrent === 'permissions' ? 'aria-current="page"' : '' ?>>Permissions</a>
@@ -325,11 +326,11 @@ include __DIR__ . '/header.php';
             <strong><?= number_format($failedLoginsToday) ?></strong>
             <span>Failed logins today</span>
         </div>
-        <div class="dash-stat dash-stat-ok">
+        <a class="dash-stat dash-stat-ok" href="/system-admin-emails.php" style="text-decoration: none;">
             <strong><?= number_format($emailsSent30d) ?></strong>
             <span>Emails sent (30d)</span>
             <div class="dash-stat-sub"><?= number_format($emailsPending) ?> pending now</div>
-        </div>
+        </a>
         <div class="dash-stat <?= $emailsFailed30d > 0 ? 'dash-stat-warning' : '' ?>">
             <strong><?= number_format($emailsFailed30d) ?></strong>
             <span>Emails failed (30d)</span>
@@ -409,6 +410,7 @@ include __DIR__ . '/header.php';
             <h2 style="margin-top: 1.5rem;">Quick Links</h2>
             <ul style="font-size: .9rem; line-height: 2;">
                 <li><a href="/system-admin.php" class="dash-person-link">Full Audit Log</a></li>
+                <li><a href="/system-admin-emails.php" class="dash-person-link">Email Queue</a></li>
                 <li><a href="/system-admin-cron.php" class="dash-person-link">Run Cron Jobs</a></li>
                 <li><a href="/system-admin-person.php" class="dash-person-link">Person Lookup</a></li>
                 <li><a href="/system-admin-gdpr.php" class="dash-person-link">GDPR Reports</a></li>

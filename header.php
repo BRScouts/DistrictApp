@@ -350,13 +350,25 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
         <?php if ($user): ?>
             <?php
                 $userAccessLevel = (string) ($user['highest_access_level'] ?? $user['role'] ?? 'member');
-                $isAdminUser = in_array($userAccessLevel, ['system_admin', 'district_admin'], true);
+                $isSystemAdmin = $userAccessLevel === 'system_admin';
+                $isDistrictAdmin = in_array($userAccessLevel, ['system_admin', 'district_admin'], true);
+                // highest_access_level ranks group_admin above member, so anyone
+                // who manages a group (or is a district/system admin) lands here.
+                $isGroupAdmin = in_array($userAccessLevel, ['system_admin', 'district_admin', 'group_admin'], true);
             ?>
             <nav class="lt-primary-nav" aria-label="Main navigation">
                 <a href="/index.php">Home</a>
                 <a href="/dc/">Calendar</a>
                 <a href="/directory.php">Directory</a>
-                <a href="/profile.php">My Profile</a>
+                <?php if ($isGroupAdmin): ?>
+                    <a href="/group-manager.php">Group Admin</a>
+                <?php endif; ?>
+                <?php if ($isDistrictAdmin): ?>
+                    <a href="/district-admin.php">District Admin</a>
+                <?php endif; ?>
+                <?php if ($isSystemAdmin): ?>
+                    <a href="/system-admin-dashboard.php">System Admin</a>
+                <?php endif; ?>
             </nav>
 
             <button type="button" class="lt-mobile-nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="lt-mobile-nav">
@@ -408,6 +420,15 @@ $profilePhotoUrl = $user ? '/auth/profile-photo.php' : null;
             <a href="/index.php">Home</a>
             <a href="/dc/">Calendar</a>
             <a href="/directory.php">Directory</a>
+            <?php if (!empty($isGroupAdmin)): ?>
+                <a href="/group-manager.php">Group Admin</a>
+            <?php endif; ?>
+            <?php if (!empty($isDistrictAdmin)): ?>
+                <a href="/district-admin.php">District Admin</a>
+            <?php endif; ?>
+            <?php if (!empty($isSystemAdmin)): ?>
+                <a href="/system-admin-dashboard.php">System Admin</a>
+            <?php endif; ?>
             <a href="/profile.php">My Profile</a>
             <a href="/logout.php">Sign out</a>
         </div>
