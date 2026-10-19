@@ -430,15 +430,6 @@ $modules = [
         'visible' => true,
     ],
     [
-        'title' => 'Leader Feedback Form',
-        'description' => 'Share your feedback, ideas or requests with the District team via our Microsoft Forms survey.',
-        'url' => 'https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=o0n0PQcw006x9bzynIL4rBErZYBckIpEmBAYxB6OaWlUN1FDRDI2NlhEQzJFSVQ0N1FTMU9QSE9SSS4u',
-        'status' => 'available',
-        'image' => '/assets/img/cub-high-ropes-1-jpg.jpg',
-        'visible' => true,
-        'external' => true,
-    ],
-    [
         'title' => 'Roll of Honour',
         'description' => 'Nominate a volunteer for the District Roll of Honour and celebrate outstanding contributions.',
         'url' => 'https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=o0n0PQcw006x9bzynIL4rBErZYBckIpEmBAYxB6OaWlUN1FDRDI2NlhEQzJFSVQ0N1FTMU9QSE9SSS4u',
