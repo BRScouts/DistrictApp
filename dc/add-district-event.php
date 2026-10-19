@@ -1073,10 +1073,16 @@ require __DIR__ . '/layout.php';
 
         fetch(url.toString(), { headers: { 'Accept': 'application/json' } })
             .then(function (response) {
+                if (response.status === 429) {
+                    resultsElement.hidden = false;
+                    resultsElement.innerHTML = '<div style="padding:0.75rem;">The map service is busy. Please wait a few seconds and search again.</div>';
+                    return null;
+                }
                 if (!response.ok) throw new Error('search failed');
                 return response.json();
             })
             .then(function (results) {
+                if (results === null) return;
                 if (!Array.isArray(results) || results.length === 0) {
                     resultsElement.hidden = false;
                     resultsElement.innerHTML = '<div style="padding:0.75rem;">No matching locations found. Try a postcode, town or venue name.</div>';

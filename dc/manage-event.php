@@ -2366,6 +2366,12 @@ const initiallySelectedRiskIds = <?= json_encode(
                 }
             });
 
+            if (response.status === 429) {
+                resultsElement.hidden = false;
+                resultsElement.innerHTML = '<div class="p-3">The map service is busy. Please wait a few seconds and search again.</div>';
+                return;
+            }
+
             if (!response.ok) {
                 throw new Error('Location search failed');
             }

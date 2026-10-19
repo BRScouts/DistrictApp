@@ -37,11 +37,19 @@ if (function_exists('mb_substr')) {
     $query = substr($query, 0, 200);
 }
 
+$contactEmail = defined('M365_PROVISIONING_SUPPORT_EMAIL')
+    ? M365_PROVISIONING_SUPPORT_EMAIL
+    : 'support@irvalscouts.org.uk';
+
 $params = http_build_query([
     'format' => 'json',
     'addressdetails' => '1',
     'limit' => '5',
     'countrycodes' => 'gb',
+    // Nominatim's usage policy asks heavy / server-side users to identify
+    // themselves with an email so they are rate-limited gently rather than
+    // blocked outright.
+    'email' => $contactEmail,
     'q' => $query,
 ]);
 
@@ -53,11 +61,12 @@ $userAgent = sprintf(
     '%s/1.0 (%s; %s)',
     'IrwellValleyDistrictCalendar',
     APP_URL,
-    defined('M365_PROVISIONING_SUPPORT_EMAIL') ? M365_PROVISIONING_SUPPORT_EMAIL : 'support@irvalscouts.org.uk'
+    $contactEmail
 );
 
 $body = null;
 $httpCode = 0;
+$transportError = '';
 
 if (function_exists('curl_init')) {
     $ch = curl_init($endpoint);
@@ -69,25 +78,30 @@ if (function_exists('curl_init')) {
         CURLOPT_USERAGENT => $userAgent,
         CURLOPT_HTTPHEADER => [
             'Accept: application/json',
+            'Accept-Language: en-GB,en;q=0.9',
             'Referer: ' . APP_URL,
         ],
     ]);
 
     $body = curl_exec($ch);
     $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
 
     if ($body === false) {
+        $transportError = curl_error($ch);
         $body = null;
     }
+
+    curl_close($ch);
 } else {
     // Fallback when cURL is unavailable.
     $context = stream_context_create([
         'http' => [
             'method' => 'GET',
             'timeout' => 10,
+            'ignore_errors' => true, // so we can read the body on 4xx/5xx too
             'header' => implode("\r\n", [
                 'Accept: application/json',
+                'Accept-Language: en-GB,en;q=0.9',
                 'User-Agent: ' . $userAgent,
                 'Referer: ' . APP_URL,
             ]),
@@ -97,6 +111,7 @@ if (function_exists('curl_init')) {
     $body = @file_get_contents($endpoint, false, $context);
 
     if ($body === false) {
+        $transportError = 'file_get_contents failed';
         $body = null;
     } else {
         $httpCode = 200;
@@ -113,6 +128,23 @@ if (function_exists('curl_init')) {
 }
 
 if ($body === null || $httpCode < 200 || $httpCode >= 300) {
+    // Record the real reason server-side so this is diagnosable, without
+    // leaking upstream detail to the browser.
+    error_log(sprintf(
+        'geocode-search: upstream failure (http=%d, err=%s, q=%s)',
+        $httpCode,
+        $transportError !== '' ? $transportError : 'none',
+        $query
+    ));
+
+    // 429 = Nominatim rate limiting. Tell the client specifically so it can
+    // suggest waiting a moment rather than reporting a generic outage.
+    if ($httpCode === 429 || $httpCode === 403) {
+        http_response_code(429);
+        echo json_encode(['error' => 'rate_limited']);
+        exit;
+    }
+
     http_response_code(502);
     echo json_encode(['error' => 'geocode_unavailable']);
     exit;
@@ -122,6 +154,7 @@ if ($body === null || $httpCode < 200 || $httpCode >= 300) {
 $decoded = json_decode($body, true);
 
 if (!is_array($decoded)) {
+    error_log('geocode-search: upstream returned non-JSON body for q=' . $query);
     http_response_code(502);
     echo json_encode(['error' => 'geocode_unavailable']);
     exit;
