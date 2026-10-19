@@ -430,6 +430,15 @@ $modules = [
         'visible' => true,
     ],
     [
+        'title' => 'Leader Feedback Form',
+        'description' => 'Share your feedback, ideas or requests with the District team via our Microsoft Forms survey.',
+        'url' => 'https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=o0n0PQcw006x9bzynIL4rBErZYBckIpEmBAYxB6OaWlUN1FDRDI2NlhEQzJFSVQ0N1FTMU9QSE9SSS4u',
+        'status' => 'available',
+        'image' => '/assets/img/cub-high-ropes-1-jpg.jpg',
+        'visible' => true,
+        'external' => true,
+    ],
+    [
         'title' => 'Group Manager',
         'description' => 'Manage leaders in your Group and request District Microsoft 365 accounts.',
         'url' => '/group-manager.php',
@@ -927,10 +936,12 @@ $sharedMailboxesJson = json_encode($sharedMailboxes, JSON_UNESCAPED_SLASHES | JS
             <?php foreach ($modules as $module): ?>
                 <?php $isSharedMailboxTile = (($module['type'] ?? '') === 'shared_mailbox'); ?>
 
+                <?php $isExternalTile = !empty($module['external']); ?>
+
                 <?php if ($isSharedMailboxTile): ?>
                     <button type="button" class="lt-card-button" id="open-shared-mailbox-tile">
                 <?php elseif ($module['status'] === 'available'): ?>
-                    <a href="<?= e($module['url']) ?>" class="lt-card-link">
+                    <a href="<?= e($module['url']) ?>" class="lt-card-link"<?= $isExternalTile ? ' target="_blank" rel="noopener noreferrer"' : '' ?>>
                 <?php endif; ?>
 
                     <article class="lt-mod-card">
