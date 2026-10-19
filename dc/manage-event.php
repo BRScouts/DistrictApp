@@ -20,6 +20,12 @@ if (!$event || !dc_user_can_manage_group((int) $event['group_id'])) {
     exit;
 }
 
+// District Events use their own editor (no risk assessments / attendance /
+// review workflow), so send them there instead of this group-event form.
+if (dc_event_is_district($event)) {
+    redirect('/dc/add-district-event.php?id=' . $eventId);
+}
+
 $groupId = (int) $event['group_id'];
 $people = dc_fetch_group_people($groupId);
 

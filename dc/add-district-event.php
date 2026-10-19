@@ -28,13 +28,63 @@ $districtPeople = dc_fetch_all_district_people();
 
 $validAudiences = ['none', 'glvs', 'leaders', 'custom'];
 
-function dce_old(string $key, string $default = ''): string
-{
-    if (!array_key_exists($key, $_POST) || is_array($_POST[$key])) {
-        return $default;
+// ── Edit mode ──────────────────────────────────────────────────────────────
+// When an id is supplied we load that District Event and switch to editing it.
+$eventId = (int) ($_GET['id'] ?? $_POST['event_id'] ?? 0);
+$existingEvent = null;
+
+if ($eventId > 0) {
+    $loaded = dc_get_event($eventId);
+
+    if (!$loaded || !dc_event_is_district($loaded)) {
+        require __DIR__ . '/404.php';
+        exit;
     }
 
-    return (string) $_POST[$key];
+    $existingEvent = $loaded;
+}
+
+$isEditing = $existingEvent !== null;
+
+/**
+ * Convert a stored "Y-m-d H:i:s" value to the datetime-local input format.
+ */
+function dce_to_input_datetime(?string $value): string
+{
+    if (!$value) {
+        return '';
+    }
+
+    try {
+        return (new DateTimeImmutable($value))->format('Y-m-d\TH:i');
+    } catch (Throwable $e) {
+        return '';
+    }
+}
+
+/**
+ * Field value for the form: posted value wins, otherwise the existing event's
+ * value (edit mode), otherwise the default.
+ */
+function dce_old(string $key, string $default = ''): string
+{
+    global $existingEvent;
+
+    if (array_key_exists($key, $_POST) && !is_array($_POST[$key])) {
+        return (string) $_POST[$key];
+    }
+
+    if ($existingEvent !== null) {
+        if ($key === 'starts_at' || $key === 'ends_at') {
+            return dce_to_input_datetime((string) ($existingEvent[$key] ?? ''));
+        }
+
+        if (array_key_exists($key, $existingEvent) && $existingEvent[$key] !== null) {
+            return (string) $existingEvent[$key];
+        }
+    }
+
+    return $default;
 }
 
 function dce_parse_datetime(string $value): ?DateTimeImmutable
@@ -81,7 +131,60 @@ function dce_validate_url(string $value, string $label, array &$errors): ?string
 $notifyAudience = 'none';
 $selectedPeopleIds = [];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_action'] ?? '') === 'delete' && $isEditing) {
+    csrf_validate();
+
+    try {
+        $pdo = db();
+        $pdo->beginTransaction();
+
+        // Remove any risk-assessment links defensively (district events don't
+        // create them, but this keeps the delete clean if any ever exist).
+        try {
+            $pdo->prepare('DELETE FROM event_risk_assessments WHERE calendar_event_id = :id')
+                ->execute(['id' => $eventId]);
+        } catch (Throwable $e) {
+            // Table/links may not exist — ignore.
+        }
+
+        $pdo->prepare('DELETE FROM calendar_events WHERE id = :id AND is_district_event = 1')
+            ->execute(['id' => $eventId]);
+
+        $pdo->commit();
+
+        dc_log(
+            'district_event.deleted',
+            'calendar_event',
+            $eventId,
+            ['title' => (string) ($existingEvent['title'] ?? '')],
+            $districtGroupId
+        );
+
+        if (defined('AUDIT_EVENT_DELETED')) {
+            audit_log(
+                AUDIT_EVENT_DELETED,
+                'calendar_event',
+                $eventId,
+                !empty($ctx['person_id']) ? (int) $ctx['person_id'] : null,
+                [
+                    'title' => (string) ($existingEvent['title'] ?? ''),
+                    'is_district_event' => true,
+                ],
+                $districtGroupId
+            );
+        }
+
+        redirect('/dc/?district_event=deleted');
+    } catch (Throwable $e) {
+        if (isset($pdo) && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        $errors[] = 'The District Event could not be deleted. ' . $e->getMessage();
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_action'] ?? '') !== 'delete') {
     csrf_validate();
 
     $title = trim((string) ($_POST['title'] ?? ''));
@@ -142,52 +245,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo = db();
 
-            $stmt = $pdo->prepare("
-                INSERT INTO calendar_events (
-                    group_id,
-                    title,
-                    description,
-                    event_type,
-                    location_name,
-                    location_address,
-                    location_lat,
-                    location_lng,
-                    starts_at,
-                    ends_at,
-                    leader_name,
-                    leader_email,
-                    submitted_by_person_id,
-                    submitted_via,
-                    status,
-                    is_district_event"
-                    . ($hasBookingColumn ? ",\n                    booking_url" : "")
-                    . ($hasInfoColumn ? ",\n                    info_url" : "")
-                    . "
-                ) VALUES (
-                    :group_id,
-                    :title,
-                    :description,
-                    'other',
-                    :location_name,
-                    :location_address,
-                    :location_lat,
-                    :location_lng,
-                    :starts_at,
-                    :ends_at,
-                    :leader_name,
-                    :leader_email,
-                    :submitted_by_person_id,
-                    'sso',
-                    'approved',
-                    1"
-                    . ($hasBookingColumn ? ",\n                    :booking_url" : "")
-                    . ($hasInfoColumn ? ",\n                    :info_url" : "")
-                    . "
-                )
-            ");
-
-            $params = [
-                'group_id' => $districtGroupId,
+            $commonParams = [
                 'title' => $title,
                 'description' => $description !== '' ? $description : null,
                 'location_name' => $locationName !== '' ? $locationName : null,
@@ -196,49 +254,162 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'location_lng' => $locationLng !== '' ? (float) $locationLng : null,
                 'starts_at' => $startsAt?->format('Y-m-d H:i:s'),
                 'ends_at' => $endsAt?->format('Y-m-d H:i:s'),
-                'leader_name' => (string) ($ctx['name'] ?? 'District'),
-                'leader_email' => (string) ($ctx['email'] ?? ''),
-                'submitted_by_person_id' => !empty($ctx['person_id']) ? (int) $ctx['person_id'] : null,
             ];
 
-            if ($hasBookingColumn) {
-                $params['booking_url'] = $bookingUrl;
-            }
+            if ($isEditing) {
+                // ── Update an existing District Event ──
+                $setParts = [
+                    'title = :title',
+                    'description = :description',
+                    'location_name = :location_name',
+                    'location_address = :location_address',
+                    'location_lat = :location_lat',
+                    'location_lng = :location_lng',
+                    'starts_at = :starts_at',
+                    'ends_at = :ends_at',
+                    'updated_at = NOW()',
+                ];
 
-            if ($hasInfoColumn) {
-                $params['info_url'] = $infoUrl;
-            }
+                if ($hasBookingColumn) {
+                    $setParts[] = 'booking_url = :booking_url';
+                }
 
-            $stmt->execute($params);
+                if ($hasInfoColumn) {
+                    $setParts[] = 'info_url = :info_url';
+                }
 
-            $eventId = (int) $pdo->lastInsertId();
+                $sql = 'UPDATE calendar_events SET ' . implode(', ', $setParts)
+                    . ' WHERE id = :id AND is_district_event = 1 LIMIT 1';
 
-            dc_log(
-                'district_event.created',
-                'calendar_event',
-                $eventId,
-                [
-                    'title' => $title,
-                    'notify_audience' => $notifyAudience,
-                    'notify_count' => $notifyAudience === 'custom' ? count($selectedPeopleIds) : null,
-                ],
-                $districtGroupId
-            );
+                $params = $commonParams;
+                $params['id'] = $eventId;
 
-            if (defined('AUDIT_EVENT_CREATED')) {
-                audit_log(
-                    AUDIT_EVENT_CREATED,
+                if ($hasBookingColumn) {
+                    $params['booking_url'] = $bookingUrl;
+                }
+
+                if ($hasInfoColumn) {
+                    $params['info_url'] = $infoUrl;
+                }
+
+                $pdo->prepare($sql)->execute($params);
+
+                dc_log(
+                    'district_event.updated',
                     'calendar_event',
                     $eventId,
-                    !empty($ctx['person_id']) ? (int) $ctx['person_id'] : null,
                     [
                         'title' => $title,
-                        'status' => 'approved',
-                        'event_type' => 'district_event',
-                        'is_district_event' => true,
+                        'notify_audience' => $notifyAudience,
                     ],
                     $districtGroupId
                 );
+
+                if (defined('AUDIT_EVENT_UPDATED')) {
+                    audit_log(
+                        AUDIT_EVENT_UPDATED,
+                        'calendar_event',
+                        $eventId,
+                        !empty($ctx['person_id']) ? (int) $ctx['person_id'] : null,
+                        ['title' => $title, 'is_district_event' => true],
+                        $districtGroupId
+                    );
+                }
+
+                $savedWord = 'updated';
+            } else {
+                // ── Create a new District Event ──
+                $sql = "
+                    INSERT INTO calendar_events (
+                        group_id,
+                        title,
+                        description,
+                        event_type,
+                        location_name,
+                        location_address,
+                        location_lat,
+                        location_lng,
+                        starts_at,
+                        ends_at,
+                        leader_name,
+                        leader_email,
+                        submitted_by_person_id,
+                        submitted_via,
+                        status,
+                        is_district_event"
+                        . ($hasBookingColumn ? ",\n                        booking_url" : "")
+                        . ($hasInfoColumn ? ",\n                        info_url" : "")
+                        . "
+                    ) VALUES (
+                        :group_id,
+                        :title,
+                        :description,
+                        'other',
+                        :location_name,
+                        :location_address,
+                        :location_lat,
+                        :location_lng,
+                        :starts_at,
+                        :ends_at,
+                        :leader_name,
+                        :leader_email,
+                        :submitted_by_person_id,
+                        'sso',
+                        'approved',
+                        1"
+                        . ($hasBookingColumn ? ",\n                        :booking_url" : "")
+                        . ($hasInfoColumn ? ",\n                        :info_url" : "")
+                        . "
+                    )
+                ";
+
+                $params = $commonParams;
+                $params['group_id'] = $districtGroupId;
+                $params['leader_name'] = (string) ($ctx['name'] ?? 'District');
+                $params['leader_email'] = (string) ($ctx['email'] ?? '');
+                $params['submitted_by_person_id'] = !empty($ctx['person_id']) ? (int) $ctx['person_id'] : null;
+
+                if ($hasBookingColumn) {
+                    $params['booking_url'] = $bookingUrl;
+                }
+
+                if ($hasInfoColumn) {
+                    $params['info_url'] = $infoUrl;
+                }
+
+                $pdo->prepare($sql)->execute($params);
+
+                $eventId = (int) $pdo->lastInsertId();
+
+                dc_log(
+                    'district_event.created',
+                    'calendar_event',
+                    $eventId,
+                    [
+                        'title' => $title,
+                        'notify_audience' => $notifyAudience,
+                        'notify_count' => $notifyAudience === 'custom' ? count($selectedPeopleIds) : null,
+                    ],
+                    $districtGroupId
+                );
+
+                if (defined('AUDIT_EVENT_CREATED')) {
+                    audit_log(
+                        AUDIT_EVENT_CREATED,
+                        'calendar_event',
+                        $eventId,
+                        !empty($ctx['person_id']) ? (int) $ctx['person_id'] : null,
+                        [
+                            'title' => $title,
+                            'status' => 'approved',
+                            'event_type' => 'district_event',
+                            'is_district_event' => true,
+                        ],
+                        $districtGroupId
+                    );
+                }
+
+                $savedWord = 'created';
             }
 
             if ($notifyAudience !== 'none') {
@@ -246,7 +417,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $redirect = '/dc/?month=' . ($startsAt ? $startsAt->format('Y-m') : date('Y-m'));
-            $redirect .= '&district_event=created';
+            $redirect .= '&district_event=' . $savedWord;
 
             if ($notifyAudience !== 'none') {
                 $redirect .= '&notified=1';
@@ -261,9 +432,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $nowLocalMin = (new DateTimeImmutable('now'))->format('Y-m-d\TH:i');
 
-$pageTitle = 'Add District Event';
-$heroTitle = 'Add a District Event';
-$heroText = 'Create an event that every group sees on the District Calendar by default.';
+$pageTitle = $isEditing ? 'Edit District Event' : 'Add District Event';
+$heroTitle = $isEditing ? 'Edit District Event' : 'Add a District Event';
+$heroText = $isEditing
+    ? 'Update this event. It stays visible to every group on the District Calendar.'
+    : 'Create an event that every group sees on the District Calendar by default.';
 $active = 'home';
 
 require __DIR__ . '/layout.php';
@@ -471,6 +644,30 @@ require __DIR__ . '/layout.php';
         flex-wrap: wrap;
         gap: 0.75rem;
     }
+
+    .dce-delete-form {
+        max-width: 760px;
+        margin-top: 2rem;
+        padding: 1.25rem;
+        border: 1px solid #fecaca;
+        border-left: 4px solid #dc2626;
+        background: #fef2f2;
+    }
+
+    .dce-delete-btn {
+        border-radius: 0;
+        font-weight: 800;
+        padding: 0.65rem 1rem;
+        background: #fff;
+        color: #dc2626;
+        border: 2px solid #dc2626;
+    }
+
+    .dce-delete-btn:hover,
+    .dce-delete-btn:focus {
+        background: #dc2626;
+        color: #fff;
+    }
 </style>
 
 <?php if ($errors): ?>
@@ -486,6 +683,10 @@ require __DIR__ . '/layout.php';
 
 <form method="post" class="dce-form" novalidate>
     <?= csrf_field() ?>
+    <input type="hidden" name="form_action" value="save">
+    <?php if ($isEditing): ?>
+        <input type="hidden" name="event_id" value="<?= (int) $eventId ?>">
+    <?php endif; ?>
 
     <section class="lt-panel">
         <h2 class="lt-section-title">Event details</h2>
@@ -602,7 +803,9 @@ require __DIR__ . '/layout.php';
     <section class="lt-panel">
         <h2 class="lt-section-title">Notify people</h2>
         <p class="form-text" style="margin-top:0;">
-            Choose who gets an email letting them know this District Event has been added.
+            <?= $isEditing
+                ? 'Choose whether to email anyone about this change. Leave as "Do not email anyone" to save quietly.'
+                : 'Choose who gets an email letting them know this District Event has been added.' ?>
         </p>
 
         <div class="dce-radio-list" role="radiogroup" aria-label="Who to notify">
@@ -661,10 +864,27 @@ require __DIR__ . '/layout.php';
     </section>
 
     <div class="dce-actions">
-        <button type="submit" class="btn btn-primary lt-btn">Add District Event</button>
-        <a class="btn lt-btn lt-btn-secondary" href="/dc/">Cancel</a>
+        <button type="submit" class="btn btn-primary lt-btn"><?= $isEditing ? 'Save changes' : 'Add District Event' ?></button>
+        <?php if ($isEditing): ?>
+            <a class="btn lt-btn lt-btn-secondary" href="/dc/district-event.php?id=<?= (int) $eventId ?>">Cancel</a>
+        <?php else: ?>
+            <a class="btn lt-btn lt-btn-secondary" href="/dc/">Cancel</a>
+        <?php endif; ?>
     </div>
 </form>
+
+<?php if ($isEditing): ?>
+    <form method="post" class="dce-delete-form" data-delete-form>
+        <?= csrf_field() ?>
+        <input type="hidden" name="form_action" value="delete">
+        <input type="hidden" name="event_id" value="<?= (int) $eventId ?>">
+        <h2 class="lt-section-title" style="margin-top:0;">Delete this event</h2>
+        <p class="form-text" style="margin-top:0;">
+            Permanently remove this District Event from the calendar for every group. This cannot be undone.
+        </p>
+        <button type="submit" class="btn dce-delete-btn" data-delete-button>Delete District Event</button>
+    </form>
+<?php endif; ?>
 
 <script <?= csp_nonce_attr() ?>>
 (function () {
@@ -695,6 +915,16 @@ require __DIR__ . '/layout.php';
     }
 
     sync();
+
+    // Confirm before deleting.
+    var deleteForm = document.querySelector('[data-delete-form]');
+    if (deleteForm) {
+        deleteForm.addEventListener('submit', function (event) {
+            if (!window.confirm('Delete this District Event? This removes it from every group\u2019s calendar and cannot be undone.')) {
+                event.preventDefault();
+            }
+        });
+    }
 }());
 </script>
 

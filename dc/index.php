@@ -524,15 +524,20 @@ $canAddDistrictEvent = dc_context_has_admin_access($ctx);
 // The hidden "District Events" group should not show in the group filter.
 $districtEventsGroupId = dc_district_events_group_id();
 
-// Flash messages after adding a District Event.
+// Flash messages after adding, editing or deleting a District Event.
 $districtEventFlash = '';
+$districtEventAction = (string) ($_GET['district_event'] ?? '');
 
-if (($_GET['district_event'] ?? '') === 'created') {
+if ($districtEventAction === 'created') {
     $districtEventFlash = 'District Event added. It is now visible to every group on the calendar.';
+} elseif ($districtEventAction === 'updated') {
+    $districtEventFlash = 'District Event updated.';
+} elseif ($districtEventAction === 'deleted') {
+    $districtEventFlash = 'District Event deleted.';
+}
 
-    if (($_GET['notified'] ?? '') === '1') {
-        $districtEventFlash .= ' Notification emails have been added to the queue.';
-    }
+if ($districtEventFlash !== '' && ($_GET['notified'] ?? '') === '1') {
+    $districtEventFlash .= ' Notification emails have been added to the queue.';
 }
 
 

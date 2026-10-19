@@ -316,7 +316,7 @@ require __DIR__ . '/layout.php';
             <h3>District Event</h3>
             <p>This event has been added by the District and is visible to every group on the calendar.</p>
             <?php if ($canManage): ?>
-                <a class="btn lt-btn lt-btn-secondary" style="display:block;width:100%;text-align:center;margin-top:0.75rem;" href="/dc/manage-event.php?id=<?= (int) $eventId ?>">Edit this event</a>
+                <a class="btn lt-btn lt-btn-secondary" style="display:block;width:100%;text-align:center;margin-top:0.75rem;" href="/dc/add-district-event.php?id=<?= (int) $eventId ?>">Edit or delete this event</a>
             <?php endif; ?>
         </div>
     </aside>
