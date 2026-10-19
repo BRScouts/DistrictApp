@@ -655,6 +655,116 @@ function gm_disable_group_link(int $groupId, int $linkId, int $actorPersonId): v
     ]);
 }
 
+/**
+ * Returns the list of words/phrases that are not allowed to appear in a
+ * person's first or last name when adding them to a Group.
+ *
+ * This stops people from creating accounts/emails using section names,
+ * Scouting roles, generic mailbox words (support/admin/info), or profanity.
+ */
+function gm_disallowed_name_terms(): array
+{
+    static $terms = null;
+
+    if ($terms !== null) {
+        return $terms;
+    }
+
+    $sections = [
+        'squirrel', 'squirrels', 'beaver', 'beavers', 'cub', 'cubs',
+        'scout', 'scouts', 'explorer', 'explorers', 'network',
+    ];
+
+    $roles = [
+        'leader', 'leaders', 'akela', 'arkela', 'baloo', 'bagheera', 'kaa',
+        'rama', 'raksha', 'chil', 'hathi', 'skip', 'skipper',
+        'group', 'section', 'district', 'county', 'region', 'commissioner',
+        'warden', 'chair', 'chairman', 'chairperson', 'treasurer', 'trustee',
+        'secretary', 'president', 'volunteer', 'manager', 'coordinator',
+        'coordinators', 'gsl', 'dsl', 'adc', 'dc', 'cc',
+    ];
+
+    $generic = [
+        'support', 'admin', 'administrator', 'info', 'information', 'help',
+        'helpdesk', 'contact', 'enquiries', 'enquiry', 'noreply', 'no-reply',
+        'postmaster', 'webmaster', 'office', 'team', 'service', 'services',
+        'account', 'accounts', 'billing', 'sales', 'marketing', 'test',
+        'root', 'system', 'mailer', 'mailbox', 'donotreply',
+    ];
+
+    // Profanity / offensive terms. Kept deliberately small and matched as
+    // whole words so ordinary names are not caught.
+    $profanity = [
+        'fuck', 'fucker', 'fucking', 'shit', 'shite', 'crap', 'piss',
+        'bastard', 'bollocks', 'bugger', 'arse', 'arsehole', 'ass',
+        'asshole', 'cock', 'dick', 'prick', 'knob', 'wank', 'wanker',
+        'twat', 'cunt', 'bitch', 'slut', 'whore', 'tosser', 'bellend',
+        'nob', 'minge', 'fanny', 'tit', 'tits', 'boob', 'boobs',
+    ];
+
+    $terms = array_values(array_unique(array_merge($sections, $roles, $generic, $profanity)));
+
+    return $terms;
+}
+
+/**
+ * Checks a person's first and last name against the disallowed-term list.
+ *
+ * Returns an array of human-readable error messages. An empty array means the
+ * name is acceptable.
+ */
+function gm_validate_person_name(string $firstName, string $lastName): array
+{
+    $errors = [];
+    $disallowed = gm_disallowed_name_terms();
+
+    $fields = [
+        'first name' => $firstName,
+        'last name' => $lastName,
+    ];
+
+    foreach ($fields as $label => $value) {
+        $normalised = strtolower(trim($value));
+
+        if ($normalised === '') {
+            continue;
+        }
+
+        // Split into word tokens so we match whole words, not substrings
+        // (e.g. "Scott" must not be caught by "scout", "Cassidy" not by "ass").
+        $tokens = preg_split('/[^a-z0-9]+/', $normalised, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $tokenMatched = false;
+
+        foreach ($tokens as $token) {
+            if (in_array($token, $disallowed, true)) {
+                $errors[] = 'The ' . $label . ' cannot contain "' . $token . '". Please enter the person\'s real name.';
+                $tokenMatched = true;
+            }
+        }
+
+        // Also reject the whole field if it matches a disallowed term once
+        // separators are removed (e.g. "no reply" -> "noreply"), but only when
+        // no individual token already triggered an error.
+        if (!$tokenMatched) {
+            $collapsed = preg_replace('/[^a-z0-9]+/', '', $normalised) ?? '';
+
+            if ($collapsed !== '' && in_array($collapsed, $disallowed, true)) {
+                $errors[] = 'The ' . $label . ' is not allowed. Please enter the person\'s real name.';
+            }
+        }
+    }
+
+    // Catch terms that are split across the first and last name
+    // (e.g. first "No", last "Reply" -> "noreply").
+    $combined = preg_replace('/[^a-z0-9]+/', '', strtolower(trim($firstName . $lastName))) ?? '';
+
+    if (!$errors && $combined !== '' && in_array($combined, $disallowed, true)) {
+        $errors[] = 'That name is not allowed. Please enter the person\'s real name.';
+    }
+
+    return array_values(array_unique($errors));
+}
+
 function gm_name_part(string $value): string
 {
     $value = trim($value);

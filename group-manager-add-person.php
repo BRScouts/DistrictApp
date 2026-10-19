@@ -206,7 +206,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fullName = trim($firstName . ' ' . $lastName);
             $personalEmail = gm_add_normalise_email((string) ($_POST['personal_email'] ?? ''));
             $phone = trim((string) ($_POST['phone'] ?? ''));
-            $membershipRole = (string) ($_POST['membership_role'] ?? 'group_leadership_team_member');
+            $membershipRole = trim((string) ($_POST['membership_role'] ?? ''));
             $sharePhone = isset($_POST['share_phone']) ? 1 : 0;
             $notes = trim((string) ($_POST['notes'] ?? ''));
 
@@ -249,11 +249,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $errors[] = 'Enter the person\'s last name.';
             }
 
+            // Block section names, Scouting roles, generic mailbox words and profanity.
+            if ($firstName !== '' || $lastName !== '') {
+                foreach (gm_validate_person_name($firstName, $lastName) as $nameError) {
+                    $errors[] = $nameError;
+                }
+            }
+
             if ($personalEmail === '' || !filter_var($personalEmail, FILTER_VALIDATE_EMAIL)) {
                 $errors[] = 'Enter a valid current email address.';
             }
 
-            if (!array_key_exists($membershipRole, $roleOptions)) {
+            if ($membershipRole === '') {
+                $errors[] = 'Choose a role for this person.';
+            } elseif (!array_key_exists($membershipRole, $roleOptions)) {
                 $errors[] = 'Choose a valid role.';
             }
 
@@ -613,21 +622,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $createdPersonId = $personId;
-                $success = $existingPerson
-                    ? 'Existing person found by email and linked to this Group.'
-                    : 'Person added to this Group.';
 
-                if ($finalAccessRoute === 'district_account_requested') {
-                    $success .= ' A Microsoft 365 account request and welcome email have been queued.';
-                } elseif ($finalAccessRoute === 'existing_district_email') {
-                    $success .= ' Existing District email detected, so no new Microsoft 365 account request was created. Sign-in instructions have been queued.';
-                } elseif ($finalAccessRoute === 'b2b_sso') {
-                    $success .= ' This Group has its own Office 365, so no District email was created. B2B SSO sign-in instructions have been queued.';
-                } else {
-                    $success .= ' A calendar-link-only access email has been queued.';
-                }
+                // Hand the outcome to the confirmation page via a one-shot flash.
+                $_SESSION['gm_add_person_confirmation'] = [
+                    'person_id' => $personId,
+                    'group_id' => $selectedGroupId,
+                    'group_name' => (string) $selectedGroup['group_name'],
+                    'full_name' => $fullName,
+                    'role_title' => gm_role_title_from_membership_role($membershipRole),
+                    'access_route' => $finalAccessRoute,
+                    'notify_email' => $personalEmail,
+                    'district_email' => $requestedDistrictEmail,
+                    'invite_url' => $createdInviteUrl,
+                    'existing_person' => (bool) $existingPerson,
+                ];
 
-                $posted = [];
+                redirect('/group-manager-add-person-confirmed.php?group_id=' . (int) $selectedGroupId);
                 } // end else (no duplicates or confirmed)
             }
         }
@@ -868,7 +878,7 @@ include __DIR__ . '/app/group-manager-nav.php';
                         <input type="hidden" name="last_name" value="<?= e($posted['last_name'] ?? '') ?>">
                         <input type="hidden" name="personal_email" value="<?= e($posted['personal_email'] ?? '') ?>">
                         <input type="hidden" name="phone" value="<?= e($posted['phone'] ?? '') ?>">
-                        <input type="hidden" name="membership_role" value="<?= e($posted['membership_role'] ?? 'group_leadership_team_member') ?>">
+                        <input type="hidden" name="membership_role" value="<?= e($posted['membership_role'] ?? '') ?>">
                         <input type="hidden" name="access_route" value="<?= e($posted['access_route'] ?? 'microsoft') ?>">
                         <input type="hidden" name="requested_district_email" value="<?= e($posted['requested_district_email'] ?? '') ?>">
                         <input type="hidden" name="notes" value="<?= e($posted['notes'] ?? '') ?>">
@@ -1085,14 +1095,16 @@ include __DIR__ . '/app/group-manager-nav.php';
 
                     <div class="form-group mb-0">
                         <label for="membership_role">Role</label>
+                        <?php $selectedRole = trim((string) ($posted['membership_role'] ?? '')); ?>
                         <select class="form-control" id="membership_role" name="membership_role" required>
-                            <?php $selectedRole = (string) ($posted['membership_role'] ?? 'group_leadership_team_member'); ?>
+                            <option value="" <?= $selectedRole === '' ? 'selected' : '' ?> disabled>Please choose a role&hellip;</option>
                             <?php foreach ($roleOptions as $value => $label): ?>
                                 <option value="<?= e($value) ?>" <?= $selectedRole === $value ? 'selected' : '' ?>>
                                     <?= e($label) ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
+                        <small class="form-text text-muted">You must choose a role. There is no default.</small>
                     </div>
                 </div>
 
