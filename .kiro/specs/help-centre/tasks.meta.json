@@ -1,5 +1,14 @@
 {
-  "pbtResults": {},
+  "pbtResults": {
+    "2.2 Write property test for published-only index listing": {
+      "status": "passed",
+      "lastRunTimestamp": 1792431223170
+    },
+    "2.4 Write property and example tests for published-only viewer lookup": {
+      "status": "passed",
+      "lastRunTimestamp": 1792431272103
+    }
+  },
   "executionHistory": {
     "1.1 Create the `help_articles` table schema in `database/migrations/005_help_articles.sql`": [
       {
@@ -45,6 +54,11 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792430318941
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792430826234
       }
     ],
     "1.4 Write example tests for migration idempotence and seed content": [
@@ -52,6 +66,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881583
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792430830026
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431102636
       }
     ],
     "2.1 Implement `help_published_articles()`, `help_group_by_topic()`, and `help_find_published_article()`": [
@@ -59,6 +83,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881610
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792430831055
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431101638
       }
     ],
     "2.2 Write property test for published-only index listing": [
@@ -66,6 +100,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881640
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431109128
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431288545
       }
     ],
     "2.3 Write property test for topic ordering stability": [
@@ -73,6 +117,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881674
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431110537
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431289926
       }
     ],
     "2.4 Write property and example tests for published-only viewer lookup": [
@@ -80,6 +134,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881701
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431111334
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431290742
       }
     ],
     "3.1 Implement `help_render_body()` and block helpers in `app/help-helpers.php`": [
@@ -87,6 +151,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881727
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431108136
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431287613
       }
     ],
     "3.2 Implement external-link handling in `help_render_action_link()`": [
@@ -94,6 +168,16 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881758
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431294003
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431333621
       }
     ],
     "3.3 Write property test for escaping of stored content": [
@@ -101,6 +185,11 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881784
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431338421
       }
     ],
     "3.4 Write property test for block render order": [
@@ -108,6 +197,11 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881810
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431339432
       }
     ],
     "3.5 Write property test for steps rendering as an ordered list": [
@@ -115,6 +209,11 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881836
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431340750
       }
     ],
     "3.6 Write property test for heading-level discipline": [
@@ -122,6 +221,11 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881875
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431341703
       }
     ],
     "3.7 Write property test for safe external-action rendering": [
@@ -129,6 +233,11 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429881900
+      },
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431342667
       }
     ],
     "3.8 Write property test for descriptive action link text": [
@@ -220,6 +329,20 @@
         "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
         "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
         "timestamp": 1792429882267
+      }
+    ],
+    "1. Create the Help_Article_Store migration with schema and seed content": [
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431102663
+      }
+    ],
+    "2. Implement data-access helpers in `app/help-helpers.php`": [
+      {
+        "executionId": "a8ca5e67-7b80-48ed-9437-bfc6859a0e0d",
+        "chatSessionId": "sess_db7a5857-c973-4218-b3bf-149ce132a481",
+        "timestamp": 1792431290770
       }
     ]
   }

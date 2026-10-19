@@ -8,7 +8,7 @@ The design uses concrete PHP throughout, so no implementation-language choice is
 
 ## Tasks
 
-- [ ] 1. Create the Help_Article_Store migration with schema and seed content
+- [x] 1. Create the Help_Article_Store migration with schema and seed content
   - [x] 1.1 Create the `help_articles` table schema in `database/migrations/005_help_articles.sql`
     - Create `database/migrations/005_help_articles.sql` mirroring the structure of `004_district_events.sql`
     - Use `CREATE TABLE IF NOT EXISTS help_articles` with columns: `id BIGINT UNSIGNED AUTO_INCREMENT PK`, `slug VARCHAR(160) NOT NULL`, `title VARCHAR(255) NOT NULL`, `summary VARCHAR(500) NOT NULL DEFAULT ''`, `keywords VARCHAR(500) NOT NULL DEFAULT ''`, `body JSON NOT NULL`, `topic VARCHAR(120) NOT NULL DEFAULT ''`, `status ENUM('draft','published') NOT NULL DEFAULT 'draft'`, `sort_order INT NOT NULL DEFAULT 0`, `created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`, `updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`
@@ -23,40 +23,40 @@ The design uses concrete PHP throughout, so no implementation-language choice is
     - Mark every Microsoft 365 action `"external": true`; set `status='published'`, a meaningful `topic`, populated `keywords`, and a `sort_order`
     - _Requirements: 5.1, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9_
 
-  - [-] 1.3 Author and seed the 5 additional articles (idempotent inserts)
+  - [x] 1.3 Author and seed the 5 additional articles (idempotent inserts)
     - Append slug-guarded `INSERT ... SELECT ... WHERE NOT EXISTS` statements for slugs 10–14: `navigating-the-calendar` → `/dc/event.php`; `finding-a-glv` → `/group-manager.php`; `requesting-support` → `/technical-support.php`; `access-levels-and-roles` → `/group-manager.php`; `logging-in-with-microsoft` → `https://outlook.cloud.microsoft/` (external)
     - Same rich-JSON body rules as 1.2: step blocks where page-based, action block to the real target, external flag on the Microsoft 365 link, published status, topic, keywords, sort_order
     - _Requirements: 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9_
 
-  - [~] 1.4 Write example tests for migration idempotence and seed content
+  - [x] 1.4 Write example tests for migration idempotence and seed content
     - Apply the migration twice; assert the seed count is stable after the second run (no duplicates, no error on existing objects)
     - Assert a duplicate-slug insert is rejected by the unique constraint
     - Assert all 14 expected articles exist with `status='published'`, their expected topics, and their expected action targets
     - _Requirements: 1.13, 5.9_
 
-- [ ] 2. Implement data-access helpers in `app/help-helpers.php`
-  - [~] 2.1 Implement `help_published_articles()`, `help_group_by_topic()`, and `help_find_published_article()`
+- [x] 2. Implement data-access helpers in `app/help-helpers.php`
+  - [x] 2.1 Implement `help_published_articles()`, `help_group_by_topic()`, and `help_find_published_article()`
     - Create `app/help-helpers.php`
     - `help_published_articles(): array` — prepared `SELECT ... WHERE status='published' ORDER BY topic ASC, sort_order ASC, title ASC`; `json_decode($row['body'], true)` each body (non-array result → empty array); wrap in `try/catch (Throwable)` returning `[]` when the table is absent
     - `help_group_by_topic(array $rows): array` — group rows keyed by `topic`, preserving the SQL ordering within each topic
     - `help_find_published_article(string $slug): ?array` — prepared `SELECT ... WHERE slug = ? AND status = 'published' LIMIT 1`; decode `body`; return `null` for a draft or unknown slug; `try/catch (Throwable)` → `null`
     - _Requirements: 2.4, 2.5, 2.6, 2.8, 3.1, 3.7, 3.8_
 
-  - [~] 2.2 Write property test for published-only index listing
+  - [x] 2.2 Write property test for published-only index listing
     - **Property 2: Index lists exactly the published articles**
     - **Validates: Requirements 2.4, 2.8**
 
-  - [~] 2.3 Write property test for topic ordering stability
+  - [x] 2.3 Write property test for topic ordering stability
     - **Property 3: Topic ordering is stable**
     - **Validates: Requirements 2.6**
 
-  - [~] 2.4 Write property and example tests for published-only viewer lookup
+  - [x] 2.4 Write property and example tests for published-only viewer lookup
     - **Property 9: Only published articles are viewable**
     - Example test: a draft slug and an unknown slug both return `null` (drives the not-found state)
     - **Validates: Requirements 3.1, 3.7, 3.8**
 
 - [ ] 3. Implement the Rich_Body renderer and per-block helpers
-  - [~] 3.1 Implement `help_render_body()` and block helpers in `app/help-helpers.php`
+  - [x] 3.1 Implement `help_render_body()` and block helpers in `app/help-helpers.php`
     - `help_render_body(array $blocks): string` — iterate blocks, defensively skip non-array/typeless blocks, dispatch on `type` via `match`, skip unknown types; render blocks in stored order
     - `help_render_paragraph()` → `<p>` with `htmlspecialchars(..., ENT_QUOTES, 'UTF-8')`
     - `help_render_heading()` → clamp `level` to 2–6 and to at most one greater than the previously rendered heading level (no skips, always below the `<h1>` title); escape text
@@ -64,28 +64,28 @@ The design uses concrete PHP throughout, so no implementation-language choice is
     - `help_render_actions()` / `help_render_action_link()` → labelled `<a>` using the action `label` as visible text (never the bare URL); escape `label` and `url`; default `style` to `primary`; skip actions missing `label` or `url`
     - _Requirements: 3.2, 3.3, 3.4, 3.6, 6.1, 6.2, 6.3, 6.4_
 
-  - [~] 3.2 Implement external-link handling in `help_render_action_link()`
+  - [x] 3.2 Implement external-link handling in `help_render_action_link()`
     - When `external` is truthy: add `target="_blank" rel="noopener noreferrer"` and an assistive-technology-conveyed "(opens in a new tab)" affordance (visible icon `aria-hidden` plus visually-hidden text)
     - Keep links as native `<a>` elements so they stay keyboard-reachable and operable
     - _Requirements: 3.5, 6.5, 6.6_
 
-  - [~] 3.3 Write property test for escaping of stored content
+  - [-] 3.3 Write property test for escaping of stored content
     - **Property 1: Stored content is always escaped**
     - **Validates: Requirements 3.6**
 
-  - [~] 3.4 Write property test for block render order
+  - [-] 3.4 Write property test for block render order
     - **Property 4: Blocks render in stored order**
     - **Validates: Requirements 3.2**
 
-  - [~] 3.5 Write property test for steps rendering as an ordered list
+  - [-] 3.5 Write property test for steps rendering as an ordered list
     - **Property 5: Steps render as an ordered list**
     - **Validates: Requirements 3.3, 6.4**
 
-  - [~] 3.6 Write property test for heading-level discipline
+  - [-] 3.6 Write property test for heading-level discipline
     - **Property 6: Heading levels never skip and stay below the title**
     - **Validates: Requirements 6.1, 6.2**
 
-  - [~] 3.7 Write property test for safe external-action rendering
+  - [-] 3.7 Write property test for safe external-action rendering
     - **Property 7: External actions open safely in a new context**
     - **Validates: Requirements 3.5, 6.6**
 
