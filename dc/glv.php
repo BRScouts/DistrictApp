@@ -45,26 +45,6 @@ $requestedGroupId = isset($_GET['group_id']) ? (int) $_GET['group_id'] : null;
 $selectedGroupId = dc_selected_group_id($requestedGroupId);
 $showGroupPicker = count($groups) > 1;
 
-// TEMP DEBUG — remove once the group-picker issue is diagnosed.
-if (isset($_GET['glvdebug'])) {
-    header('Content-Type: text/plain; charset=utf-8');
-    echo "RAW _GET['group_id'] = " . var_export($_GET['group_id'] ?? null, true) . "\n";
-    echo "requestedGroupId     = " . var_export($requestedGroupId, true) . "\n";
-    echo "selectedGroupId      = " . var_export($selectedGroupId, true) . "\n";
-    echo "can_access requested = " . var_export(
-        $requestedGroupId ? dc_user_can_access_group($requestedGroupId) : null,
-        true
-    ) . "\n";
-    echo "accessible groups (stored order):\n";
-    foreach ($groups as $i => $g) {
-        echo "  [$i] id=" . ($g['id'] ?? $g['group_id'] ?? '?')
-            . " name=" . ($g['group_name'] ?? $g['name'] ?? '?') . "\n";
-    }
-    echo "context group_ids    = " . implode(', ', (array) ($ctx['group_ids'] ?? [])) . "\n";
-    echo "actor_type           = " . var_export($ctx['actor_type'] ?? null, true) . "\n";
-    exit;
-}
-
 
 
 function dc_glv_column_exists(string $table, string $column): bool
