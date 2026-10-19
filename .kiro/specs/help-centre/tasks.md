@@ -16,14 +16,14 @@ The design uses concrete PHP throughout, so no implementation-language choice is
     - Use `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 1.12_
 
-  - [-] 1.2 Author and seed the 9 explicit-topic articles (idempotent inserts)
+  - [x] 1.2 Author and seed the 9 explicit-topic articles (idempotent inserts)
     - Append one `INSERT INTO help_articles (...) SELECT ... FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM help_articles WHERE slug = '...')` per article
     - Seed slugs 1–9 from the design's Seed Content Plan: `adding-new-members` → `/dc/add-user.php`; `adding-an-event` → `/dc/add-event.php`; `searching-risk-assessments` → `/dc/risk-assessments.php` + `/dc/download-risk-assessment.php`; `editing-events` → `/dc/manage-event.php` + `/dc/event.php`; `approving-events` → `/dc/reviewer/`; `updating-your-profile` → `/profile.php`; `creating-a-district-email` → `/group-manager.php`; `using-a-shared-mailbox` → `https://outlook.cloud.microsoft/` (external); `why-a-shared-mailbox` → `https://outlook.cloud.microsoft/` (external)
     - Each `body` is a JSON array of ordered blocks (`paragraph`, `heading`, `steps`, `action`) with full step-by-step instructions for page-based tasks and an `action` block to the real target
     - Mark every Microsoft 365 action `"external": true`; set `status='published'`, a meaningful `topic`, populated `keywords`, and a `sort_order`
     - _Requirements: 5.1, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9_
 
-  - [~] 1.3 Author and seed the 5 additional articles (idempotent inserts)
+  - [-] 1.3 Author and seed the 5 additional articles (idempotent inserts)
     - Append slug-guarded `INSERT ... SELECT ... WHERE NOT EXISTS` statements for slugs 10–14: `navigating-the-calendar` → `/dc/event.php`; `finding-a-glv` → `/group-manager.php`; `requesting-support` → `/technical-support.php`; `access-levels-and-roles` → `/group-manager.php`; `logging-in-with-microsoft` → `https://outlook.cloud.microsoft/` (external)
     - Same rich-JSON body rules as 1.2: step blocks where page-based, action block to the real target, external flag on the Microsoft 365 link, published status, topic, keywords, sort_order
     - _Requirements: 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9_

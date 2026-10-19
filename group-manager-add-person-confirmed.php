@@ -14,6 +14,19 @@ if (function_exists('user_needs_group_onboarding') && user_needs_group_onboardin
 $user = current_user();
 $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
 
+// The Group Manager nav partial needs these to render its group selector.
+$memberships = gm_current_memberships($user);
+$isDistrictAdmin = gm_actor_is_district_admin($user, $memberships);
+$manageableGroups = gm_manageable_groups((int) $user['id'], $isDistrictAdmin);
+
+if (!$manageableGroups) {
+    http_response_code(403);
+    include __DIR__ . '/header.php';
+    echo '<main class="lt-main"><div class="alert alert-danger"><strong>Access denied:</strong> You do not currently manage any Groups.</div></main>';
+    include __DIR__ . '/footer.php';
+    exit;
+}
+
 // One-shot flash set by group-manager-add-person.php after a successful add.
 $confirmation = $_SESSION['gm_add_person_confirmation'] ?? null;
 unset($_SESSION['gm_add_person_confirmation']);
@@ -24,6 +37,7 @@ if (!is_array($confirmation)) {
 }
 
 $groupId = (int) ($confirmation['group_id'] ?? 0);
+$selectedGroupId = $groupId > 0 ? $groupId : gm_selected_group_id($manageableGroups);
 $personId = (int) ($confirmation['person_id'] ?? 0);
 $groupName = (string) ($confirmation['group_name'] ?? '');
 $fullName = (string) ($confirmation['full_name'] ?? '');
