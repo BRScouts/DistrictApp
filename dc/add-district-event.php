@@ -90,6 +90,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $locationName = trim((string) ($_POST['location_name'] ?? ''));
     $locationAddress = trim((string) ($_POST['location_address'] ?? ''));
 
+    $locationLat = trim((string) ($_POST['location_lat'] ?? ''));
+    $locationLng = trim((string) ($_POST['location_lng'] ?? ''));
+
+    if ($locationLat !== '' && !is_numeric($locationLat)) {
+        $errors[] = 'The selected latitude is invalid.';
+    }
+
+    if ($locationLng !== '' && !is_numeric($locationLng)) {
+        $errors[] = 'The selected longitude is invalid.';
+    }
+
     $startsAt = dce_parse_datetime((string) ($_POST['starts_at'] ?? ''));
     $endsAt = dce_parse_datetime((string) ($_POST['ends_at'] ?? ''));
 
@@ -139,6 +150,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     event_type,
                     location_name,
                     location_address,
+                    location_lat,
+                    location_lng,
                     starts_at,
                     ends_at,
                     leader_name,
@@ -157,6 +170,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'other',
                     :location_name,
                     :location_address,
+                    :location_lat,
+                    :location_lng,
                     :starts_at,
                     :ends_at,
                     :leader_name,
@@ -177,6 +192,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'description' => $description !== '' ? $description : null,
                 'location_name' => $locationName !== '' ? $locationName : null,
                 'location_address' => $locationAddress !== '' ? $locationAddress : null,
+                'location_lat' => $locationLat !== '' ? (float) $locationLat : null,
+                'location_lng' => $locationLng !== '' ? (float) $locationLng : null,
                 'starts_at' => $startsAt?->format('Y-m-d H:i:s'),
                 'ends_at' => $endsAt?->format('Y-m-d H:i:s'),
                 'leader_name' => (string) ($ctx['name'] ?? 'District'),
@@ -252,11 +269,69 @@ $active = 'home';
 require __DIR__ . '/layout.php';
 ?>
 
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+
 <style>
     .dce-form {
         display: grid;
         gap: 1.25rem;
         max-width: 760px;
+    }
+
+    .dce-map-search {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    @media (min-width: 768px) {
+        .dce-map-search {
+            grid-template-columns: 1fr auto;
+            align-items: end;
+        }
+    }
+
+    .dce-location-map-wrap {
+        position: relative;
+        width: 100%;
+        overflow: hidden;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        background: var(--dc-canvas, #f8fafc);
+        margin-top: 1rem;
+        isolation: isolate;
+    }
+
+    .dce-location-map {
+        display: block;
+        width: 100%;
+        height: 320px;
+        position: relative;
+        z-index: 0;
+    }
+
+    .dce-location-results {
+        margin-top: 1rem;
+        border: 1px solid var(--dc-border, #e2e8f0);
+        background: #fff;
+    }
+
+    .dce-location-results button {
+        display: block;
+        width: 100%;
+        padding: 0.75rem;
+        border: 0;
+        border-bottom: 1px solid var(--dc-border, #e2e8f0);
+        background: #fff;
+        text-align: left;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .dce-location-results button:hover,
+    .dce-location-results button:focus {
+        background: var(--dc-canvas, #f8fafc);
+        outline: 3px solid #ffdd00;
+        outline-offset: -3px;
     }
 
     .dce-form .lt-panel {
@@ -456,6 +531,29 @@ require __DIR__ . '/layout.php';
     <section class="lt-panel">
         <h2 class="lt-section-title">Location</h2>
 
+        <div class="dce-map-search">
+            <div class="form-group mb-0">
+                <label for="location_search">Search for a location</label>
+                <input
+                    id="location_search"
+                    class="form-control"
+                    autocomplete="off"
+                    placeholder="Example: Bibby's Farm, Chorley"
+                >
+            </div>
+            <div class="form-group mb-0">
+                <button type="button" class="btn btn-primary lt-btn" id="location_search_button">Search map</button>
+            </div>
+        </div>
+
+        <div id="location_results" class="dce-location-results" hidden></div>
+
+        <div class="dce-location-map-wrap">
+            <div id="location_map" class="dce-location-map" aria-label="Selected event location map"></div>
+        </div>
+
+        <p class="form-text" style="margin-top:0.5rem;">Search, or click the map to drop a pin. This is shown on the event page.</p>
+
         <div class="form-group mb-0">
             <label for="location_name">Location name</label>
             <input id="location_name" name="location_name" class="form-control" value="<?= e(dce_old('location_name')) ?>" placeholder="e.g. District HQ">
@@ -463,8 +561,11 @@ require __DIR__ . '/layout.php';
 
         <div class="form-group mb-0">
             <label for="location_address">Address</label>
-            <input id="location_address" name="location_address" class="form-control" value="<?= e(dce_old('location_address')) ?>" placeholder="Full address or postcode">
+            <textarea id="location_address" name="location_address" class="form-control" rows="2" placeholder="Full address or postcode"><?= e(dce_old('location_address')) ?></textarea>
         </div>
+
+        <input type="hidden" id="location_lat" name="location_lat" value="<?= e(dce_old('location_lat')) ?>">
+        <input type="hidden" id="location_lng" name="location_lng" value="<?= e(dce_old('location_lng')) ?>">
     </section>
 
     <section class="lt-panel">
@@ -594,5 +695,125 @@ require __DIR__ . '/layout.php';
     }
 
     sync();
+}());
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" <?= csp_nonce_attr() ?>></script>
+
+<script <?= csp_nonce_attr() ?>>
+(function () {
+    var mapElement = document.getElementById('location_map');
+    var searchInput = document.getElementById('location_search');
+    var searchButton = document.getElementById('location_search_button');
+    var resultsElement = document.getElementById('location_results');
+
+    var nameInput = document.getElementById('location_name');
+    var addressInput = document.getElementById('location_address');
+    var latInput = document.getElementById('location_lat');
+    var lngInput = document.getElementById('location_lng');
+
+    if (!mapElement || typeof L === 'undefined') {
+        return;
+    }
+
+    var defaultLat = parseFloat(latInput.value || '53.647');
+    var defaultLng = parseFloat(lngInput.value || '-2.316');
+
+    var map = L.map(mapElement, { scrollWheelZoom: false }).setView([defaultLat, defaultLng], 11);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    var marker = null;
+
+    function setLocation(lat, lng, name, address) {
+        latInput.value = String(lat);
+        lngInput.value = String(lng);
+
+        if (name && !nameInput.value) nameInput.value = name;
+        if (address && !addressInput.value) addressInput.value = address;
+
+        if (marker) {
+            marker.setLatLng([lat, lng]);
+        } else {
+            marker = L.marker([lat, lng]).addTo(map);
+        }
+
+        map.setView([lat, lng], 15);
+        setTimeout(function () { map.invalidateSize(); }, 100);
+    }
+
+    if (latInput.value && lngInput.value && !Number.isNaN(defaultLat) && !Number.isNaN(defaultLng)) {
+        setLocation(defaultLat, defaultLng, nameInput.value, addressInput.value);
+    }
+
+    map.on('click', function (event) {
+        var lat = Number(event.latlng.lat.toFixed(7));
+        var lng = Number(event.latlng.lng.toFixed(7));
+        setLocation(lat, lng, nameInput.value, addressInput.value);
+    });
+
+    function searchLocation() {
+        var query = searchInput.value.trim();
+        if (!query) { searchInput.focus(); return; }
+
+        searchButton.disabled = true;
+        searchButton.textContent = 'Searching...';
+        resultsElement.hidden = true;
+        resultsElement.innerHTML = '';
+
+        var url = new URL('/dc/geocode-search.php', window.location.origin);
+        url.searchParams.set('q', query);
+
+        fetch(url.toString(), { headers: { 'Accept': 'application/json' } })
+            .then(function (response) {
+                if (!response.ok) throw new Error('search failed');
+                return response.json();
+            })
+            .then(function (results) {
+                if (!Array.isArray(results) || results.length === 0) {
+                    resultsElement.hidden = false;
+                    resultsElement.innerHTML = '<div style="padding:0.75rem;">No matching locations found. Try a postcode, town or venue name.</div>';
+                    return;
+                }
+
+                results.forEach(function (result) {
+                    var button = document.createElement('button');
+                    button.type = 'button';
+                    button.textContent = result.display_name || 'Unnamed location';
+                    button.addEventListener('click', function () {
+                        var lat = Number(parseFloat(result.lat).toFixed(7));
+                        var lng = Number(parseFloat(result.lon).toFixed(7));
+                        var displayName = result.name || result.display_name || query;
+                        if (!nameInput.value) nameInput.value = displayName;
+                        if (!addressInput.value) addressInput.value = result.display_name || displayName;
+                        setLocation(lat, lng, displayName, result.display_name || displayName);
+                        resultsElement.hidden = true;
+                    });
+                    resultsElement.appendChild(button);
+                });
+
+                resultsElement.hidden = false;
+            })
+            .catch(function () {
+                resultsElement.hidden = false;
+                resultsElement.innerHTML = '<div style="padding:0.75rem;">The location search is unavailable. You can still click the map to choose a location.</div>';
+            })
+            .finally(function () {
+                searchButton.disabled = false;
+                searchButton.textContent = 'Search map';
+                setTimeout(function () { map.invalidateSize(); }, 100);
+            });
+    }
+
+    searchButton.addEventListener('click', searchLocation);
+    searchInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') { event.preventDefault(); searchLocation(); }
+    });
+
+    window.addEventListener('resize', function () { map.invalidateSize(); });
+    setTimeout(function () { map.invalidateSize(); }, 250);
 }());
 </script>

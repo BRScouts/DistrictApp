@@ -88,6 +88,67 @@ function dc_index_event_date_value(array $event, string $key): DateTimeImmutable
     }
 }
 
+/**
+ * Render a single event tile (used by both the desktop spanning bars and the
+ * mobile day list) so the markup stays in one place.
+ *
+ * $options:
+ *   continues_before / continues_after (bool) — show ←/→ continuation arrows
+ *   show_status (bool)                         — include the status line
+ *   group_colors (array)                       — group_id => colour hex map
+ *   ctx (array)                                — current user context
+ */
+function dc_index_render_event_tile(array $event, array $options = []): string
+{
+    $continuesBefore = (bool) ($options['continues_before'] ?? false);
+    $continuesAfter = (bool) ($options['continues_after'] ?? false);
+    $showStatus = (bool) ($options['show_status'] ?? true);
+    $groupColors = (array) ($options['group_colors'] ?? []);
+    $ctx = (array) ($options['ctx'] ?? []);
+
+    $eventStatus = (string) ($event['status'] ?? '');
+    $isDistrictEvent = dc_event_is_district($event);
+    $eventClass = dc_event_bar_class($eventStatus);
+
+    if ($isDistrictEvent) {
+        $eventClass .= ' dc-cal-event-district';
+    }
+
+    $canManage = dc_index_user_can_manage_event_group($ctx, (int) ($event['group_id'] ?? 0));
+    $timeLabel = !empty($event['starts_at']) ? date('H:i', strtotime((string) $event['starts_at'])) : '';
+    $prefix = $continuesBefore ? '← ' : '';
+    $suffix = $continuesAfter ? ' →' : '';
+    $groupColor = $groupColors[(int) ($event['group_id'] ?? 0)] ?? '#7413dc';
+    $metaLabel = $isDistrictEvent ? 'District event' : (string) ($event['group_name'] ?? '');
+
+    $title = e($prefix . (string) ($event['title'] ?? '') . $suffix);
+    $meta = e($timeLabel . ($metaLabel !== '' ? ' · ' . $metaLabel : ''));
+    $styleAttr = 'style="--dc-group-color: ' . e($groupColor) . ';"';
+
+    if ($isDistrictEvent) {
+        $href = '/dc/district-event.php?id=' . (int) ($event['id'] ?? 0);
+
+        return '<a class="' . e($eventClass) . '" href="' . e($href) . '" ' . $styleAttr . '>'
+            . '<span class="dc-cal-event-ooo" aria-hidden="true"></span>'
+            . '<span class="dc-cal-event-title">' . $title . '</span>'
+            . '<span class="dc-cal-event-meta">' . $meta . '</span>'
+            . '</a>';
+    }
+
+    $html = '<button type="button" class="' . e($eventClass) . ' ' . ($canManage ? '' : 'is-locked') . '" '
+        . 'data-event-id="' . (int) ($event['id'] ?? 0) . '" ' . $styleAttr . '>'
+        . '<span class="dc-cal-event-title">' . $title . '</span>'
+        . '<span class="dc-cal-event-meta">' . $meta . '</span>';
+
+    if ($showStatus) {
+        $html .= '<span class="dc-cal-event-status">' . e(str_replace('_', ' ', $eventStatus)) . '</span>';
+    }
+
+    $html .= '</button>';
+
+    return $html;
+}
+
 $accessibleGroups = dc_accessible_groups();
 $allGroups = $accessibleGroups;
 
@@ -349,7 +410,7 @@ $weeks = [];
 $cursor = $calendarStart;
 
 while ($cursor <= $calendarEnd) {
-    $weekStart = $cursor;
+    $weekStart = $cursor->setTime(0, 0, 0);
     $days = [];
 
     for ($i = 0; $i < 7; $i++) {
@@ -357,24 +418,97 @@ while ($cursor <= $calendarEnd) {
         $cursor = $cursor->modify('+1 day');
     }
 
-    $weekEnd = end($days)->setTime(23, 59, 59);
-    $weekBars = [];
+    $weekEndDay = end($days);
+    $weekEnd = $weekEndDay->setTime(23, 59, 59);
+
+    /*
+     * Build spanning segments for this week. Each overlapping event is clipped
+     * to the week's Monday–Sunday bounds and placed into the first vertical
+     * "lane" (row) that is free across the columns it covers — the same layout
+     * approach a month calendar uses, so a multi-day event is drawn as ONE bar
+     * stretching across the days it covers rather than repeated per day.
+     */
+    $segments = [];
 
     foreach ($events as $event) {
         $eventStart = dc_index_event_date_value($event, 'starts_at');
         $eventEnd = dc_index_event_date_value($event, 'ends_at');
 
-        if ($eventStart <= $weekEnd && $eventEnd >= $weekStart) {
-            $weekBars[] = [
-                'event' => $event,
-            ];
+        if ($eventStart > $weekEnd || $eventEnd < $weekStart) {
+            continue;
+        }
+
+        // Clip to this week and work out the start column (1-7) and span.
+        $clippedStart = $eventStart < $weekStart ? $weekStart : $eventStart;
+        $clippedEnd = $eventEnd > $weekEnd ? $weekEnd : $eventEnd;
+
+        $startCol = (int) $weekStart->diff($clippedStart->setTime(0, 0, 0))->days + 1;
+        $endCol = (int) $weekStart->diff($clippedEnd->setTime(0, 0, 0))->days + 1;
+
+        $startCol = max(1, min(7, $startCol));
+        $endCol = max(1, min(7, $endCol));
+
+        $segments[] = [
+            'event' => $event,
+            'start_col' => $startCol,
+            'span' => ($endCol - $startCol) + 1,
+            'continues_before' => $eventStart < $weekStart,
+            'continues_after' => $eventEnd > $weekEnd,
+            'sort_start' => $clippedStart->getTimestamp(),
+            'is_multi' => $endCol > $startCol || $eventStart < $weekStart || $eventEnd > $weekEnd,
+        ];
+    }
+
+    /*
+     * Lane assignment. Sort so longer / earlier bars settle first, then drop
+     * each into the lowest lane whose columns are all still free.
+     */
+    usort($segments, static function (array $a, array $b): int {
+        if ($a['start_col'] !== $b['start_col']) {
+            return $a['start_col'] <=> $b['start_col'];
+        }
+
+        if ($a['span'] !== $b['span']) {
+            return $b['span'] <=> $a['span'];
+        }
+
+        return $a['sort_start'] <=> $b['sort_start'];
+    });
+
+    $lanes = []; // lane index => array of occupied columns
+
+    foreach ($segments as &$segment) {
+        $laneIndex = 0;
+
+        while (true) {
+            $free = true;
+
+            for ($c = $segment['start_col']; $c < $segment['start_col'] + $segment['span']; $c++) {
+                if (!empty($lanes[$laneIndex][$c])) {
+                    $free = false;
+                    break;
+                }
+            }
+
+            if ($free) {
+                for ($c = $segment['start_col']; $c < $segment['start_col'] + $segment['span']; $c++) {
+                    $lanes[$laneIndex][$c] = true;
+                }
+
+                $segment['lane'] = $laneIndex;
+                break;
+            }
+
+            $laneIndex++;
         }
     }
+    unset($segment);
 
     $weeks[] = [
         'start' => $weekStart,
         'days' => $days,
-        'bars' => $weekBars,
+        'segments' => $segments,
+        'lane_count' => count($lanes),
     ];
 }
 
@@ -412,25 +546,38 @@ require __DIR__ . '/layout.php';
 ?>
 
 <style>
-    /* Give the calendar more breathing room on desktop than the standard
-       1120px content column, without going as wide as the old full-bleed
-       calendar. Only widens the page the calendar lives on. */
+    /* Slightly wider than the standard 1120px content column so the month grid
+       has room, but comfortably within a normal screen. Tightens the gap at the
+       top too. */
     @media (min-width: 1200px) {
         .dc-main:has(.dc-calendar-page) {
-            width: min(1440px, calc(100% - 3rem));
+            width: min(1320px, calc(100% - 2rem));
         }
+    }
+
+    .dc-main:has(.dc-calendar-page) {
+        padding-top: 1rem;
+    }
+
+    /* Tighten the hero band on the calendar page so the grid is higher up. */
+    body:has(.dc-calendar-page) .lt-hero-inner {
+        padding: 1.1rem 0 0.9rem;
+    }
+
+    body:has(.dc-calendar-page) .lt-hero h1 {
+        font-size: clamp(1.4rem, 3vw, 2rem);
     }
 
     .dc-calendar-page {
         display: grid;
-        gap: 1.5rem;
+        gap: 1.25rem;
     }
 
     @media (min-width: 1100px) {
         .dc-calendar-page {
-            grid-template-columns: 320px minmax(0, 1fr);
+            grid-template-columns: 300px minmax(0, 1fr);
             align-items: start;
-            gap: 2rem;
+            gap: 1.5rem;
         }
     }
 
@@ -555,9 +702,9 @@ require __DIR__ . '/layout.php';
 
     .dc-calendar-toolbar {
         display: grid;
-        gap: 1rem;
-        margin-bottom: 1.25rem;
-        padding: 1rem 1.25rem;
+        gap: 0.5rem;
+        margin-bottom: 0.85rem;
+        padding: 0.75rem 1rem;
         background: #ffffff;
         border: 1px solid var(--dc-border, #e2e8f0);
         border-radius: 0;
@@ -636,6 +783,61 @@ require __DIR__ . '/layout.php';
 
     .dc-calendar-week:first-of-type {
         border-top: 0;
+    }
+
+    /* ─── Spanning month grid (desktop) ─────────────────────────────────
+       Hidden by default (mobile uses the stacked day list below) and shown
+       at the desktop breakpoint. Multi-day events render as ONE bar that
+       stretches across the days they cover, using CSS grid column spans. */
+    .dc-week-grid {
+        display: none;
+    }
+
+    .dc-week-numbers {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+
+    .dc-week-number {
+        min-height: 2rem;
+        padding: 0.4rem 0.55rem 0.2rem;
+        border-right: 1px solid var(--dc-border, #e2e8f0);
+        color: var(--dc-ink, #1d2939);
+        font-size: 0.95rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .dc-week-number:last-child {
+        border-right: 0;
+    }
+
+    .dc-week-number.is-outside-month {
+        background: var(--dc-canvas, #f8fafc);
+        color: var(--dc-muted, #64748b);
+    }
+
+    .dc-week-number.is-today span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.6rem;
+        height: 1.6rem;
+        background: var(--dc-scouts-teal, #00a794);
+        color: #ffffff;
+        border-radius: 999px;
+    }
+
+    .dc-week-bars {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 0.25rem 0.25rem;
+        padding: 0.15rem 0.25rem 0.5rem;
+        /* grid-template-rows set inline per week based on lane count */
+    }
+
+    .dc-week-bar {
+        min-width: 0;
     }
 
     .dc-calendar-days {
@@ -969,35 +1171,32 @@ require __DIR__ . '/layout.php';
             display: grid;
         }
 
-        .dc-calendar-days {
-            grid-template-columns: repeat(7, minmax(0, 1fr));
-        }
-
-        .dc-calendar-day {
-            min-height: 140px;
-            padding: 0.6rem;
-            border-right: 1px solid var(--dc-border, #e2e8f0);
-            border-bottom: 0;
-        }
-
-        .dc-calendar-day:nth-child(7n) {
-            border-right: 0;
-        }
-
-        .dc-calendar-day-heading {
+        /* Switch to the spanning month grid; hide the mobile day list. */
+        .dc-week-grid {
             display: block;
+            min-height: 120px;
         }
 
-        .dc-calendar-day-heading span {
+        .dc-week-mobile {
             display: none;
         }
 
         .dc-cal-event {
-            padding: 0.35rem 0.45rem;
+            padding: 0.3rem 0.45rem;
             border-left: 0;
             border-top: 3px solid var(--dc-group-color, #7413dc);
             border-radius: 0;
             overflow: hidden;
+        }
+
+        /* In the spanning grid a bar sits on its own; the title can stay on a
+           single line and the meta line is enough. */
+        .dc-week-bar .dc-cal-event-meta {
+            display: none;
+        }
+
+        .dc-week-bar .dc-cal-event-title {
+            white-space: nowrap;
         }
 
         .dc-cal-event.is-locked {
@@ -1026,11 +1225,11 @@ require __DIR__ . '/layout.php';
         .dc-cal-event-district {
             border-top: 0;
             border-left: 0;
-            padding-top: 0.75rem;
+            padding-top: 0.7rem;
         }
 
         .dc-cal-event-ooo {
-            height: 8px;
+            height: 7px;
         }
 
         .dc-cal-event-title {
@@ -1046,9 +1245,9 @@ require __DIR__ . '/layout.php';
         }
     }
 
-    @media (min-width: 1300px) {
-        .dc-calendar-day {
-            min-height: 160px;
+    @media (min-width: 1100px) {
+        .dc-week-grid {
+            min-height: 140px;
         }
     }
 
@@ -1222,84 +1421,88 @@ require __DIR__ . '/layout.php';
 
             <?php
             $today = (new DateTimeImmutable('today'))->format('Y-m-d');
+            $tileOptions = ['group_colors' => $groupColorsMap, 'ctx' => $ctx];
 
             foreach ($weeks as $weekIndex => $week):
+                $laneCount = max(1, (int) ($week['lane_count'] ?? 1));
             ?>
                 <div class="dc-calendar-week" data-week="<?= (int) $weekIndex ?>">
-                    <div class="dc-calendar-days">
-                        <?php foreach ($week['days'] as $day): ?>
+                    <?php /* ─── Desktop: spanning month grid ─── */ ?>
+                    <div class="dc-week-grid" aria-hidden="false">
+                        <div class="dc-week-numbers">
+                            <?php foreach ($week['days'] as $day): ?>
+                                <?php
+                                $dateKey = $day->format('Y-m-d');
+                                $isOutsideMonth = $day->format('Y-m') !== $monthStart->format('Y-m');
+                                $isToday = $dateKey === $today;
+                                ?>
+                                <div class="dc-week-number <?= $isOutsideMonth ? 'is-outside-month' : '' ?> <?= $isToday ? 'is-today' : '' ?>">
+                                    <span><?= e($day->format('j')) ?></span>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <div
+                            class="dc-week-bars"
+                            style="grid-template-rows: repeat(<?= $laneCount ?>, auto);"
+                        >
+                            <?php foreach ($week['segments'] as $segment): ?>
+                                <?php
+                                $event = $segment['event'];
+                                $lane = (int) ($segment['lane'] ?? 0);
+                                $startCol = (int) $segment['start_col'];
+                                $span = (int) $segment['span'];
+                                ?>
+                                <div
+                                    class="dc-week-bar"
+                                    style="grid-column: <?= $startCol ?> / span <?= $span ?>; grid-row: <?= $lane + 1 ?>;"
+                                >
+                                    <?= dc_index_render_event_tile($event, $tileOptions + [
+                                        'continues_before' => (bool) $segment['continues_before'],
+                                        'continues_after' => (bool) $segment['continues_after'],
+                                        'show_status' => !$segment['is_multi'],
+                                    ]) ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <?php /* ─── Mobile: stacked per-day cards ─── */ ?>
+                    <div class="dc-week-mobile">
+                        <?php foreach ($week['days'] as $dayIndex => $day): ?>
                             <?php
                             $dateKey = $day->format('Y-m-d');
-                            $isOutsideMonth = $day->format('Y-m') !== $monthStart->format('Y-m');
                             $isToday = $dateKey === $today;
+                            $col = $dayIndex + 1;
+
                             $dayEvents = [];
 
-                            foreach ($week['bars'] as $bar) {
-                                $event = $bar['event'];
-
-                                try {
-                                    $eventStart = new DateTimeImmutable((string) $event['starts_at']);
-                                    $eventEnd = new DateTimeImmutable((string) $event['ends_at']);
-                                } catch (Throwable $e) {
-                                    continue;
-                                }
-
-                                $dayStart = new DateTimeImmutable($dateKey . ' 00:00:00');
-                                $dayEnd = new DateTimeImmutable($dateKey . ' 23:59:59');
-
-                                if ($eventStart <= $dayEnd && $eventEnd >= $dayStart) {
-                                    $dayEvents[] = [
-                                        'event' => $event,
-                                        'continues_before' => $eventStart < $dayStart,
-                                        'continues_after' => $eventEnd > $dayEnd,
-                                    ];
+                            foreach ($week['segments'] as $segment) {
+                                if ($col >= $segment['start_col'] && $col < $segment['start_col'] + $segment['span']) {
+                                    $dayEvents[] = $segment;
                                 }
                             }
                             ?>
 
-                            <div class="dc-calendar-day <?= $isOutsideMonth ? 'is-outside-month' : '' ?> <?= $isToday ? 'is-today' : '' ?> <?= !$dayEvents ? 'is-empty' : '' ?>">
+                            <div class="dc-calendar-day <?= $isToday ? 'is-today' : '' ?> <?= !$dayEvents ? 'is-empty' : '' ?>">
                                 <div class="dc-calendar-day-heading">
-                                    <strong><?= e($day->format('j')) ?></strong>
                                     <span><?= e($day->format('D j M')) ?></span>
                                 </div>
 
                                 <?php if ($dayEvents): ?>
                                     <div class="dc-calendar-day-events">
-                                        <?php foreach ($dayEvents as $dayEvent): ?>
+                                        <?php foreach ($dayEvents as $segment): ?>
                                             <?php
-                                            $event = $dayEvent['event'];
-                                            $eventStatus = (string) $event['status'];
-                                            $isDistrictEvent = dc_event_is_district($event);
-                                            $eventClass = dc_event_bar_class($eventStatus);
-
-                                            if ($isDistrictEvent) {
-                                                $eventClass .= ' dc-cal-event-district';
-                                            }
-
-                                            $canManage = dc_index_user_can_manage_event_group($ctx, (int) $event['group_id']);
-                                            $timeLabel = date('H:i', strtotime((string) $event['starts_at']));
-                                            $continuationPrefix = $dayEvent['continues_before'] ? '← ' : '';
-                                            $continuationSuffix = $dayEvent['continues_after'] ? ' →' : '';
-                                            $groupColor = $groupColorsMap[(int) $event['group_id']] ?? '#7413dc';
-                                            $metaLabel = $isDistrictEvent
-                                                ? 'District event'
-                                                : (string) $event['group_name'];
+                                            $event = $segment['event'];
+                                            // Continuation arrows relative to this specific day.
+                                            $contBefore = $col > $segment['start_col'] || $segment['continues_before'];
+                                            $contAfter = $col < ($segment['start_col'] + $segment['span'] - 1) || $segment['continues_after'];
                                             ?>
-                                            <button
-                                                type="button"
-                                                class="<?= e($eventClass) ?> <?= $canManage ? '' : 'is-locked' ?>"
-                                                data-event-id="<?= (int) $event['id'] ?>"
-                                                style="--dc-group-color: <?= e($groupColor) ?>;"
-                                            >
-                                                <?php if ($isDistrictEvent): ?>
-                                                    <span class="dc-cal-event-ooo" aria-hidden="true"></span>
-                                                <?php endif; ?>
-                                                <span class="dc-cal-event-title"><?= e($continuationPrefix . (string) $event['title'] . $continuationSuffix) ?></span>
-                                                <span class="dc-cal-event-meta"><?= e($timeLabel) ?> · <?= e($metaLabel) ?></span>
-                                                <?php if (!$isDistrictEvent): ?>
-                                                    <span class="dc-cal-event-status"><?= e(str_replace('_', ' ', $eventStatus)) ?></span>
-                                                <?php endif; ?>
-                                            </button>
+                                            <?= dc_index_render_event_tile($event, $tileOptions + [
+                                                'continues_before' => $contBefore,
+                                                'continues_after' => $contAfter,
+                                                'show_status' => true,
+                                            ]) ?>
                                         <?php endforeach; ?>
                                     </div>
                                 <?php endif; ?>
