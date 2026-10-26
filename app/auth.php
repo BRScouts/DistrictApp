@@ -187,7 +187,7 @@ function find_or_create_microsoft_user(array $claims): array
             $stmt = $pdo->prepare("
                 SELECT id
                 FROM people
-                WHERE LOWER(primary_email) = LOWER(:email)
+                WHERE LOWER(TRIM(primary_email)) = LOWER(TRIM(:email))
                 LIMIT 1
             ");
             $stmt->execute(['email' => $email]);
@@ -200,40 +200,110 @@ function find_or_create_microsoft_user(array $claims): array
          * because they will not have a Group membership yet.
          */
         if ($personId) {
+            /*
+             * Only move primary_email to the token's email when no OTHER person
+             * already owns it. Microsoft UPN renames (and duplicate people rows)
+             * mean the incoming email can collide with a different person's
+             * primary_email, which would violate uq_people_primary_email and
+             * abort sign-in. In that case keep this person's existing email and
+             * log it for an admin to reconcile, rather than failing the login.
+             */
             $stmt = $pdo->prepare("
-    UPDATE people
-    SET full_name = CASE
-            WHEN full_name IS NULL OR full_name = '' THEN :full_name
-            ELSE full_name
-        END,
-        primary_email = :email,
-        status = CASE WHEN status = 'inactive' THEN status ELSE 'active' END
-    WHERE id = :person_id
-");
-$stmt->execute([
-    'full_name' => $fullName,
-    'email' => $email,
-    'person_id' => (int) $personId,
-]);
-        } else {
-            $stmt = $pdo->prepare("
-                INSERT INTO people (
-                    full_name,
-                    primary_email,
-                    status
-                )
-                VALUES (
-                    :full_name,
-                    :email,
-                    'active'
-                )
+                SELECT id
+                FROM people
+                WHERE LOWER(TRIM(primary_email)) = LOWER(TRIM(:email))
+                  AND id <> :person_id
+                LIMIT 1
             ");
             $stmt->execute([
-                'full_name' => $fullName !== '' ? $fullName : $email,
                 'email' => $email,
+                'person_id' => (int) $personId,
             ]);
+            $emailOwnedByOther = (bool) $stmt->fetchColumn();
 
-            $personId = (int) $pdo->lastInsertId();
+            if ($emailOwnedByOther) {
+                error_log(sprintf(
+                    'Microsoft sign-in: email %s already belongs to another person; keeping person %d\'s existing email. Needs admin merge.',
+                    $email,
+                    (int) $personId
+                ));
+
+                $stmt = $pdo->prepare("
+                    UPDATE people
+                    SET full_name = CASE
+                            WHEN full_name IS NULL OR full_name = '' THEN :full_name
+                            ELSE full_name
+                        END,
+                        status = CASE WHEN status = 'inactive' THEN status ELSE 'active' END
+                    WHERE id = :person_id
+                ");
+                $stmt->execute([
+                    'full_name' => $fullName,
+                    'person_id' => (int) $personId,
+                ]);
+            } else {
+                $stmt = $pdo->prepare("
+                    UPDATE people
+                    SET full_name = CASE
+                            WHEN full_name IS NULL OR full_name = '' THEN :full_name
+                            ELSE full_name
+                        END,
+                        primary_email = :email,
+                        status = CASE WHEN status = 'inactive' THEN status ELSE 'active' END
+                    WHERE id = :person_id
+                ");
+                $stmt->execute([
+                    'full_name' => $fullName,
+                    'email' => $email,
+                    'person_id' => (int) $personId,
+                ]);
+            }
+        } else {
+            try {
+                $stmt = $pdo->prepare("
+                    INSERT INTO people (
+                        full_name,
+                        primary_email,
+                        status
+                    )
+                    VALUES (
+                        :full_name,
+                        :email,
+                        'active'
+                    )
+                ");
+                $stmt->execute([
+                    'full_name' => $fullName !== '' ? $fullName : $email,
+                    'email' => $email,
+                ]);
+
+                $personId = (int) $pdo->lastInsertId();
+            } catch (PDOException $e) {
+                /*
+                 * A person with this primary_email already exists but the
+                 * lookups above did not find it. This happens with a
+                 * concurrent sign-in (the other request committed between our
+                 * SELECT and INSERT) or any subtle normalisation mismatch.
+                 * Recover by re-selecting the existing row rather than failing
+                 * the whole sign-in.
+                 */
+                if ($e->getCode() !== '23000') {
+                    throw $e;
+                }
+
+                $stmt = $pdo->prepare("
+                    SELECT id
+                    FROM people
+                    WHERE LOWER(TRIM(primary_email)) = LOWER(TRIM(:email))
+                    LIMIT 1
+                ");
+                $stmt->execute(['email' => $email]);
+                $personId = (int) $stmt->fetchColumn();
+
+                if (!$personId) {
+                    throw $e;
+                }
+            }
         }
 
         /*
