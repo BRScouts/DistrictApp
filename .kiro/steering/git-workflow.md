@@ -79,8 +79,9 @@ sdsd
 ## Pushing
 
 1. Confirm the current branch with `git branch --show-current`.
-2. Never push directly to `main`/`master` unless I explicitly ask. Default to a feature branch named `type/short-description` (e.g. `feat/district-events`), and push with `git push -u origin <branch>`.
-3. If I ask for a pull request, create it with the GitHub CLI (`gh pr create`). Keep the title under 70 chars; put detail in the body.
+2. Commit and push directly to `main` by default: `git push origin main`. A feature branch is optional — use one only when I ask for it, naming it `type/short-description` (e.g. `feat/district-events`) and pushing with `git push -u origin <branch>`.
+3. Because changes land straight on `main`, run `composer test` before pushing and don't push if it fails.
+4. If I ask for a pull request, create it with the GitHub CLI (`gh pr create`). Keep the title under 70 chars; put detail in the body.
 4. PR description structure:
    - **Summary** — what changed and why
    - **Changes** — bullet list of the notable edits
