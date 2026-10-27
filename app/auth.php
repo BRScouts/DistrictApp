@@ -14,9 +14,49 @@ function is_logged_in(): bool
 
 function require_login(): void
 {
-    if (!is_logged_in()) {
-        redirect('/login.php');
+    if (is_logged_in()) {
+        return;
     }
+
+    // Remember where the user was heading so we can return them there after
+    // sign-in (e.g. a deep link from an email). Only forward safe same-site
+    // GET destinations; microsoft-start.php validates this again before use.
+    $target = login_return_target();
+
+    if ($target !== null) {
+        redirect('/login.php?return=' . rawurlencode($target));
+    }
+
+    redirect('/login.php');
+}
+
+/**
+ * Build a safe, same-site relative URL (path + query) for the current request,
+ * suitable for use as a post-login return destination. Returns null when the
+ * request is not a plain GET or the URI cannot be safely forwarded.
+ */
+function login_return_target(): ?string
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+        return null;
+    }
+
+    $uri = (string) ($_SERVER['REQUEST_URI'] ?? '');
+
+    if (
+        $uri === ''
+        || $uri[0] !== '/'
+        || str_starts_with($uri, '//')
+        || str_contains($uri, '://')
+        || preg_match('/[\x00-\x1f\x7f]/', $uri)
+        || str_starts_with($uri, '/login.php')
+        || str_starts_with($uri, '/dc/login.php')
+        || str_starts_with($uri, '/auth/')
+    ) {
+        return null;
+    }
+
+    return $uri;
 }
 
 function login_user(array $user): void

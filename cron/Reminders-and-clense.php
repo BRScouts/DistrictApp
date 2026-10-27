@@ -57,6 +57,26 @@ function dc_clense_event_url(int $eventId): string
     return dc_clense_app_url() . '/dc/manage-event.php?id=' . $eventId;
 }
 
+function dc_clense_review_url(int $eventId): string
+{
+    return dc_clense_app_url() . '/dc/reviewer/review-event.php?id=' . $eventId;
+}
+
+function dc_clense_status_label(string $status): string
+{
+    $labels = [
+        'draft' => 'Draft (not yet submitted)',
+        'submitted' => 'Submitted, waiting for review',
+        'under_review' => 'Under review',
+        'changes_requested' => 'Changes requested',
+        'approved' => 'Approved',
+        'rejected' => 'Not approved',
+        'cancelled' => 'Cancelled',
+    ];
+
+    return $labels[$status] ?? ucfirst(str_replace('_', ' ', $status));
+}
+
 function dc_clense_quote_identifier(string $identifier): string
 {
     return '`' . str_replace('`', '``', $identifier) . '`';
@@ -347,8 +367,10 @@ function dc_clense_queue_duplicate_exists(string $notificationType, int $eventId
         $where[] = 'related_entity_id = :event_id';
         $params['event_id'] = $eventId;
     } elseif (in_array('body', $columns, true)) {
+        // Fallback for schemas without related_entity_id: match the event link
+        // that every reminder body carries, rather than exposing a raw ID.
         $where[] = 'body LIKE :event_marker';
-        $params['event_marker'] = '%Event ID: ' . $eventId . '%';
+        $params['event_marker'] = '%?id=' . $eventId . '%';
     }
 
     if (in_array('status', $columns, true)) {
@@ -400,7 +422,7 @@ function dc_clense_queue_email(
         return false;
     }
 
-    $plainBody = trim($plainBody) . "\n\nEvent ID: {$eventId}";
+    $plainBody = trim($plainBody);
     $htmlBody = dc_clense_html_from_text($plainBody);
 
     $data = [
@@ -546,22 +568,104 @@ function dc_clense_delete_event_risk_links(array $eventIds): int
  * -----------------------------------------------------------------------------
  */
 
-function dc_clense_reviewer_recipients(): array
+/**
+ * Build the reviewer reminder recipient list for a single event.
+ *
+ * This mirrors the live submit-notification logic in dc_queue_event_notifications()
+ * (dc/auth.php). Reminders go ONLY to:
+ *   - the event group's Group Lead Volunteer, if that group has opted in
+ *     (groups.notify_lead_on_event_created = 1),
+ *   - members of the event's group who can review events (can_review_events = 1),
+ *   - District Lead Volunteers (membership_role = 'district_lead_volunteer').
+ *
+ * It deliberately does NOT notify system admins, district admins, or
+ * district reviewers by access level, and it does not pull in the
+ * event_notification_recipients free-text setting.
+ */
+function dc_clense_reviewer_recipients(int $groupId): array
 {
     $recipients = [];
 
-    $configured = dc_clense_get_setting('event_notification_recipients', '');
+    /*
+     * 1. Group Lead Volunteer for this event's group, only if the group has
+     *    opted in to lead notifications.
+     */
+    try {
+        $stmt = db()->prepare("
+            SELECT DISTINCT
+                p.full_name,
+                p.primary_email
+            FROM group_memberships gm
+            JOIN people p
+              ON p.id = gm.person_id
+            JOIN groups g
+              ON g.id = gm.group_id
+            WHERE gm.group_id = :group_id
+              AND gm.membership_role = 'group_lead_volunteer'
+              AND gm.status = 'active'
+              AND p.status = 'active'
+              AND p.primary_email IS NOT NULL
+              AND p.primary_email <> ''
+              AND g.notify_lead_on_event_created = 1
+        ");
+        $stmt->execute(['group_id' => $groupId]);
 
-    foreach (dc_clense_split_emails($configured) as $email) {
-        $recipients[$email] = [
-            'email' => $email,
-            'name' => null,
-            'source' => 'app_settings',
-        ];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $email = strtolower(trim((string) $row['primary_email']));
+
+            if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $recipients[$email] = [
+                    'email' => $email,
+                    'name' => (string) ($row['full_name'] ?? ''),
+                    'source' => 'group_lead_volunteer',
+                ];
+            }
+        }
+    } catch (Throwable $e) {
+        dc_clense_log('GLV reminder lookup skipped: ' . $e->getMessage());
     }
 
     /*
-     * Pull district admins/reviewers from group memberships where available.
+     * 2. Group reviewers for this event's group (can_review_events = 1).
+     *    The column may not exist on older schemas, so skip gracefully.
+     */
+    if (dc_clense_column_exists('group_memberships', 'can_review_events')) {
+        try {
+            $stmt = db()->prepare("
+                SELECT DISTINCT
+                    p.full_name,
+                    p.primary_email
+                FROM group_memberships gm
+                JOIN people p
+                  ON p.id = gm.person_id
+                WHERE gm.group_id = :group_id
+                  AND gm.can_review_events = 1
+                  AND gm.status = 'active'
+                  AND p.status = 'active'
+                  AND p.primary_email IS NOT NULL
+                  AND p.primary_email <> ''
+            ");
+            $stmt->execute(['group_id' => $groupId]);
+
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $email = strtolower(trim((string) $row['primary_email']));
+
+                if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $recipients[$email] = [
+                        'email' => $email,
+                        'name' => (string) ($row['full_name'] ?? ''),
+                        'source' => 'group_reviewer',
+                    ];
+                }
+            }
+        } catch (Throwable $e) {
+            dc_clense_log('Group reviewer reminder lookup skipped: ' . $e->getMessage());
+        }
+    }
+
+    /*
+     * 3. District Lead Volunteers. They review events across every group in
+     *    the district, so they are notified regardless of group.
      */
     try {
         $stmt = db()->query("
@@ -571,11 +675,11 @@ function dc_clense_reviewer_recipients(): array
             FROM group_memberships gm
             JOIN people p
               ON p.id = gm.person_id
-            WHERE gm.status = 'active'
+            WHERE gm.membership_role = 'district_lead_volunteer'
+              AND gm.status = 'active'
               AND p.status = 'active'
               AND p.primary_email IS NOT NULL
               AND p.primary_email <> ''
-              AND gm.access_level IN ('district_reviewer', 'district_admin', 'system_admin')
         ");
 
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -585,44 +689,12 @@ function dc_clense_reviewer_recipients(): array
                 $recipients[$email] = [
                     'email' => $email,
                     'name' => (string) ($row['full_name'] ?? ''),
-                    'source' => 'group_memberships',
+                    'source' => 'district_lead_volunteer',
                 ];
             }
         }
     } catch (Throwable $e) {
-        dc_clense_log('Reviewer lookup from group_memberships skipped: ' . $e->getMessage());
-    }
-
-    /*
-     * Pull district admins/reviewers from people.highest_access_level where available.
-     */
-    if (dc_clense_column_exists('people', 'highest_access_level')) {
-        try {
-            $stmt = db()->query("
-                SELECT DISTINCT
-                    full_name,
-                    primary_email
-                FROM people
-                WHERE status = 'active'
-                  AND primary_email IS NOT NULL
-                  AND primary_email <> ''
-                  AND highest_access_level IN ('district_reviewer', 'district_admin', 'system_admin')
-            ");
-
-            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                $email = strtolower(trim((string) $row['primary_email']));
-
-                if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    $recipients[$email] = [
-                        'email' => $email,
-                        'name' => (string) ($row['full_name'] ?? ''),
-                        'source' => 'people.highest_access_level',
-                    ];
-                }
-            }
-        } catch (Throwable $e) {
-            dc_clense_log('Reviewer lookup from people.highest_access_level skipped: ' . $e->getMessage());
-        }
+        dc_clense_log('District Lead Volunteer reminder lookup skipped: ' . $e->getMessage());
     }
 
     return array_values($recipients);
@@ -665,7 +737,7 @@ function dc_clense_queue_draft_reminder(array $event, string $type): bool
     $eventUrl = dc_clense_event_url($eventId);
 
     if ($type === 'day_before') {
-        $subject = 'Draft event still not submitted: ' . $eventTitle;
+        $subject = 'Action needed: draft event still not submitted - ' . $eventTitle;
         $body = "Hello {$helloName},\n\n"
             . "Your District Calendar event is still saved as a draft and has not been submitted for review.\n\n"
             . "Event: {$eventTitle}\n"
@@ -674,7 +746,7 @@ function dc_clense_queue_draft_reminder(array $event, string $type): bool
             . "If the event is still going ahead, please open the draft and submit it as soon as possible:\n"
             . "{$eventUrl}";
     } else {
-        $subject = 'Reminder: submit your draft District Calendar event';
+        $subject = 'Reminder: submit your draft event for review - ' . $eventTitle;
         $body = "Hello {$helloName},\n\n"
             . "You have a District Calendar event saved as a draft with less than 8 days to go.\n\n"
             . "Event: {$eventTitle}\n"
@@ -716,7 +788,7 @@ function dc_clense_queue_review_reminder(array $event): int
         return 0;
     }
 
-    $recipients = dc_clense_reviewer_recipients();
+    $recipients = dc_clense_reviewer_recipients($groupId);
 
     if (!$recipients) {
         dc_clense_log("No reviewer recipients found for event #{$eventId}");
@@ -726,18 +798,19 @@ function dc_clense_queue_review_reminder(array $event): int
     $eventTitle = (string) ($event['title'] ?? 'Untitled event');
     $groupName = (string) ($event['group_name'] ?? 'Unknown Group');
     $status = (string) ($event['status'] ?? 'unknown');
+    $statusLabel = dc_clense_status_label($status);
     $start = dc_clense_format_date((string) ($event['starts_at'] ?? ''));
-    $eventUrl = dc_clense_event_url($eventId);
+    $reviewUrl = dc_clense_review_url($eventId);
 
-    $subject = 'Event waiting for review: ' . $eventTitle;
+    $subject = 'Reminder: event waiting for your review - ' . $eventTitle;
 
-    $body = "A District Calendar event is waiting for review and is coming up soon.\n\n"
+    $body = "This is a reminder that a District Calendar event is still waiting for review and is coming up soon.\n\n"
         . "Event: {$eventTitle}\n"
         . "Group: {$groupName}\n"
         . "Start: {$start}\n"
-        . "Status: {$status}\n\n"
-        . "Review the event here:\n"
-        . "{$eventUrl}";
+        . "Status: {$statusLabel}\n\n"
+        . "Review this event:\n"
+        . "{$reviewUrl}";
 
     $queuedCount = 0;
 

@@ -905,9 +905,11 @@ require __DIR__ . '/layout.php';
         width: 100%;
         min-width: 0;
         padding: 0.45rem 0.55rem;
-        background: #f8f5fc;
+        /* The main card is tinted with the group's colour; the accent border
+           (the ribbon in the spanning grid) carries the status colour. */
+        background: color-mix(in srgb, var(--dc-group-color, #7413dc) 12%, #fff);
         border: 0;
-        border-left: 4px solid var(--dc-group-color, #7413dc);
+        border-left: 4px solid var(--dc-status-color, #7413dc);
         border-radius: 0;
         color: var(--dc-ink, #1d2939);
         cursor: pointer;
@@ -923,12 +925,11 @@ require __DIR__ . '/layout.php';
         outline-offset: 1px;
         box-shadow: none;
         text-decoration: none;
-        background: #f0e7fb;
+        background: color-mix(in srgb, var(--dc-group-color, #7413dc) 20%, #fff);
     }
 
     .dc-cal-event.is-locked {
-        background: #eff6ff;
-        border-left-color: var(--dc-group-color, #006ddf);
+        border-left-color: var(--dc-status-color, #006ddf);
     }
 
     .dc-cal-event-title {
@@ -965,30 +966,30 @@ require __DIR__ . '/layout.php';
     }
 
     .dc-cal-event-approved {
-        background: #f0fdf9;
-        border-left-color: var(--dc-group-color, #00a794);
+        --dc-status-color: #00a794;
+        border-left-color: var(--dc-status-color);
     }
 
     .dc-cal-event-submitted,
     .dc-cal-event-under_review {
-        background: #fefce8;
-        border-left-color: var(--dc-group-color, #d4a300);
+        --dc-status-color: #d4a300;
+        border-left-color: var(--dc-status-color);
     }
 
     .dc-cal-event-changes_requested {
-        background: #fef2f2;
-        border-left-color: var(--dc-group-color, #dc2626);
+        --dc-status-color: #dc2626;
+        border-left-color: var(--dc-status-color);
     }
 
     .dc-cal-event-draft {
-        background: var(--dc-canvas, #f8fafc);
-        border-left-color: var(--dc-group-color, #94a3b8);
+        --dc-status-color: #94a3b8;
+        border-left-color: var(--dc-status-color);
     }
 
     .dc-cal-event-cancelled,
     .dc-cal-event-rejected {
-        background: #fef2f2;
-        border-left-color: var(--dc-group-color, #dc2626);
+        --dc-status-color: #dc2626;
+        border-left-color: var(--dc-status-color);
         opacity: 0.7;
         text-decoration: line-through;
     }
@@ -1193,7 +1194,9 @@ require __DIR__ . '/layout.php';
         .dc-cal-event {
             padding: 0.3rem 0.45rem;
             border-left: 0;
-            border-top: 3px solid var(--dc-group-color, #7413dc);
+            /* Ribbon across the top carries the status colour; the tile body
+               keeps the group-colour tint from the base rule. */
+            border-top: 3px solid var(--dc-status-color, #7413dc);
             border-radius: 0;
             overflow: hidden;
         }
@@ -1209,26 +1212,7 @@ require __DIR__ . '/layout.php';
         }
 
         .dc-cal-event.is-locked {
-            border-top-color: var(--dc-group-color, #006ddf);
-        }
-
-        .dc-cal-event-approved {
-            border-top-color: var(--dc-group-color, #00a794);
-        }
-
-        .dc-cal-event-submitted,
-        .dc-cal-event-under_review {
-            border-top-color: var(--dc-group-color, #d4a300);
-        }
-
-        .dc-cal-event-changes_requested,
-        .dc-cal-event-cancelled,
-        .dc-cal-event-rejected {
-            border-top-color: var(--dc-group-color, #dc2626);
-        }
-
-        .dc-cal-event-draft {
-            border-top-color: var(--dc-group-color, #94a3b8);
+            border-top-color: var(--dc-status-color, #006ddf);
         }
 
         .dc-cal-event-district {

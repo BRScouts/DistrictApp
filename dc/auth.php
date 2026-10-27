@@ -1164,28 +1164,69 @@ function dc_queue_event_notifications(int $eventId, string $eventAction): void
 
     $subject = match ($eventAction) {
         'approved' => 'Event approved: ' . $event['title'],
-        'changes_requested' => 'Changes requested: ' . $event['title'],
-        'rejected' => 'Event rejected: ' . $event['title'],
+        'changes_requested' => 'Changes requested on your event: ' . $event['title'],
+        'rejected' => 'Event not approved: ' . $event['title'],
         'cancelled' => 'Event cancelled: ' . $event['title'],
-        default => 'Event submitted for review: ' . $event['title'],
+        default => 'Event submitted for your review: ' . $event['title'],
     };
 
-    $body = "Event: {$event['title']}\n"
+    // Human-readable status label instead of the raw machine value.
+    $statusLabels = [
+        'draft' => 'Draft (not yet submitted)',
+        'submitted' => 'Submitted, waiting for review',
+        'under_review' => 'Under review',
+        'changes_requested' => 'Changes requested',
+        'approved' => 'Approved',
+        'rejected' => 'Not approved',
+        'cancelled' => 'Cancelled',
+    ];
+    $statusLabel = $statusLabels[(string) $event['status']] ?? ucfirst(str_replace('_', ' ', (string) $event['status']));
+
+    // A one-line explanation so the purpose of the email is obvious.
+    $intro = match ($eventAction) {
+        'approved' => 'Good news — this event has been approved.',
+        'changes_requested' => 'A reviewer has requested changes before this event can be approved.',
+        'rejected' => 'This event has not been approved.',
+        'cancelled' => 'This event has been cancelled.',
+        default => 'This event has been submitted and is waiting for review.',
+    };
+
+    // Format the dates for readability rather than showing raw timestamps.
+    $whenLine = (string) $event['starts_at'];
+
+    if (!empty($event['starts_at']) && strtotime((string) $event['starts_at'])) {
+        $whenLine = date('j M Y H:i', strtotime((string) $event['starts_at']));
+
+        if (!empty($event['ends_at']) && strtotime((string) $event['ends_at'])) {
+            $whenLine .= ' to ' . date('j M Y H:i', strtotime((string) $event['ends_at']));
+        }
+    }
+
+    // Reviewers go straight to the review screen; the leader goes to the event
+    // they manage. Build both links so each recipient gets the right one.
+    $reviewUrl = dc_absolute_url('/dc/reviewer/review-event.php?id=' . $eventId);
+    $manageUrl = dc_absolute_url('/dc/manage-event.php?id=' . $eventId);
+
+    $baseBody = "{$intro}\n\n"
+        . "Event: {$event['title']}\n"
         . "Group: {$event['group_name']}\n"
-        . "When: {$event['starts_at']} to {$event['ends_at']}\n"
-        . "Status: {$event['status']}\n\n"
-        . "Open the Leader Tool to review the full details.";
+        . "When: {$whenLine}\n"
+        . "Status: {$statusLabel}\n";
 
     $recipients = [];
 
     if ($eventAction === 'submitted') {
-        foreach (dc_split_emails(dc_setting('event_notification_recipients', '')) as $email) {
-            $recipients[strtolower($email)] = [
-                'email' => $email,
-                'name' => null,
-            ];
-        }
-
+        /*
+         * Submit notifications go ONLY to role-based recipients:
+         *   - the group's Group Lead Volunteer (if the group opted in),
+         *   - group reviewers (can_review_events = 1) for this group,
+         *   - District Lead Volunteers,
+         *   - the event leader (added last, below).
+         *
+         * The free-text event_notification_recipients setting was intentionally
+         * dropped so system admins (or any ad-hoc address) are no longer
+         * emailed on every submission.
+         */
         $stmt = db()->prepare("
             SELECT
                 p.full_name,
@@ -1209,6 +1250,7 @@ function dc_queue_event_notifications(int $eventId, string $eventAction): void
             $recipients[strtolower((string) $row['primary_email'])] = [
                 'email' => (string) $row['primary_email'],
                 'name' => (string) $row['full_name'],
+                'role' => 'reviewer',
             ];
         }
 
@@ -1236,6 +1278,7 @@ function dc_queue_event_notifications(int $eventId, string $eventAction): void
                 $recipients[strtolower((string) $row['primary_email'])] = [
                     'email' => (string) $row['primary_email'],
                     'name' => (string) $row['full_name'],
+                    'role' => 'reviewer',
                 ];
             }
         } catch (Throwable $e) {
@@ -1264,18 +1307,31 @@ function dc_queue_event_notifications(int $eventId, string $eventAction): void
             $recipients[strtolower((string) $row['primary_email'])] = [
                 'email' => (string) $row['primary_email'],
                 'name' => (string) $row['full_name'],
+                'role' => 'reviewer',
             ];
         }
     }
 
+    // The leader who owns the event. Set last so that, if they are also a
+    // reviewer, they receive the leader-facing link to the event they manage.
     if (!empty($event['leader_email'])) {
         $recipients[strtolower((string) $event['leader_email'])] = [
             'email' => (string) $event['leader_email'],
             'name' => (string) ($event['leader_name'] ?? null),
+            'role' => 'leader',
         ];
     }
 
     foreach ($recipients as $recipient) {
+        $isReviewer = ($recipient['role'] ?? 'leader') === 'reviewer';
+
+        // Reviewers get the review screen; the leader gets the event they manage.
+        if ($isReviewer) {
+            $body = $baseBody . "\nReview this event:\n" . $reviewUrl;
+        } else {
+            $body = $baseBody . "\nView this event:\n" . $manageUrl;
+        }
+
         dc_queue_email(
             $recipient['email'],
             $recipient['name'],

@@ -12,6 +12,27 @@ $appName = app_config('APP_NAME', 'Irwell Valley Leader Tool');
 $authError = $_SESSION['auth_error'] ?? '';
 
 unset($_SESSION['auth_error']);
+
+/*
+ * Carry any post-login return destination through to the Microsoft sign-in
+ * start endpoint. Only forward a safe, same-site relative path; microsoft-
+ * start.php validates it again before stashing it in the session.
+ */
+$requestedReturn = trim((string) ($_GET['return'] ?? ''));
+
+$microsoftStartUrl = '/auth/microsoft-start.php';
+
+if (
+    $requestedReturn !== ''
+    && $requestedReturn[0] === '/'
+    && !str_starts_with($requestedReturn, '//')
+    && !str_contains($requestedReturn, '://')
+    && !preg_match('/[\x00-\x1f\x7f]/', $requestedReturn)
+    && !str_starts_with($requestedReturn, '/login.php')
+    && !str_starts_with($requestedReturn, '/dc/login.php')
+) {
+    $microsoftStartUrl .= '?return=' . rawurlencode($requestedReturn);
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -243,7 +264,7 @@ unset($_SESSION['auth_error']);
                 </div>
             <?php endif; ?>
 
-            <a href="/auth/microsoft-start.php" class="lt-login-button">
+            <a href="<?= e($microsoftStartUrl) ?>" class="lt-login-button">
                 Sign in with Microsoft
             </a>
 
