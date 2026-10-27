@@ -57,6 +57,61 @@ try {
     $risks = [];
 }
 
+// Audit history. Only people who can manage the group see the audit trail;
+// it's an administrative record, not viewer-facing content. The query mirrors
+// the one on manage-event.php so both pages show the same history, including
+// risk-assessment actions linked to this event via details_json.
+$auditRows = [];
+
+if ($canManage) {
+    try {
+        $stmt = db()->prepare("
+            SELECT
+                al.*,
+                p.full_name AS actor_name,
+                g.group_name
+            FROM audit_log al
+            LEFT JOIN people p
+              ON p.id = al.actor_person_id
+            LEFT JOIN groups g
+              ON g.id = al.group_id
+            WHERE
+              (al.entity_type = 'calendar_event' AND al.entity_id = :event_id)
+              OR
+              (al.entity_type = 'risk_assessment' AND JSON_EXTRACT(al.details_json, '$.event_id') = CAST(:event_id_json AS JSON))
+            ORDER BY al.created_at DESC, al.id DESC
+            LIMIT 100
+        ");
+        $stmt->execute([
+            'event_id' => $eventId,
+            'event_id_json' => (string) $eventId,
+        ]);
+        $auditRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        try {
+            $stmt = db()->prepare("
+                SELECT
+                    al.*,
+                    p.full_name AS actor_name,
+                    g.group_name
+                FROM audit_log al
+                LEFT JOIN people p
+                  ON p.id = al.actor_person_id
+                LEFT JOIN groups g
+                  ON g.id = al.group_id
+                WHERE al.entity_type = 'calendar_event'
+                  AND al.entity_id = :event_id
+                ORDER BY al.created_at DESC, al.id DESC
+                LIMIT 100
+            ");
+            $stmt->execute(['event_id' => $eventId]);
+            $auditRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            $auditRows = [];
+        }
+    }
+}
+
 $title = (string) ($event['title'] ?? 'Event');
 $status = (string) ($event['status'] ?? '');
 $description = (string) ($event['description'] ?? '');
@@ -111,6 +166,30 @@ function dc_event_when(?DateTimeImmutable $start, ?DateTimeImmutable $end): stri
 
 $whenLabel = dc_event_when($startsAt, $endsAt);
 $statusLabel = ucwords(str_replace('_', ' ', $status));
+$isCancelled = $status === 'cancelled';
+
+/**
+ * Map an event lifecycle status to a badge tone so the status reads at a
+ * glance: green when approved, amber while it needs attention, red when
+ * rejected/cancelled, neutral for drafts.
+ */
+function dc_event_status_tone(string $status): string
+{
+    switch ($status) {
+        case 'approved':
+            return 'positive';
+        case 'submitted':
+        case 'changes_requested':
+            return 'warning';
+        case 'rejected':
+        case 'cancelled':
+            return 'critical';
+        default:
+            return 'neutral';
+    }
+}
+
+$statusTone = dc_event_status_tone($status);
 
 $mapParts = array_filter([$locationName, $locationAddress]);
 $mapQuery = $mapParts ? implode(', ', $mapParts) : '';
@@ -186,6 +265,72 @@ require __DIR__ . '/layout.php';
 
     .dc-ev-risk-list { margin: 0; padding-left: 1.1rem; }
     .dc-ev-risk-list li { margin-bottom: 0.35rem; }
+
+    /* Status card + badge. Colour reflects the event lifecycle state;
+       the label text carries the meaning too, so it's not colour-only. */
+    .dc-ev-status-badge {
+        display: inline-block;
+        padding: 0.35rem 0.75rem;
+        font-weight: 800;
+        font-size: 0.95rem;
+        border: 2px solid var(--dc-scouts-purple, #7413dc);
+        border-radius: 999px;
+        color: var(--dc-scouts-purple, #7413dc);
+        background: #faf5ff;
+    }
+
+    .dc-ev-status-badge--positive {
+        color: #2e7d32;
+        border-color: #2e7d32;
+        background: #edf7ee;
+    }
+
+    .dc-ev-status-badge--warning {
+        color: #8a5300;
+        border-color: #c77700;
+        background: #fff6e6;
+    }
+
+    .dc-ev-status-badge--critical {
+        color: #c0392b;
+        border-color: #c0392b;
+        background: #fcecea;
+    }
+
+    /* Audit trail — mirrors the ribbon/actor styling on manage-event.php. */
+    .dc-audit-list { display: grid; gap: 0.65rem; }
+
+    .dc-audit-item {
+        border-left: 5px solid var(--dc-scouts-purple, #7413dc);
+        background: #fff;
+        padding: 0.75rem;
+        border-top: 1px solid var(--dc-border, #e2e8f0);
+        border-right: 1px solid var(--dc-border, #e2e8f0);
+        border-bottom: 1px solid var(--dc-border, #e2e8f0);
+    }
+
+    .dc-audit-item--positive { border-left-color: #2e7d32; }
+    .dc-audit-item--warning { border-left-color: #c77700; }
+    .dc-audit-item--critical { border-left-color: #c0392b; }
+
+    .dc-audit-meta {
+        margin-top: 0.15rem;
+        font-size: 0.85rem;
+        color: var(--dc-muted, #64748b);
+    }
+
+    .dc-audit-actor {
+        font-weight: 700;
+        color: var(--dc-ink, #1d2939);
+    }
+
+    .dc-audit-actor::after {
+        content: " · ";
+        font-weight: 400;
+        color: var(--dc-muted, #64748b);
+    }
+
+    .mt-2 { margin-top: 0.5rem; }
 </style>
 
 <a class="dc-ev-back" href="/dc/">&larr; Back to the calendar</a>
@@ -198,7 +343,6 @@ require __DIR__ . '/layout.php';
             <?php if ($locationName !== '' || $locationAddress !== ''): ?>
                 <div><strong>Where</strong> <span><?= e($locationName !== '' ? $locationName : $locationAddress) ?></span></div>
             <?php endif; ?>
-            <div><strong>Status</strong> <span><?= e($statusLabel) ?></span></div>
         </div>
 
         <?php if ($description !== ''): ?>
@@ -254,9 +398,67 @@ require __DIR__ . '/layout.php';
                 </ul>
             </section>
         <?php endif; ?>
+
+        <?php if ($canManage): ?>
+            <section class="dc-ev-section">
+                <h2>Audit trail</h2>
+
+                <?php if (!$auditRows): ?>
+                    <p class="dc-ev-body">No audit activity has been recorded for this event yet.</p>
+                <?php else: ?>
+                    <div class="dc-audit-list">
+                        <?php foreach ($auditRows as $row): ?>
+                            <?php
+                                $details = json_decode((string) ($row['details_json'] ?? ''), true);
+                                if (!is_array($details)) {
+                                    $details = [];
+                                }
+
+                                $actor = $row['actor_type'] === 'person'
+                                    ? ((string) ($row['actor_name'] ?? 'Signed-in user'))
+                                    : ucwords(str_replace('_', ' ', (string) $row['actor_type']));
+                                $tone = audit_event_tone((string) $row['action']);
+                            ?>
+                            <div class="dc-audit-item dc-audit-item--<?= e($tone) ?>">
+                                <strong><?= e(ucwords(str_replace(['.', '_'], ' ', (string) $row['action']))) ?></strong>
+                                <div class="dc-audit-meta">
+                                    <span class="dc-audit-actor"><?= e($actor) ?></span>
+                                    <span class="dc-audit-when">
+                                        <?= e(date('d M Y H:i', strtotime((string) $row['created_at']))) ?>
+                                        <?php if (!empty($row['group_name'])): ?>
+                                            · <?= e((string) $row['group_name']) ?>
+                                        <?php endif; ?>
+                                    </span>
+                                </div>
+
+                                <?php if ($details): ?>
+                                    <div class="mt-2">
+                                        <?php foreach ($details as $key => $value): ?>
+                                            <?php if ($value === null || $value === '') continue; ?>
+                                            <?php [$detailLabel, $detailValue] = audit_format_detail((string) $key, $value); ?>
+                                            <div>
+                                                <strong><?= e($detailLabel) ?>:</strong>
+                                                <?= e($detailValue) ?>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </section>
+        <?php endif; ?>
     </div>
 
     <aside class="dc-ev-aside">
+        <div class="dc-ev-card dc-ev-status-card">
+            <h3>Status</h3>
+            <span class="dc-ev-status-badge dc-ev-status-badge--<?= e($statusTone) ?>">
+                <?= e($statusLabel !== '' ? $statusLabel : 'Unknown') ?>
+            </span>
+        </div>
+
         <div class="dc-ev-card">
             <h3>Main contact</h3>
             <p style="margin:0;font-weight:700;"><?= e($leaderName !== '' ? $leaderName : 'Not set') ?></p>
@@ -271,7 +473,12 @@ require __DIR__ . '/layout.php';
         <?php if ($canManage): ?>
             <div class="dc-ev-card">
                 <h3>Manage</h3>
-                <a class="btn btn-primary lt-btn" href="/dc/manage-event.php?id=<?= (int) $eventId ?>">Open &amp; edit event</a>
+                <?php if ($isCancelled): ?>
+                    <a class="btn btn-primary lt-btn" href="/dc/manage-event.php?id=<?= (int) $eventId ?>">Open event</a>
+                <?php else: ?>
+                    <a class="btn btn-primary lt-btn" href="/dc/manage-event.php?id=<?= (int) $eventId ?>&amp;edit=1">Edit event</a>
+                    <a class="btn lt-btn lt-btn-secondary" href="/dc/manage-event.php?id=<?= (int) $eventId ?>" style="margin-top:0.5rem;">Open full management page</a>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
     </aside>

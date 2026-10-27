@@ -278,6 +278,36 @@ require __DIR__ . '/../layout.php';
         border-left: 5px solid #7413dc;
     }
 
+    /* Ribbon colour reflects the outcome of the logged action. */
+    .dc-audit-item--positive {
+        border-left-color: #2e7d32;
+    }
+
+    .dc-audit-item--warning {
+        border-left-color: #c77700;
+    }
+
+    .dc-audit-item--critical {
+        border-left-color: #c0392b;
+    }
+
+    .dc-audit-meta {
+        margin-top: 0.15rem;
+        font-size: 0.85rem;
+        color: var(--dc-muted, #64748b);
+    }
+
+    .dc-audit-actor {
+        font-weight: 700;
+        color: var(--dc-ink, #0f172a);
+    }
+
+    .dc-audit-actor::after {
+        content: " · ";
+        font-weight: 400;
+        color: var(--dc-muted, #64748b);
+    }
+
     .dc-notification-item {
         border-left: 5px solid #006ddf;
     }
@@ -475,15 +505,14 @@ require __DIR__ . '/../layout.php';
                             if (!is_array($details)) {
                                 $details = [];
                             }
+                            $tone = audit_event_tone((string) $row['action']);
                         ?>
-                        <article class="dc-audit-item">
+                        <article class="dc-audit-item dc-audit-item--<?= e($tone) ?>">
                             <strong><?= e(ucwords(str_replace(['.', '_'], ' ', (string) $row['action']))) ?></strong>
-                            <br>
-                            <small>
-                                <?= e(date('j M Y H:i', strtotime((string) $row['created_at']))) ?>
-                                ·
-                                <?= e((string) ($row['actor_name'] ?? $row['actor_type'] ?? 'Unknown')) ?>
-                            </small>
+                            <div class="dc-audit-meta">
+                                <span class="dc-audit-actor"><?= e((string) ($row['actor_name'] ?? $row['actor_type'] ?? 'Unknown')) ?></span>
+                                <span class="dc-audit-when"><?= e(date('j M Y H:i', strtotime((string) $row['created_at']))) ?></span>
+                            </div>
 
                             <?php if ($details): ?>
                                 <div class="mt-2">

@@ -1102,13 +1102,43 @@ require __DIR__ . '/layout.php';
     }
 
     .dc-audit-item {
-        border-left: 3px solid var(--dc-scouts-purple, #7413dc);
+        border-left: 5px solid var(--dc-scouts-purple, #7413dc);
         border-radius: 0;
         background: #fff;
         padding: 0.75rem;
         border-top: 1px solid var(--dc-border, #e2e8f0);
         border-right: 1px solid var(--dc-border, #e2e8f0);
         border-bottom: 1px solid var(--dc-border, #e2e8f0);
+    }
+
+    /* Ribbon colour reflects the outcome of the logged action. */
+    .dc-audit-item--positive {
+        border-left-color: #2e7d32;
+    }
+
+    .dc-audit-item--warning {
+        border-left-color: #c77700;
+    }
+
+    .dc-audit-item--critical {
+        border-left-color: #c0392b;
+    }
+
+    .dc-audit-meta {
+        margin-top: 0.15rem;
+        font-size: 0.85rem;
+        color: var(--dc-muted, #64748b);
+    }
+
+    .dc-audit-actor {
+        font-weight: 700;
+        color: var(--dc-ink, #0f172a);
+    }
+
+    .dc-audit-actor::after {
+        content: " · ";
+        font-weight: 400;
+        color: var(--dc-muted, #64748b);
     }
 
     .dc-audit-item small {
@@ -1271,17 +1301,19 @@ require __DIR__ . '/layout.php';
                         $actor = $row['actor_type'] === 'person'
                             ? ((string) ($row['actor_name'] ?? 'Signed-in user'))
                             : ucwords(str_replace('_', ' ', (string) $row['actor_type']));
+                        $tone = audit_event_tone((string) $row['action']);
                     ?>
-                    <div class="dc-audit-item">
+                    <div class="dc-audit-item dc-audit-item--<?= e($tone) ?>">
                         <strong><?= e(ucwords(str_replace(['.', '_'], ' ', (string) $row['action']))) ?></strong>
-                        <br>
-                        <small>
-                            <?= e(date('d M Y H:i', strtotime((string) $row['created_at']))) ?>
-                            · <?= e($actor) ?>
-                            <?php if (!empty($row['group_name'])): ?>
-                                · <?= e((string) $row['group_name']) ?>
-                            <?php endif; ?>
-                        </small>
+                        <div class="dc-audit-meta">
+                            <span class="dc-audit-actor"><?= e($actor) ?></span>
+                            <span class="dc-audit-when">
+                                <?= e(date('d M Y H:i', strtotime((string) $row['created_at']))) ?>
+                                <?php if (!empty($row['group_name'])): ?>
+                                    · <?= e((string) $row['group_name']) ?>
+                                <?php endif; ?>
+                            </span>
+                        </div>
 
                         <?php if ($details): ?>
                             <div class="mt-2">

@@ -332,6 +332,38 @@ function audit_event_severity(string $eventCode): string
     return $types[$eventCode][2] ?? AUDIT_SEVERITY_INFO;
 }
 
+/**
+ * Map an audit event code to a visual "tone" used to colour the ribbon
+ * on an audit trail entry. Tones are intentionally coarse so the trail
+ * reads at a glance:
+ *   - 'positive' : a good outcome worth highlighting (e.g. event approved)
+ *   - 'critical' : a permission/settings change (critical severity)
+ *   - 'warning'  : a destructive or sensitive action (warning severity)
+ *   - 'neutral'  : routine info events (the default purple ribbon)
+ *
+ * Returns one of: 'positive' | 'critical' | 'warning' | 'neutral'.
+ */
+function audit_event_tone(string $eventCode): string
+{
+    // Explicit positive outcomes get the green ribbon regardless of severity.
+    $positive = [
+        AUDIT_EVENT_APPROVED,
+        AUDIT_USER_REACTIVATED,
+    ];
+    if (in_array($eventCode, $positive, true)) {
+        return 'positive';
+    }
+
+    switch (audit_event_severity($eventCode)) {
+        case AUDIT_SEVERITY_CRITICAL:
+            return 'critical';
+        case AUDIT_SEVERITY_WARNING:
+            return 'warning';
+        default:
+            return 'neutral';
+    }
+}
+
 // ─── Helper: Fetch recent audit entries for an entity ────────────────────────
 
 /**
