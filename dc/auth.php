@@ -1078,6 +1078,48 @@ function dc_store_risk_assessment_upload(
 
     $finfo = new finfo(FILEINFO_MIME_TYPE);
     $mime = $finfo->file((string) $file['tmp_name']) ?: 'application/octet-stream';
+
+    // Hash the file bytes from the still-uploaded temp file, before anything
+    // is written to disk, so an identical re-upload never lands a second copy.
+    $sha = hash_file('sha256', (string) $file['tmp_name']) ?: null;
+
+    // Deduplicate within the group: if this group already holds a byte-identical
+    // active risk assessment, reuse that row rather than storing the file again.
+    // Scoped to the group on purpose — risk assessments are group data, so the
+    // same template held by two groups is not a duplicate. Guarded with
+    // dc_table_has_column so the app still works before migration 006 adds the
+    // column/index on an older schema.
+    if ($sha !== null && dc_table_has_column('risk_assessments', 'file_sha256')) {
+        $dupStmt = db()->prepare("
+            SELECT id
+            FROM risk_assessments
+            WHERE group_id = :group_id
+              AND file_sha256 = :file_sha256
+              AND status = 'active'
+            ORDER BY id ASC
+            LIMIT 1
+        ");
+        $dupStmt->execute([
+            'group_id' => $groupId,
+            'file_sha256' => $sha,
+        ]);
+        $existingId = $dupStmt->fetchColumn();
+
+        if ($existingId !== false) {
+            $existingId = (int) $existingId;
+
+            dc_log(
+                'risk_assessment.duplicate_reused',
+                'risk_assessment',
+                $existingId,
+                ['file_sha256' => $sha],
+                $groupId
+            );
+
+            return $existingId;
+        }
+    }
+
     $stored = 'risk_assessment_' . date('Ymd_His') . '_' . bin2hex(random_bytes(8)) . '.' . $extension;
     $dir = dc_safe_upload_dir();
     $target = $dir . '/' . $stored;
@@ -1087,7 +1129,6 @@ function dc_store_risk_assessment_upload(
     }
 
     $relative = 'uploads/risk_assessments/' . date('Y') . '/' . date('m') . '/' . $stored;
-    $sha = hash_file('sha256', $target) ?: null;
 
     $stmt = db()->prepare("
         INSERT INTO risk_assessments (
