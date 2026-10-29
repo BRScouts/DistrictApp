@@ -8,6 +8,17 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
+/**
+ * Shared mailbox that receives district review notifications.
+ *
+ * District review used to be emailed to each District Lead Volunteer
+ * individually (membership_role = 'district_lead_volunteer'). It now goes to
+ * this one shared address instead.
+ */
+if (!defined('DC_DLV_SHARED_EMAIL')) {
+    define('DC_DLV_SHARED_EMAIL', 'dlv@irvalscouts.org.uk');
+}
+
 function dc_table_has_column(string $table, string $column): bool
 {
     static $cache = [];
@@ -1327,27 +1338,16 @@ function dc_queue_event_notifications(int $eventId, string $eventAction): void
         }
 
         /*
-         * Notify District Lead Volunteers. They review events across every
-         * group in the district, so they are notified regardless of their
-         * access level (reviewer/admin or otherwise).
+         * Notify the District Lead Volunteer shared mailbox. District review
+         * used to fan out to every district_lead_volunteer person's personal
+         * email; it now goes to the one shared address instead.
          */
-        $stmt = db()->query("
-            SELECT DISTINCT
-                p.full_name,
-                p.primary_email
-            FROM group_memberships gm
-            JOIN people p
-              ON p.id = gm.person_id
-            WHERE gm.membership_role = 'district_lead_volunteer'
-              AND gm.status = 'active'
-              AND p.status = 'active'
-              AND p.primary_email IS NOT NULL
-        ");
+        $dlvEmail = strtolower(trim((string) DC_DLV_SHARED_EMAIL));
 
-        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $recipients[strtolower((string) $row['primary_email'])] = [
-                'email' => (string) $row['primary_email'],
-                'name' => (string) $row['full_name'],
+        if (filter_var($dlvEmail, FILTER_VALIDATE_EMAIL)) {
+            $recipients[$dlvEmail] = [
+                'email' => $dlvEmail,
+                'name' => 'District Lead Volunteer',
                 'role' => 'reviewer',
             ];
         }

@@ -24,6 +24,17 @@ require_once __DIR__ . '/cron-guard.php';
 $pdo = db();
 
 /**
+ * Shared mailbox that receives district review notifications.
+ *
+ * District review used to be emailed to each District Lead Volunteer
+ * individually (membership_role = 'district_lead_volunteer'). It now goes to
+ * this one shared address instead.
+ */
+if (!defined('DC_DLV_SHARED_EMAIL')) {
+    define('DC_DLV_SHARED_EMAIL', 'dlv@irvalscouts.org.uk');
+}
+
+/**
  * -----------------------------------------------------------------------------
  * Basic helpers
  * -----------------------------------------------------------------------------
@@ -576,7 +587,12 @@ function dc_clense_delete_event_risk_links(array $eventIds): int
  *   - the event group's Group Lead Volunteer, if that group has opted in
  *     (groups.notify_lead_on_event_created = 1),
  *   - members of the event's group who can review events (can_review_events = 1),
- *   - District Lead Volunteers (membership_role = 'district_lead_volunteer').
+ *   - the single shared District Lead Volunteer mailbox (DC_DLV_SHARED_EMAIL).
+ *
+ * District review used to fan out to every person with the
+ * district_lead_volunteer membership role, hitting their personal inboxes.
+ * That is now collapsed to one shared address so the district review lands in
+ * a single mailbox instead.
  *
  * It deliberately does NOT notify system admins, district admins, or
  * district reviewers by access level, and it does not pull in the
@@ -664,37 +680,18 @@ function dc_clense_reviewer_recipients(int $groupId): array
     }
 
     /*
-     * 3. District Lead Volunteers. They review events across every group in
-     *    the district, so they are notified regardless of group.
+     * 3. District Lead Volunteer shared mailbox. District review used to fan
+     *    out to every district_lead_volunteer person's personal email; it now
+     *    goes to the one shared address instead.
      */
-    try {
-        $stmt = db()->query("
-            SELECT DISTINCT
-                p.full_name,
-                p.primary_email
-            FROM group_memberships gm
-            JOIN people p
-              ON p.id = gm.person_id
-            WHERE gm.membership_role = 'district_lead_volunteer'
-              AND gm.status = 'active'
-              AND p.status = 'active'
-              AND p.primary_email IS NOT NULL
-              AND p.primary_email <> ''
-        ");
+    $dlvEmail = strtolower(trim((string) DC_DLV_SHARED_EMAIL));
 
-        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $email = strtolower(trim((string) $row['primary_email']));
-
-            if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                $recipients[$email] = [
-                    'email' => $email,
-                    'name' => (string) ($row['full_name'] ?? ''),
-                    'source' => 'district_lead_volunteer',
-                ];
-            }
-        }
-    } catch (Throwable $e) {
-        dc_clense_log('District Lead Volunteer reminder lookup skipped: ' . $e->getMessage());
+    if (filter_var($dlvEmail, FILTER_VALIDATE_EMAIL)) {
+        $recipients[$dlvEmail] = [
+            'email' => $dlvEmail,
+            'name' => 'District Lead Volunteer',
+            'source' => 'district_lead_volunteer',
+        ];
     }
 
     return array_values($recipients);
