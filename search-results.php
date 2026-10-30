@@ -218,6 +218,12 @@ include __DIR__ . '/header.php';
         border-color: #c3dcf2;
     }
 
+    .search-badge--district_event {
+        background: #f1e6fb;
+        color: #4d0b93;
+        border-color: #d9c2f2;
+    }
+
     .search-badge--risk {
         background: #fff3e0;
         color: #9a5600;

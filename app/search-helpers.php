@@ -8,8 +8,8 @@ declare(strict_types=1);
  *
  * Every result is returned in a normalised shape:
  *   [
- *     'category' => 'module'|'calendar'|'risk'|'person'|'help',
- *     'badge'    => 'Module'|'Calendar'|'Risk Assessment'|'Person'|'Help',
+ *     'category' => 'module'|'calendar'|'district_event'|'risk'|'person'|'help',
+ *     'badge'    => 'Module'|'Calendar'|'District Event'|'Risk Assessment'|'Person'|'Help',
  *     'title'    => string,
  *     'subtitle' => string,   // group / date / email etc.
  *     'url'      => string,    // where the result opens
@@ -19,8 +19,10 @@ declare(strict_types=1);
  * Permission rules are intentionally identical to the pages the
  * results link to, so a user can never surface something they are
  * not allowed to see:
- *   - Calendar events:  own groups' events + all district events
+ *   - Calendar events:  own groups' (non-district) events
  *                       (reviewers/admins see everything).
+ *   - District Events:  visible to every signed-in user, matching
+ *                       /dc/district-event.php (which uses dc_require_access()).
  *   - Risk assessments: district-visibility to all, group-visibility
  *                       only to members of that group.
  *   - People:           active people in the directory.
@@ -35,11 +37,12 @@ require_once __DIR__ . '/../dc/auth.php';
 function search_categories(): array
 {
     return [
-        'module'   => 'Module',
-        'calendar' => 'Calendar',
-        'risk'     => 'Risk Assessment',
-        'person'   => 'Person',
-        'help'     => 'Help',
+        'module'         => 'Module',
+        'calendar'       => 'Calendar',
+        'district_event' => 'District Event',
+        'risk'           => 'Risk Assessment',
+        'person'         => 'Person',
+        'help'           => 'Help',
     ];
 }
 
@@ -120,12 +123,13 @@ function search_run(string $query, array $categories = [], int $perCategory = 25
 
     foreach ($categories as $category) {
         $rows = match ($category) {
-            'module'   => search_modules($query, $perCategory),
-            'calendar' => search_calendar_events($query, $perCategory),
-            'risk'     => search_risk_assessments($query, $perCategory),
-            'person'   => search_people($query, $perCategory),
-            'help'     => search_help_articles($query, $perCategory),
-            default    => [],
+            'module'         => search_modules($query, $perCategory),
+            'calendar'       => search_calendar_events($query, $perCategory),
+            'district_event' => search_district_events($query, $perCategory),
+            'risk'           => search_risk_assessments($query, $perCategory),
+            'person'         => search_people($query, $perCategory),
+            'help'           => search_help_articles($query, $perCategory),
+            default          => [],
         };
 
         $counts[$category] = count($rows);
@@ -194,6 +198,12 @@ function search_calendar_events(string $query, int $limit): array
     $where = [];
     $params = [];
 
+    // District Events are searched separately under their own category, so
+    // exclude them here to avoid the same event appearing twice.
+    if ($hasDistrictColumn) {
+        $where[] = 'ce.is_district_event = 0';
+    }
+
     $like = '%' . $query . '%';
     $where[] = '(ce.title LIKE ? OR ce.description LIKE ? OR ce.location_name LIKE ? OR ce.location_address LIKE ? OR ce.leader_name LIKE ? OR g.group_name LIKE ?)';
     for ($i = 0; $i < 6; $i++) {
@@ -260,6 +270,79 @@ function search_calendar_events(string $query, int $limit): array
             'url'       => '/dc/event.php?id=' . (int) $row['id'],
             'external'  => false,
             'can_edit'  => $canEdit,
+        ];
+    }
+
+    return $out;
+}
+
+/**
+ * Search District Events — events created by a district/system admin that
+ * every group sees on the District Calendar.
+ *
+ * District Events are visible to every signed-in user (the view page,
+ * /dc/district-event.php, uses dc_require_access()), so there is no group
+ * scoping here. Returns nothing if the is_district_event column is absent
+ * (i.e. migration 004 has not been run yet).
+ */
+function search_district_events(string $query, int $limit): array
+{
+    if ($query === '') {
+        return [];
+    }
+
+    $ctx = dc_context(false);
+    if (empty($ctx['is_signed_in'])) {
+        return [];
+    }
+
+    // Without the district flag column there are no District Events to find.
+    if (!dc_table_has_column('calendar_events', 'is_district_event')) {
+        return [];
+    }
+
+    $like = '%' . $query . '%';
+    $params = [];
+
+    $where = ['ce.is_district_event = 1'];
+    $where[] = '(ce.title LIKE ? OR ce.description LIKE ? OR ce.location_name LIKE ? OR ce.location_address LIKE ?)';
+    for ($i = 0; $i < 4; $i++) {
+        $params[] = $like;
+    }
+
+    $whereSql = implode("\n          AND ", $where);
+
+    $sql = "
+        SELECT ce.id, ce.title, ce.location_name, ce.starts_at
+        FROM calendar_events ce
+        WHERE {$whereSql}
+        ORDER BY ce.starts_at DESC
+        LIMIT " . (int) $limit;
+
+    try {
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return [];
+    }
+
+    $out = [];
+
+    foreach ($rows as $row) {
+        $when = !empty($row['starts_at']) ? date('j M Y', strtotime((string) $row['starts_at'])) : '';
+        $subParts = array_filter([
+            $when,
+            trim((string) ($row['location_name'] ?? '')),
+        ]);
+
+        $out[] = [
+            'category' => 'district_event',
+            'badge'    => 'District Event',
+            'title'    => (string) ($row['title'] ?? 'District Event'),
+            'subtitle' => implode(' · ', $subParts) ?: 'District event',
+            'url'      => '/dc/district-event.php?id=' . (int) $row['id'],
+            'external' => false,
         ];
     }
 

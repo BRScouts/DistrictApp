@@ -918,6 +918,49 @@ function dc_accessible_groups(): array
     return $ctx['groups'];
 }
 
+/**
+ * The group id of the signed-in person's primary membership, if they have one.
+ *
+ * A person can be a member of several groups with different roles (e.g. a GLV
+ * in one group and a section helper in another). District admins can mark one
+ * membership as the person's primary role via the group manager, recorded in
+ * group_memberships.is_primary. This returns that primary group's id, or null
+ * when there is no signed-in person, no primary set, or the is_primary column
+ * has not been added yet (run migration adding group_memberships.is_primary).
+ */
+function dc_primary_group_id(): ?int
+{
+    if (!dc_table_has_column('group_memberships', 'is_primary')) {
+        return null;
+    }
+
+    $user = current_user();
+
+    if (!$user) {
+        return null;
+    }
+
+    try {
+        $stmt = db()->prepare("
+            SELECT gm.group_id
+            FROM group_memberships gm
+            JOIN groups g
+              ON g.id = gm.group_id
+            WHERE gm.person_id = :person_id
+              AND gm.status = 'active'
+              AND gm.is_primary = 1
+              AND g.is_active = 1
+            LIMIT 1
+        ");
+        $stmt->execute(['person_id' => (int) $user['id']]);
+        $primaryGroupId = (int) $stmt->fetchColumn();
+
+        return $primaryGroupId > 0 ? $primaryGroupId : null;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
 function dc_selected_group_id(?int $requested = null): int
 {
     $groups = dc_accessible_groups();
@@ -928,6 +971,15 @@ function dc_selected_group_id(?int $requested = null): int
 
     if ($requested && dc_user_can_access_group($requested)) {
         return $requested;
+    }
+
+    // With no explicit group chosen, default to the person's primary group so
+    // a leader with roles in several groups lands on the one that matters most
+    // to them, rather than whichever sorts first alphabetically.
+    $primaryGroupId = dc_primary_group_id();
+
+    if ($primaryGroupId !== null && dc_user_can_access_group($primaryGroupId)) {
+        return $primaryGroupId;
     }
 
     return (int) $groups[0]['id'];
